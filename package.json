@@ -1,11 +1,10 @@
 {
   "name": "MusicFree",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "private": true,
   "license": "AGPL",
   "author": {
-    "name": "猫头猫",
-    "email": "lhx_xjtu@163.com"
+    "name": "Toskysun"
   },
   "scripts": {
     "android": "react-native run-android",
@@ -130,6 +129,6 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/maotoumao/MusicFree.git"
+    "url": "git+https://github.com/Toskysun/MusicFree.git"
   }
 }

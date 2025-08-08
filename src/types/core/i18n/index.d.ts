@@ -389,12 +389,6 @@ export interface ILanguageData {
     "toast.noFloatWindowPermission": string; // 无悬浮窗权限
     "toast.folderNotExistOrNoPermission": string; // 文件夹不存在或无权限
     
-    // 音质相关
-    "musicQuality.low": string; // 低音质
-    "musicQuality.standard": string; // 标准音质
-    "musicQuality.high": string; // 高音质
-    "musicQuality.super": string; // 超高音质
-
     // 播放全部栏相关
     "playAllBar.title": string; // 播放全部
 
@@ -529,6 +523,16 @@ export interface ILanguageData {
     "repeatMode.SHUFFLE": string; // 随机播放
     "repeatMode.QUEUE": string; // 列表循环
     "repeatMode.SINGLE": string; // 单曲循环
+    
+    // 音质翻译
+    "quality.128k": string; // 普通音质 128K
+    "quality.320k": string; // 高清音质 320K  
+    "quality.flac": string; // 高清音质 FLAC
+    "quality.flac24bit": string; // 无损音质 FLAC Hires
+    "quality.hires": string; // 无损音质 Hires
+    "quality.atmos": string; // 无损音质 Atmos
+    "quality.atmos_plus": string; // 无损音质 Atmos 2.0
+    "quality.master": string; // 无损音质 Master
 }
 
 // 语言接口定义

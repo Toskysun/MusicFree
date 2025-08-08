@@ -3,7 +3,7 @@ import { Pressable, StyleSheet } from "react-native";
 import rpx from "@/utils/rpx";
 import ThemeText from "@/components/base/themeText";
 
-import { qualityKeys, qualityText } from "@/utils/qualities";
+import { qualityKeys, getQualityText, getAvailableQualities, getQualitySize } from "@/utils/qualities";
 import { sizeFormatter } from "@/utils/fileUtils";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import PanelBase from "../base/panelBase";
@@ -27,8 +27,12 @@ interface IMusicQualityProps {
 export default function MusicQuality(props: IMusicQualityProps) {
     const safeAreaInsets = useSafeAreaInsets();
     const i18n = useI18N();
+    const qualityTextI18n = getQualityText(i18n.getLanguage().languageData);
 
     const { musicItem, onQualityPress, type = "play" } = props ?? {};
+
+    // 使用增强的音质获取函数
+    const availableQualities = getAvailableQualities(musicItem);
 
     return (
         <PanelBase
@@ -52,30 +56,41 @@ export default function MusicQuality(props: IMusicQualityProps) {
                             {
                                 marginBottom: safeAreaInsets.bottom,
                             },
-                        ]}>
-                        {qualityKeys.map(key => {
-                            return (
-                                <Fragment key={`frag-${key}`}>
-                                    <Pressable
-                                        key={`btn-${key}`}
-                                        style={style.item}
-                                        onPress={() => {
-                                            onQualityPress(key, musicItem);
-                                            hidePanel();
-                                        }}>
-                                        <ThemeText>
-                                            {qualityText[key]}{" "}
-                                            {musicItem.qualities?.[key]?.size
-                                                ? `(${sizeFormatter(
-                                                      musicItem.qualities[key]
-                                                          .size!,
-                                                )})`
-                                                : ""}
-                                        </ThemeText>
-                                    </Pressable>
-                                </Fragment>
-                            );
-                        })}
+                        ]}
+                        showsVerticalScrollIndicator={availableQualities.length > 4}>
+                        {availableQualities.length > 0 ? (
+                            availableQualities.map(key => {
+                                return (
+                                    <Fragment key={`frag-${key}`}>
+                                        <Pressable
+                                            key={`btn-${key}`}
+                                            style={style.item}
+                                            onPress={() => {
+                                                onQualityPress(key, musicItem);
+                                                hidePanel();
+                                            }}>
+                                            <ThemeText>
+                                                {qualityTextI18n[key]}{" "}
+                                                {(() => {
+                                                    // 使用新的工具函数获取文件大小
+                                                    const qualitySize = getQualitySize(musicItem, key);
+                                                    if (qualitySize) {
+                                                        return `(${sizeFormatter(qualitySize)})`;
+                                                    }
+                                                    return "";
+                                                })()}
+                                            </ThemeText>
+                                        </Pressable>
+                                    </Fragment>
+                                );
+                            })
+                        ) : (
+                            <Pressable style={style.item}>
+                                <ThemeText fontColor="textSecondary">
+                                    {i18n.t("panel.musicQuality.noQualityAvailable", "暂无可用音质")}
+                                </ThemeText>
+                            </Pressable>
+                        )}
                     </ScrollView>
                 </>
             )}

@@ -15,7 +15,7 @@ import LyricUtil, { NativeTextAlignment } from "@/native/lyricUtil";
 import { AppConfigPropertyKey } from "@/types/core/config";
 import { clearCache, getCacheSize, sizeFormatter } from "@/utils/fileUtils";
 import { clearLog, getErrorLogContent } from "@/utils/log";
-import { qualityKeys } from "@/utils/qualities";
+import { qualityKeys, getQualityText } from "@/utils/qualities";
 import rpx from "@/utils/rpx";
 import Toast from "@/utils/toast";
 import Clipboard from "@react-native-clipboard/clipboard";
@@ -130,7 +130,8 @@ export default function BasicSetting() {
     const musicOrderInLocalSheet = useAppConfig("basic.musicOrderInLocalSheet");
     const tryChangeSourceWhenPlayFail = useAppConfig("basic.tryChangeSourceWhenPlayFail");
 
-    const { t } = useI18N();
+    const { t, getLanguage } = useI18N();
+    const qualityTextI18n = getQualityText(getLanguage().languageData);
 
     const debugEnableErrorLog = useAppConfig("debug.errorLog");
     const debugEnableTraceLog = useAppConfig("debug.traceLog");
@@ -308,13 +309,8 @@ export default function BasicSetting() {
                     t("basicSettings.defaultPlayQuality"),
                     "basic.defaultPlayQuality",
                     qualityKeys,
-                    defaultPlayQuality ?? "standard",
-                    {
-                        low: t("musicQuality.low"),
-                        standard: t("musicQuality.standard"),
-                        high: t("musicQuality.high"),
-                        super: t("musicQuality.super"),
-                    },
+                    defaultPlayQuality ?? "320k",
+                    qualityTextI18n,
                 ),
                 createRadio(
                     t("basicSettings.playQualityOrder"),
@@ -374,13 +370,8 @@ export default function BasicSetting() {
                     t("basicSettings.defaultDownloadQuality"),
                     "basic.defaultDownloadQuality",
                     qualityKeys,
-                    defaultDownloadQuality ?? "standard",
-                    {
-                        low: t("musicQuality.low"),
-                        standard: t("musicQuality.standard"),
-                        high: t("musicQuality.high"),
-                        super: t("musicQuality.super"),
-                    },
+                    defaultDownloadQuality ?? "320k",
+                    qualityTextI18n,
                 ),
                 createRadio(
                     t("basicSettings.downloadQualityOrder"),

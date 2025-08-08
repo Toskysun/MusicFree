@@ -320,10 +320,6 @@
     "toast.logCleared": "日志已清空",
     "toast.noFloatWindowPermission": "无悬浮窗权限",
     "toast.folderNotExistOrNoPermission": "文件夹不存在或无权限",
-    "musicQuality.low": "低音质",
-    "musicQuality.standard": "标准音质",
-    "musicQuality.high": "高音质",
-    "musicQuality.super": "超高音质",
     "common.emptyList": "什么都没有呀~",
     "common.loading": "加载中...",
     "common.error": "出错啦...",
@@ -428,5 +424,15 @@
     "panel.sheetTags.title": "歌单类别",
     "repeatMode.SHUFFLE": "随机播放",
     "repeatMode.QUEUE": "列表循环",
-    "repeatMode.SINGLE": "单曲循环"
+    "repeatMode.SINGLE": "单曲循环",
+    
+    // 音质翻译
+    "quality.128k": "普通音质 128K",
+    "quality.320k": "高清音质 320K",
+    "quality.flac": "高清音质 FLAC",
+    "quality.flac24bit": "无损音质 FLAC Hires",
+    "quality.hires": "无损音质 Hires",
+    "quality.atmos": "无损音质 Atmos",
+    "quality.atmos_plus": "无损音质 Atmos 2.0",
+    "quality.master": "无损音质 Master"
 }

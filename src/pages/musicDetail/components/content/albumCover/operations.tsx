@@ -8,7 +8,8 @@ import { ImgAsset } from "@/constants/assetsConst";
 import Toast from "@/utils/toast";
 import toast from "@/utils/toast";
 import useOrientation from "@/hooks/useOrientation";
-import { showPanel } from "@/components/panels/usePanel";
+import { showPanel, hidePanel } from "@/components/panels/usePanel";
+import { showDialog, hideDialog } from "@/components/dialogs/useDialog";
 import TrackPlayer, { useCurrentMusic, useMusicQuality } from "@/core/trackPlayer";
 import { iconSizeConst } from "@/constants/uiConst";
 import PersistStatus from "@/utils/persistStatus";
@@ -39,7 +40,10 @@ export default function Operations() {
                 orientation === "horizontal" ? styles.horizontalWrapper : null,
             ]}>
             <HeartIcon />
-            <Pressable
+            <Icon
+                name="quality-button"
+                size={rpx(52)}
+                color="white"
                 onPress={() => {
                     if (!musicItem) {
                         return;
@@ -54,25 +58,62 @@ export default function Operations() {
                             }
                         },
                     });
-                }}>
-                <Image
-                    source={ImgAsset.quality[currentQuality]}
-                    style={styles.quality}
-                />
-            </Pressable>
+                }}
+            />
             <Icon
                 name={isDownloaded ? "check-circle-outline" : "arrow-down-tray"}
                 size={iconSizeConst.normal}
                 color="white"
-                onPress={() => {
+                onPress={async () => {
                     if (musicItem && !isDownloaded) {
-                        showPanel("MusicQuality", {
-                            type: "download",
-                            musicItem,
-                            async onQualityPress(quality) {
-                                downloader.download(musicItem, quality);
-                            },
+                        // 显示加载状态
+                        showDialog("LoadingDialog", {
+                            title: i18n.t("downloading.downloadStatus.preparing")
                         });
+
+                        try {
+                            // 获取插件实例
+                            const plugin = PluginManager.getPlugin(musicItem.platform);
+                            let enhancedMusicItem = musicItem;
+                            
+                            // 如果插件支持getMusicInfo且当前音乐没有qualities信息，则获取完整信息
+                            if (plugin?.methods?.getMusicInfo && !musicItem.qualities) {
+                                const additionalInfo = await plugin.methods.getMusicInfo(musicItem);
+                                if (additionalInfo) {
+                                    enhancedMusicItem = {
+                                        ...musicItem,
+                                        ...additionalInfo,
+                                        // 保持原有的基本信息不被覆盖
+                                        id: musicItem.id,
+                                        platform: musicItem.platform,
+                                    };
+                                }
+                            }
+
+                            // 隐藏加载对话框
+                            hideDialog("LoadingDialog");
+
+                            // 显示音质选择面板
+                            showPanel("MusicQuality", {
+                                type: "download",
+                                musicItem: enhancedMusicItem,
+                                async onQualityPress(quality) {
+                                    downloader.download(enhancedMusicItem, quality);
+                                },
+                            });
+                        } catch (error) {
+                            // 隐藏加载对话框
+                            hideDialog("LoadingDialog");
+                            
+                            // 出错时使用原始音乐信息
+                            showPanel("MusicQuality", {
+                                type: "download",
+                                musicItem,
+                                async onQualityPress(quality) {
+                                    downloader.download(musicItem, quality);
+                                },
+                            });
+                        }
                     }
                 }}
             />

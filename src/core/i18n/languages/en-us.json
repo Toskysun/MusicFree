@@ -320,10 +320,6 @@
     "toast.logCleared": "Logs cleared",
     "toast.noFloatWindowPermission": "No float window permission",
     "toast.folderNotExistOrNoPermission": "Folder doesn't exist or no permission",
-    "musicQuality.low": "Low Quality",
-    "musicQuality.standard": "Standard Quality",
-    "musicQuality.high": "High Quality",
-    "musicQuality.super": "Super High Quality",
     "common.emptyList": "Nothing here~",
     "common.loading": "Loading...",
     "common.error": "Error...",
@@ -428,5 +424,15 @@
     "panel.sheetTags.title": "Playlist Categories",
     "repeatMode.SHUFFLE": "Shuffle",
     "repeatMode.QUEUE": "Repeat Queue",
-    "repeatMode.SINGLE": "Repeat Single"
+    "repeatMode.SINGLE": "Repeat Single",
+    
+    // Quality translations
+    "quality.128k": "Standard Quality 128K",
+    "quality.320k": "High Quality 320K", 
+    "quality.flac": "High Quality FLAC",
+    "quality.flac24bit": "Lossless Quality FLAC Hires",
+    "quality.hires": "Lossless Quality Hires",
+    "quality.atmos": "Lossless Quality Atmos",
+    "quality.atmos_plus": "Lossless Quality Atmos 2.0",
+    "quality.master": "Lossless Quality Master"
 }
