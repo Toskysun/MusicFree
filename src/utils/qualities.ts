@@ -226,24 +226,36 @@ export function buildQualitiesFromArray(qualityArray: Array<{
 
 /**
  * 获取可用音质列表 - 增强版本
- * 支持从qualities和source字段获取音质信息
+ * 支持从插件supportedQualities、qualities和source字段获取音质信息
+ * 精确到歌曲级别，只显示该歌曲实际支持的音质
  */
-export function getAvailableQualities(musicItem: IMusic.IMusicItem): IMusic.IQualityKey[] {
+export function getAvailableQualities(
+    musicItem: IMusic.IMusicItem, 
+    plugin?: { supportedQualities?: IMusic.IQualityKey[] }
+): IMusic.IQualityKey[] {
     const availableQualities: IMusic.IQualityKey[] = [];
     
-    // 从qualities字段获取
+    // 第一优先级：从歌曲的qualities字段获取实际支持的音质
     if (musicItem.qualities) {
-        for (const quality of qualityKeys) {
-            if (musicItem.qualities[quality] && 
-                (musicItem.qualities[quality]!.url || 
-                 musicItem.qualities[quality]!.size !== undefined)) {
-                availableQualities.push(quality);
+        // 按照插件声明的音质顺序检查，保证显示顺序一致
+        if (plugin?.supportedQualities) {
+            for (const quality of plugin.supportedQualities) {
+                if (musicItem.qualities[quality] !== undefined) {
+                    availableQualities.push(quality);
+                }
+            }
+        } else {
+            // 如果没有插件信息，按照标准顺序检查
+            for (const quality of qualityKeys) {
+                if (musicItem.qualities[quality] !== undefined) {
+                    availableQualities.push(quality);
+                }
             }
         }
     }
     
-    // 从source字段获取
-    if (musicItem.source && availableQualities.length === 0) {
+    // 第二优先级：从歌曲的source字段获取
+    if (availableQualities.length === 0 && musicItem.source) {
         for (const quality of qualityKeys) {
             if (musicItem.source[quality] && 
                 (musicItem.source[quality]!.url || 
@@ -253,8 +265,13 @@ export function getAvailableQualities(musicItem: IMusic.IMusicItem): IMusic.IQua
         }
     }
     
-    // 如果都没有，提供默认音质
+    // 最后手段：如果歌曲没有任何音质信息，显示插件支持的全部音质
     if (availableQualities.length === 0) {
+        // 优先返回插件声明的支持音质
+        if (plugin?.supportedQualities && plugin.supportedQualities.length > 0) {
+            return plugin.supportedQualities;
+        }
+        // 如果没有插件信息，提供基础默认音质
         return ['128k', '320k', 'flac'];
     }
     

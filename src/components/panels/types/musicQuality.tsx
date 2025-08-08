@@ -4,6 +4,7 @@ import rpx from "@/utils/rpx";
 import ThemeText from "@/components/base/themeText";
 
 import { qualityKeys, getQualityText, getAvailableQualities, getQualitySize } from "@/utils/qualities";
+import PluginManager from "@/core/pluginManager";
 import { sizeFormatter } from "@/utils/fileUtils";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import PanelBase from "../base/panelBase";
@@ -31,8 +32,9 @@ export default function MusicQuality(props: IMusicQualityProps) {
 
     const { musicItem, onQualityPress, type = "play" } = props ?? {};
 
-    // 使用增强的音质获取函数
-    const availableQualities = getAvailableQualities(musicItem);
+    // 使用增强的音质获取函数，传入插件信息
+    const plugin = PluginManager.getByMedia(musicItem);
+    const availableQualities = getAvailableQualities(musicItem, plugin?.instance);
 
     return (
         <PanelBase
