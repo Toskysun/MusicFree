@@ -82,6 +82,13 @@ jobs:
         # 使用npm ci进行更快的安装
         npm ci --prefer-offline --no-audit --progress=false
     
+    # 🔨 生成构建信息
+    - name: Generate build info
+      run: |
+        echo "📝 Generating build info..."
+        npm run generate-build-info
+        echo "✅ Build info generated"
+    
     # 🔧 Gradle 权限和缓存预热
     - name: Setup Gradle with permissions and cache warmup
       run: |
@@ -244,7 +251,13 @@ jobs:
           
           ### 🔄 更新内容
           
-          1. ikun666
+          1. 全面支持ikun音源8种音质
+          2. 🚩请使用改版ikun插件
+             - 在线导入地址：`https://musicfree.3kddyys.workers.dev/api/subscription.json?key=你的卡密.json`
+             - 导入失败请使用代理，导入不完全请多次重试，你亦可以自行在浏览器访问上述地址以获取单个插件地址
+          3. 下载通知与多种文件名功能
+          4. 根据喜好定制音质标签
+          5. 软件启动时打开播放详情页
           
           ### ⚡ 构建信息
           - 构建时间: ${{ github.event.head_commit.timestamp }}
