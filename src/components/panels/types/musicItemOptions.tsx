@@ -120,8 +120,8 @@ export default function MusicItemOptions(props: IMusicItemOptionsProps) {
         },
         {
             icon: "arrow-down-tray",
-            title: t("common.download"),
-            show: !downloaded,
+            title: downloaded ? t("panel.musicItemOptions.redownload") : t("common.download"),
+            show: true,
             onPress: async () => {
                 // 显示加载状态
                 showDialog("LoadingDialog", {
@@ -172,11 +172,6 @@ export default function MusicItemOptions(props: IMusicItemOptionsProps) {
                     });
                 }
             },
-        },
-        {
-            icon: "check-circle-outline",
-            title: t("panel.musicItemOptions.downloaded"),
-            show: !!downloaded,
         },
         {
             icon: "trash-outline",

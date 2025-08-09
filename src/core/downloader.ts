@@ -14,7 +14,7 @@ import { atom, getDefaultStore, useAtomValue } from "jotai";
 import { nanoid } from "nanoid";
 import path from "path-browserify";
 import { useEffect, useState } from "react";
-import { copyFile, downloadFile, exists, unlink } from "react-native-fs";
+import { copyFile, downloadFile, exists, unlink, stopDownload } from "react-native-fs";
 import LocalMusicSheet from "./localMusicSheet";
 import { IPluginManager } from "@/types/core/pluginManager";
 import downloadNotificationManager from "./downloadNotificationManager";
@@ -377,7 +377,7 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
 
         // 下载
         const taskId = getMediaUniqueKey(musicItem);
-        const { promise } = downloadFile({
+        const downloadResult = downloadFile({
             fromUrl: url ?? "",
             toFile: cacheDownloadPath,
             headers: headers,
@@ -411,9 +411,14 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
                 }
             },
         });
+        
+        // 保存jobId以便取消下载
+        this.updateDownloadTask(musicItem, {
+            jobId: downloadResult.jobId,
+        });
 
         try {
-            await promise;
+            await downloadResult.promise;
             // 下载完成，移动文件
             await copyFile(cacheDownloadPath, targetDownloadPath);
 
@@ -471,10 +476,6 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
             if (downloadTasks.has(key)) {
                 return false;
             }
-            // TODO: 如果已经下载了，也应该返回false
-            if (LocalMusicSheet.isLocalMusic(m)) {
-                return false;
-            }
 
             // 设置下载任务
             downloadTasks.set(getMediaUniqueKey(m), {
@@ -506,7 +507,28 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
         if (!task) {
             return false;
         }
-        if (task.status === DownloadStatus.Pending || task.status === DownloadStatus.Error) {
+        
+        // 可以删除等待中、错误和正在下载的任务
+        if (task.status === DownloadStatus.Pending || 
+            task.status === DownloadStatus.Error ||
+            task.status === DownloadStatus.Preparing ||
+            task.status === DownloadStatus.Downloading) {
+            
+            // 如果正在下载，先停止下载
+            if (task.status === DownloadStatus.Downloading && task.jobId) {
+                try {
+                    stopDownload(task.jobId);
+                } catch (error) {
+                    errorLog("Failed to stop download", error);
+                }
+            }
+            
+            // 如果正在下载，需要减少下载计数
+            if (task.status === DownloadStatus.Downloading || task.status === DownloadStatus.Preparing) {
+                this.downloadingCount--;
+            }
+            
+            // 删除任务
             downloadTasks.delete(key);
             const downloadQueue = getDefaultStore().get(downloadQueueAtom);
             const newDownloadQueue = downloadQueue.filter(item => !isSameMediaItem(item, musicItem));
@@ -516,6 +538,9 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
             downloadNotificationManager.cancelNotification(key).catch(error => {
                 errorLog("Failed to cancel notification", error);
             });
+            
+            // 触发下一个任务
+            this.downloadNextPendingTask();
             
             return true;
         }

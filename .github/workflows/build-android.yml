@@ -234,13 +234,13 @@ jobs:
           ### 📱 下载选项
           
           **推荐下载 (适用于所有设备):**
-          - **Universal APK**: [musicfree-${{ github.ref_name }}-universal-release.apk](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/musicfree-${{ github.ref_name }}-universal-release.apk)
+          - **Universal APK**: [app-universal-release.apk](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/app-universal-release.apk)
           
           **按设备架构下载 (体积更小):**
-          - **ARM64 (推荐)**: [musicfree-${{ github.ref_name }}-arm64-v8a-release.apk](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/musicfree-${{ github.ref_name }}-arm64-v8a-release.apk) - 适用于大部分现代Android设备
-          - **ARM32**: [musicfree-${{ github.ref_name }}-armeabi-v7a-release.apk](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/musicfree-${{ github.ref_name }}-armeabi-v7a-release.apk) - 适用于老版本Android设备
-          - **x86_64**: [musicfree-${{ github.ref_name }}-x86_64-release.apk](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/musicfree-${{ github.ref_name }}-x86_64-release.apk) - 适用于x86_64模拟器
-          - **x86**: [musicfree-${{ github.ref_name }}-x86-release.apk](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/musicfree-${{ github.ref_name }}-x86-release.apk) - 适用于x86模拟器
+          - **ARM64 (推荐)**: [app-arm64-v8a-release.apk](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/app-arm64-v8a-release.apk) - 适用于大部分现代Android设备
+          - **ARM32**: [app-armeabi-v7a-release.apk](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/app-armeabi-v7a-release.apk) - 适用于老版本Android设备
+          - **x86_64**: [app-x86_64-release.apk](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/app-x86_64-release.apk) - 适用于x86_64模拟器
+          - **x86**: [app-x86-release.apk](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/app-x86-release.apk) - 适用于x86模拟器
           
           ### 🔄 更新内容
           
