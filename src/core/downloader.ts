@@ -100,6 +100,7 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
     private pluginManagerService!: IPluginManager;
 
     private downloadingCount = 0;
+    private notificationManagerInitialized = false;
 
     private generateFilename(musicItem: IMusic.IMusicItem, quality?: IMusic.IQualityKey): string {
         // 获取文件命名配置
@@ -137,8 +138,12 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
     }
     
     private async initializeNotificationManager(): Promise<void> {
+        if (this.notificationManagerInitialized) {
+            return;
+        }
         try {
             await downloadNotificationManager.initialize();
+            this.notificationManagerInitialized = true;
         } catch (error) {
             errorLog("Failed to initialize download notification manager", error);
         }
@@ -249,6 +254,9 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
 
 
     private async downloadNextPendingTask() {
+        // 确保通知管理器已初始化
+        await this.initializeNotificationManager();
+        
         const maxDownloadCount = Math.max(1, Math.min(+(this.configService.getConfig("basic.maxDownload") || 3), 10));
         const downloadQueue = getDefaultStore().get(downloadQueueAtom);
 
