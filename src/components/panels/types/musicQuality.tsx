@@ -13,6 +13,7 @@ import { hidePanel } from "../usePanel";
 import Divider from "@/components/base/divider";
 import PanelHeader from "../base/panelHeader";
 import { useI18N } from "@/core/i18n";
+import { useAppConfig } from "@/core/appConfig";
 
 interface IMusicQualityProps {
     type?: "play" | "download";
@@ -28,7 +29,8 @@ interface IMusicQualityProps {
 export default function MusicQuality(props: IMusicQualityProps) {
     const safeAreaInsets = useSafeAreaInsets();
     const i18n = useI18N();
-    const qualityTextI18n = getQualityText(i18n.getLanguage().languageData);
+    const customQualityTranslations = useAppConfig("basic.qualityTranslations");
+    const qualityTextI18n = getQualityText(i18n.getLanguage().languageData, customQualityTranslations);
 
     const { musicItem, onQualityPress, type = "play" } = props ?? {};
 

@@ -142,9 +142,12 @@ export default function BasicSetting() {
     const fileNamingPreset = useAppConfig("basic.fileNamingPreset");
     const fileNamingCustom = useAppConfig("basic.fileNamingCustom");
     const fileNamingMaxLength = useAppConfig("basic.fileNamingMaxLength");
+    
+    // 自定义音质翻译
+    const customQualityTranslations = useAppConfig("basic.qualityTranslations");
 
     const { t, getLanguage } = useI18N();
-    const qualityTextI18n = getQualityText(getLanguage().languageData);
+    const qualityTextI18n = getQualityText(getLanguage().languageData, customQualityTranslations);
 
     const debugEnableErrorLog = useAppConfig("debug.errorLog");
     const debugEnableTraceLog = useAppConfig("debug.traceLog");
@@ -202,6 +205,17 @@ export default function BasicSetting() {
                     "basic.showExitOnNotification",
                     showExitOnNotification ?? false,
                 ),
+                {
+                    title: "音质标签",
+                    right: (
+                        <ThemeText fontSize="subTitle" style={styles.centerText}>
+                            自定义
+                        </ThemeText>
+                    ),
+                    onPress() {
+                        showPanel("QualityTranslationPanel");
+                    },
+                },
             ],
         },
         {

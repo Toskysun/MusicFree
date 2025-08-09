@@ -34,6 +34,7 @@ export interface IAppConfigProperties {
     "basic.fileNamingPreset": IFileNaming.IPresetTemplate;
     "basic.fileNamingCustom": string;
     "basic.fileNamingMaxLength": number;
+    "basic.qualityTranslations": Record<IMusic.IQualityKey, string>;
 
     // Lyric
     "lyric.showStatusBarLyric": boolean;

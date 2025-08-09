@@ -32,7 +32,22 @@ export const qualityText = {
 };
 
 /** 获取国际化的音质文本映射 */
-export function getQualityText(i18nData: ILanguageData): Record<IMusic.IQualityKey, string> {
+export function getQualityText(i18nData: ILanguageData, customTranslations?: Record<IMusic.IQualityKey, string>): Record<IMusic.IQualityKey, string> {
+    // 如果有自定义翻译，优先使用自定义翻译
+    if (customTranslations) {
+        return {
+            "128k": customTranslations["128k"] || i18nData["quality.128k"] || qualityText["128k"],
+            "320k": customTranslations["320k"] || i18nData["quality.320k"] || qualityText["320k"],
+            flac: customTranslations.flac || i18nData["quality.flac"] || qualityText.flac,
+            flac24bit: customTranslations.flac24bit || i18nData["quality.flac24bit"] || qualityText.flac24bit,
+            hires: customTranslations.hires || i18nData["quality.hires"] || qualityText.hires,
+            atmos: customTranslations.atmos || i18nData["quality.atmos"] || qualityText.atmos,
+            atmos_plus: customTranslations.atmos_plus || i18nData["quality.atmos_plus"] || qualityText.atmos_plus,
+            master: customTranslations.master || i18nData["quality.master"] || qualityText.master,
+        };
+    }
+    
+    // 没有自定义翻译时，使用i18n数据
     return {
         "128k": i18nData["quality.128k"] || qualityText["128k"],
         "320k": i18nData["quality.320k"] || qualityText["320k"],
