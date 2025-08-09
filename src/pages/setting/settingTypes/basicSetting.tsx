@@ -112,6 +112,7 @@ function useCacheSize() {
 export default function BasicSetting() {
 
     const autoPlayWhenAppStart = useAppConfig("basic.autoPlayWhenAppStart");
+    const openPlayDetailOnLaunch = useAppConfig("basic.openPlayDetailOnLaunch");
     const useCelluarNetworkPlay = useAppConfig("basic.useCelluarNetworkPlay");
     const useCelluarNetworkDownload = useAppConfig("basic.useCelluarNetworkDownload");
     const maxDownload = useAppConfig("basic.maxDownload");
@@ -299,6 +300,11 @@ export default function BasicSetting() {
                     t("basicSettings.autoPlayWhenAppStart"),
                     "basic.autoPlayWhenAppStart",
                     autoPlayWhenAppStart ?? false,
+                ),
+                createSwitch(
+                    t("basicSettings.openPlayDetailOnLaunch"),
+                    "basic.openPlayDetailOnLaunch",
+                    openPlayDetailOnLaunch ?? false,
                 ),
                 createSwitch(
                     t("basicSettings.tryChangeSourceWhenPlayFail"),

@@ -252,6 +252,7 @@
     "basicSettings.notCheckPluginVersion": "安裝外掛時不校驗版本",
     "basicSettings.playback": "播放",
     "basicSettings.notInterrupt": "允許與其他應用同時播放",
+    "basicSettings.openPlayDetailOnLaunch": "軟體啟動時打開播放詳情頁",
     "basicSettings.autoPlayWhenAppStart": "軟體啟動時自動播放歌曲",
     "basicSettings.tryChangeSourceWhenPlayFail": "播放失敗時嘗試更換音源",
     "basicSettings.autoStopWhenError": "播放失敗時自動暫停",

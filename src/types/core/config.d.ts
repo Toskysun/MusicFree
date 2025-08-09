@@ -5,6 +5,7 @@ export interface IAppConfigProperties {
     $schema: "2";
     // Basic
     "basic.autoPlayWhenAppStart": boolean;
+    "basic.openPlayDetailOnLaunch": boolean;
     "basic.useCelluarNetworkPlay": boolean;
     "basic.useCelluarNetworkDownload": boolean;
     "basic.maxDownload": number;

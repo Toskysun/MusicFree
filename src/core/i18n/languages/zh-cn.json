@@ -256,6 +256,7 @@
     "basicSettings.notCheckPluginVersion": "安装插件时不校验版本",
     "basicSettings.playback": "播放",
     "basicSettings.notInterrupt": "允许与其他应用同时播放",
+    "basicSettings.openPlayDetailOnLaunch": "软件启动时打开播放详情页",
     "basicSettings.autoPlayWhenAppStart": "软件启动时自动播放歌曲",
     "basicSettings.tryChangeSourceWhenPlayFail": "播放失败时尝试更换音源",
     "basicSettings.autoStopWhenError": "播放失败时自动暂停",

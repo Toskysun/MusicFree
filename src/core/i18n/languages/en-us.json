@@ -256,6 +256,7 @@
     "basicSettings.notCheckPluginVersion": "Don't check version when installing plugins",
     "basicSettings.playback": "Playback",
     "basicSettings.notInterrupt": "Allow simultaneous playback with other apps",
+    "basicSettings.openPlayDetailOnLaunch": "Open music detail on app launch",
     "basicSettings.autoPlayWhenAppStart": "Auto play when app starts",
     "basicSettings.tryChangeSourceWhenPlayFail": "Try different source when playback fails",
     "basicSettings.autoStopWhenError": "Auto pause when playback fails",
