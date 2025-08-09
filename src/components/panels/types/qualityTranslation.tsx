@@ -20,7 +20,7 @@ interface IQualityTranslationProps {
     tips?: string;
 }
 
-export default function QualityTranslation(props: IQualityTranslationProps) {
+export default function QualityTranslation(_props: IQualityTranslationProps) {
     const { getLanguage } = useI18N();
     const colors = useColors();
     const defaultQualityText = getQualityText(getLanguage().languageData);
@@ -97,7 +97,7 @@ export default function QualityTranslation(props: IQualityTranslationProps) {
                                     onChangeText={(text) => {
                                         setTranslations(prev => ({
                                             ...prev,
-                                            [qualityKey]: text
+                                            [qualityKey]: text,
                                         }));
                                     }}
                                     style={[

@@ -45,7 +45,9 @@ export default function Body() {
                 <TabBar
                     {...props}
                     style={style.transparentColor}
+                    // eslint-disable-next-line react-native/no-inline-styles -- Dynamic width for tab flexibility
                     tabStyle={{
+                         
                         width: "auto",
                     }}
                     renderIndicator={() => null}
@@ -55,12 +57,14 @@ export default function Body() {
                     renderLabel={({ route, focused, color }) => (
                         <Text
                             numberOfLines={1}
+                            // eslint-disable-next-line react-native/no-inline-styles -- Dynamic focused state styles
                             style={{
                                 width: rpx(160),
                                 fontWeight: focused
                                     ? fontWeightConst.bolder
                                     : fontWeightConst.medium,
                                 color,
+                                 
                                 textAlign: "center",
                             }}>
                             {t(route.i18nKey as any) ?? route.title}

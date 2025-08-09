@@ -97,7 +97,7 @@ export default function Body(props: IBodyProps) {
             return id;
         }
         return undefined;
-    }, []);
+    }, [currentMusicItem, playList]);
 
     const renderItem = ({ item }: { item: IMusic.IMusicItem; index: number }) => {
         return (

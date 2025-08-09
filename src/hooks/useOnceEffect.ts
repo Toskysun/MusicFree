@@ -16,5 +16,6 @@ export default function useOnceEffect(
             result = cb();
         }
         return result;
-    }, deps);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [cb, deps?.length, ...(deps || [])]);
 }

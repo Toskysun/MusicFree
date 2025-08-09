@@ -25,7 +25,7 @@ export default function ArtistDetail() {
             setQueryResult(initQueryResult);
             setScrollToTopState(true);
         };
-    }, []);
+    }, [setQueryResult, setScrollToTopState]);
 
     return (
         <VerticalSafeAreaView style={globalStyle.fwflex1}>

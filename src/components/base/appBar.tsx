@@ -88,7 +88,7 @@ export default function AppBar(props: IAppBarProps) {
         } else {
             scaleRate.value = withTiming(0, timingConfig);
         }
-    }, [showMenu]);
+    }, [showMenu, scaleRate]);
 
     const transformStyle = useAnimatedStyle(() => {
         return {

@@ -1,7 +1,7 @@
-import { Platform, Alert, Linking } from 'react-native';
-import notifee, { AndroidImportance } from '@notifee/react-native';
-import { errorLog } from '@/utils/log';
-import Toast from '@/utils/toast';
+import { Platform, Alert } from "react-native";
+import notifee from "@notifee/react-native";
+import { errorLog } from "@/utils/log";
+import Toast from "@/utils/toast";
 
 interface PermissionState {
     hasPermission: boolean;
@@ -22,7 +22,7 @@ class NotificationPermissionManager {
      * 检查通知权限状态
      */
     async checkPermission(): Promise<boolean> {
-        if (Platform.OS !== 'android') {
+        if (Platform.OS !== "android") {
             this.permissionState.hasPermission = true;
             return true;
         }
@@ -34,7 +34,7 @@ class NotificationPermissionManager {
             this.permissionState.hasPermission = hasPermission;
             return hasPermission;
         } catch (error) {
-            errorLog('Failed to check notification permission', error);
+            errorLog("Failed to check notification permission", error);
             return false;
         }
     }
@@ -43,7 +43,7 @@ class NotificationPermissionManager {
      * 请求通知权限（带有用户友好的提示）
      */
     async requestPermission(showRationale: boolean = true): Promise<boolean> {
-        if (Platform.OS !== 'android') {
+        if (Platform.OS !== "android") {
             return true;
         }
 
@@ -51,7 +51,7 @@ class NotificationPermissionManager {
         if (this.permissionState.lastRequestTime) {
             const timeSinceLastRequest = Date.now() - this.permissionState.lastRequestTime;
             if (timeSinceLastRequest < this.REQUEST_COOLDOWN) {
-                Toast.warn('请稍后再试，避免频繁请求权限');
+                Toast.warn("请稍后再试，避免频繁请求权限");
                 return false;
             }
         }
@@ -84,13 +84,13 @@ class NotificationPermissionManager {
                     this.showPermissionDeniedToast();
                 }
             } else {
-                Toast.success('通知权限已获取');
+                Toast.success("通知权限已获取");
             }
 
             return hasPermission;
         } catch (error) {
-            errorLog('Failed to request notification permission', error);
-            Toast.error('请求通知权限失败');
+            errorLog("Failed to request notification permission", error);
+            Toast.error("请求通知权限失败");
             return false;
         }
     }
@@ -101,16 +101,16 @@ class NotificationPermissionManager {
     private showPermissionRationale(): Promise<boolean> {
         return new Promise((resolve) => {
             Alert.alert(
-                '通知权限',
-                'MusicFree需要通知权限来显示下载进度和完成状态，这将帮助您更好地了解下载情况。',
+                "通知权限",
+                "MusicFree需要通知权限来显示下载进度和完成状态，这将帮助您更好地了解下载情况。",
                 [
                     {
-                        text: '暂不开启',
-                        style: 'cancel',
+                        text: "暂不开启",
+                        style: "cancel",
                         onPress: () => resolve(false),
                     },
                     {
-                        text: '开启权限',
+                        text: "开启权限",
                         onPress: () => resolve(true),
                     },
                 ],
@@ -125,16 +125,16 @@ class NotificationPermissionManager {
     private showSettingsDialog(): Promise<boolean> {
         return new Promise((resolve) => {
             Alert.alert(
-                '需要通知权限',
-                '您之前拒绝了通知权限，请前往设置手动开启。',
+                "需要通知权限",
+                "您之前拒绝了通知权限，请前往设置手动开启。",
                 [
                     {
-                        text: '取消',
-                        style: 'cancel',
+                        text: "取消",
+                        style: "cancel",
                         onPress: () => resolve(false),
                     },
                     {
-                        text: '前往设置',
+                        text: "前往设置",
                         onPress: () => {
                             notifee.openNotificationSettings();
                             resolve(false);
@@ -150,14 +150,14 @@ class NotificationPermissionManager {
      * 显示权限被拒绝的提示
      */
     private showPermissionDeniedToast(): void {
-        Toast.warn('下载通知已关闭，您仍可以正常下载音乐');
+        Toast.warn("下载通知已关闭，您仍可以正常下载音乐");
     }
 
     /**
      * 静默请求权限（用于应用启动时）
      */
     async silentRequestPermission(): Promise<boolean> {
-        if (Platform.OS !== 'android') {
+        if (Platform.OS !== "android") {
             return true;
         }
 
@@ -184,7 +184,7 @@ class NotificationPermissionManager {
 
             return granted;
         } catch (error) {
-            errorLog('Silent permission request failed', error);
+            errorLog("Silent permission request failed", error);
             return false;
         }
     }
@@ -214,14 +214,14 @@ class NotificationPermissionManager {
         const hasPermission = await this.checkPermission();
         
         if (hasPermission) {
-            return '通知权限已开启';
+            return "通知权限已开启";
         }
         
         if (this.permissionState.userDeniedPermanently) {
-            return '通知权限被拒绝，请前往系统设置开启';
+            return "通知权限被拒绝，请前往系统设置开启";
         }
         
-        return '通知权限未开启';
+        return "通知权限未开启";
     }
 }
 

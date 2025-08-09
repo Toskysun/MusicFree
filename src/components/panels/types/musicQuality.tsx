@@ -3,7 +3,7 @@ import { Pressable, StyleSheet } from "react-native";
 import rpx from "@/utils/rpx";
 import ThemeText from "@/components/base/themeText";
 
-import { qualityKeys, getQualityText, getAvailableQualities, getQualitySize } from "@/utils/qualities";
+import { getQualityText, getAvailableQualities, getQualitySize } from "@/utils/qualities";
 import PluginManager from "@/core/pluginManager";
 import { sizeFormatter } from "@/utils/fileUtils";
 import { useSafeAreaInsets } from "react-native-safe-area-context";

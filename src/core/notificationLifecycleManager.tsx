@@ -1,8 +1,8 @@
-import { useEffect, useRef } from 'react';
-import { AppState, AppStateStatus } from 'react-native';
-import downloadNotificationManager from '@/core/downloadNotificationManager';
-import notificationPermissionManager from '@/core/notificationPermissionManager';
-import { errorLog } from '@/utils/log';
+import { useEffect, useRef } from "react";
+import { AppState, AppStateStatus } from "react-native";
+import downloadNotificationManager from "@/core/downloadNotificationManager";
+import notificationPermissionManager from "@/core/notificationPermissionManager";
+import { errorLog } from "@/utils/log";
 
 /**
  * 应用生命周期通知管理组件
@@ -14,19 +14,19 @@ export function useAppLifecycleNotifications() {
     useEffect(() => {
         const handleAppStateChange = (nextAppState: AppStateStatus) => {
             // 应用从后台回到前台时，重新检查权限状态
-            if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+            if (appState.current.match(/inactive|background/) && nextAppState === "active") {
                 handleAppBecomeActive();
             }
             
             // 应用进入后台时，可以进行清理操作
-            else if (appState.current === 'active' && nextAppState.match(/inactive|background/)) {
+            if (appState.current === "active" && nextAppState.match(/inactive|background/)) {
                 handleAppBecomeInactive();
             }
 
             appState.current = nextAppState;
         };
 
-        const subscription = AppState.addEventListener('change', handleAppStateChange);
+        const subscription = AppState.addEventListener("change", handleAppStateChange);
 
         return () => {
             subscription?.remove();
@@ -42,10 +42,10 @@ export function useAppLifecycleNotifications() {
             const hasPermission = await downloadNotificationManager.checkNotificationPermission();
             if (hasPermission) {
                 // 权限已获得，可以记录日志或执行其他操作
-                console.log('Notification permission is available');
+                console.log("Notification permission is available");
             }
         } catch (error) {
-            errorLog('Error handling app become active', error);
+            errorLog("Error handling app become active", error);
         }
     };
 
@@ -53,9 +53,9 @@ export function useAppLifecycleNotifications() {
         try {
             // 应用进入后台时，可以进行一些清理操作
             // 例如：暂停非必要的任务等
-            console.log('App became inactive');
+            console.log("App became inactive");
         } catch (error) {
-            errorLog('Error handling app become inactive', error);
+            errorLog("Error handling app become inactive", error);
         }
     };
 }

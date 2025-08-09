@@ -111,7 +111,7 @@ const style = StyleSheet.create({
     },
     deleteButton: {
         padding: rpx(16),
-        justifyContent: 'center',
-        alignItems: 'center',
+        justifyContent: "center",
+        alignItems: "center",
     },
 });

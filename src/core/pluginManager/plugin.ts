@@ -30,7 +30,7 @@ import { devLog, errorLog, trace } from "../../utils/log";
 import Network from "../../utils/network";
 import MediaCache from "../mediaCache";
 import _internalPluginMeta from "./meta";
-import { buildQualitiesFromArray, normalizePluginMusicItem } from "@/utils/qualities";
+import { normalizePluginMusicItem } from "@/utils/qualities";
 
 
 axios.defaults.timeout = 2000;

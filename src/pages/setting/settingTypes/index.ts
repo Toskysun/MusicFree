@@ -4,6 +4,7 @@ import BackupSetting from "./backupSetting";
 import BasicSetting from "./basicSetting";
 import PluginSetting from "./pluginSetting";
 import ThemeSetting from "./themeSetting";
+import MusicTagSetting from "./musicTagSetting";
 
 const settingTypes: Record<
     string,
@@ -39,6 +40,11 @@ const settingTypes: Record<
         title: `关于${deviceInfoModule.getApplicationName()}`,
         i18nKey: "common.about",
         component: AboutSetting,
+    },
+    musicTag: {
+        title: "音乐标签设置",
+        i18nKey: "sidebar.musicTag",
+        component: MusicTagSetting,
     },
 };
 

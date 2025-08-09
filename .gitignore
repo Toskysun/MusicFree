@@ -85,3 +85,9 @@ tmp/
 .expo
 dist/
 web-build/
+
+# React Native auto-generated build assets
+android/app/src/main/assets/index.android.bundle
+android/app/src/main/res/drawable-*/
+# iOS build assets
+ios/*/Images.xcassets/

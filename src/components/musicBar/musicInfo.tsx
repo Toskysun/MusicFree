@@ -8,7 +8,7 @@ import ThemeText from "../base/themeText";
 import useColors from "@/hooks/useColors";
 import { ROUTE_PATH, useNavigate } from "@/core/router";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import TrackPlayer, { usePlayList } from "@/core/trackPlayer";
+import TrackPlayer from "@/core/trackPlayer";
 import Animated, {
     SharedValue,
     runOnJS,
@@ -118,7 +118,6 @@ function skipMusicItem(direction: number) {
 export default function MusicInfo(props: IMusicInfoProps) {
     const { musicItem } = props;
     const navigate = useNavigate();
-    const playLists = usePlayList();
     const siblingMusicItems = useMemo(() => {
         if (!musicItem) {
             return {
@@ -130,7 +129,7 @@ export default function MusicInfo(props: IMusicInfoProps) {
             prev: TrackPlayer.previousMusic,
             next: TrackPlayer.nextMusic,
         };
-    }, [musicItem, playLists]);
+    }, [musicItem]);
 
     // +- 1
     const transformSharedValue = useSharedValue(0);
@@ -145,7 +144,7 @@ export default function MusicInfo(props: IMusicInfoProps) {
 
     useLayoutEffect(() => {
         transformSharedValue.value = 0;
-    }, [musicItem]);
+    }, [musicItem, transformSharedValue]);
 
     const panGesture = Gesture.Pan()
         .minPointers(1)

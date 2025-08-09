@@ -544,7 +544,7 @@ function useSheetItem(sheetId: string) {
             ee.off("UpdateMusicList", onUpdateMusicList);
             ee.off("UpdateSheetBasic", onUpdateSheetBasic);
         };
-    }, []);
+    }, [sheetId]);
 
     return sheetItem;
 }

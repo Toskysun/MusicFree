@@ -10,7 +10,7 @@ import LyricUtil from "@/native/lyricUtil";
 import NativeUtils from "@/native/utils";
 import downloadNotificationManager from "@/core/downloadNotificationManager";
 import rpx from "@/utils/rpx";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { AppState, StyleSheet } from "react-native";
 
 type IPermissionTypes = "floatingWindow" | "fileStorage" | "notification";
@@ -49,7 +49,7 @@ export default function Permissions() {
 
         setPermissions(prevPermissions => ({
             ...prevPermissions,
-            ...newPermissions
+            ...newPermissions,
         }));
     }
 
@@ -137,7 +137,7 @@ export default function Permissions() {
                     onValueChange={async (newValue) => {
                         if (newValue) {
                             // 请求开启权限
-                            const granted = await downloadNotificationManager.requestNotificationPermission();
+                            await downloadNotificationManager.requestNotificationPermission();
                             // 请求完成后立即更新状态
                             setTimeout(() => {
                                 checkPermission("notification");

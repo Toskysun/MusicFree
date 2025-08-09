@@ -24,7 +24,7 @@ export default function MusicListEditor() {
             setEditingMusicList([]);
             setMusicListChanged(false);
         };
-    }, []);
+    }, [musicList, setEditingMusicList, setMusicListChanged]);
 
     return (
         <VerticalSafeAreaView style={globalStyle.fwflex1}>

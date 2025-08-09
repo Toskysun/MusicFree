@@ -57,7 +57,7 @@ export default function Header(props: IHeaderProps) {
             heightValue.value = withTiming(0);
             opacityValue.value = withTiming(0);
         }
-    }, [scrollToTopState, neverFold]);
+    }, [scrollToTopState, neverFold, heightValue, opacityValue]);
 
     return (
         <Animated.View style={[styles.wrapper, heightStyle]}>

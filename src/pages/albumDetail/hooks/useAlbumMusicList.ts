@@ -66,12 +66,12 @@ export default function useAlbumDetail(
                 setRequestState(RequestStateCode.ERROR);
             }
         },
-        [requestState],
+        [originalAlbumItem, requestState],
     );
 
     useEffect(() => {
         getAlbumDetail();
-    }, []);
+    }, [getAlbumDetail]);
 
     return [requestState, albumItem, musicList, getAlbumDetail] as const;
 }

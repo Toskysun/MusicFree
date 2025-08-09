@@ -1,10 +1,12 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import {
     Image,
     ScrollView,
     StyleSheet,
     TouchableOpacity,
     View,
+    Animated,
+    Easing,
 } from "react-native";
 import rpx from "@/utils/rpx";
 import { ImgAsset } from "@/constants/assetsConst";
@@ -12,7 +14,6 @@ import ThemeText from "@/components/base/themeText";
 import LinkText from "@/components/base/linkText";
 import useCheckUpdate from "@/hooks/useCheckUpdate.ts";
 import useOrientation from "@/hooks/useOrientation";
-import Divider from "@/components/base/divider";
 import Theme from "@/core/theme";
 import DeviceInfo from "react-native-device-info";
 import buildInfo from "@/constants/buildInfo";
@@ -20,16 +21,90 @@ import buildInfo from "@/constants/buildInfo";
 export default function AboutSetting() {
     const checkAndShowResult = useCheckUpdate();
     const orientation = useOrientation();
-    const {colors} = Theme.useTheme();
+    const { colors } = Theme.useTheme();
     const version = DeviceInfo.getVersion(); // 从 package.json 获取版本号
     const buildTime = buildInfo.buildTime; // 从构建信息文件获取构建时间
+
+    // 动画值
+    const fadeAnim1 = useRef(new Animated.Value(0)).current;
+    const fadeAnim2 = useRef(new Animated.Value(0)).current;
+    const fadeAnim3 = useRef(new Animated.Value(0)).current;
+    const fadeAnim4 = useRef(new Animated.Value(0)).current;
+    const scaleAnim1 = useRef(new Animated.Value(0.8)).current;
+    const scaleAnim2 = useRef(new Animated.Value(0.8)).current;
+    const scaleAnim3 = useRef(new Animated.Value(0.8)).current;
+    const scaleAnim4 = useRef(new Animated.Value(0.8)).current;
+
+    useEffect(() => {
+        // 创建动画序列
+        Animated.stagger(150, [
+            Animated.parallel([
+                Animated.timing(fadeAnim1, {
+                    toValue: 1,
+                    duration: 600,
+                    easing: Easing.out(Easing.cubic),
+                    useNativeDriver: true,
+                }),
+                Animated.spring(scaleAnim1, {
+                    toValue: 1,
+                    friction: 4,
+                    tension: 40,
+                    useNativeDriver: true,
+                }),
+            ]),
+            Animated.parallel([
+                Animated.timing(fadeAnim2, {
+                    toValue: 1,
+                    duration: 600,
+                    easing: Easing.out(Easing.cubic),
+                    useNativeDriver: true,
+                }),
+                Animated.spring(scaleAnim2, {
+                    toValue: 1,
+                    friction: 4,
+                    tension: 40,
+                    useNativeDriver: true,
+                }),
+            ]),
+            Animated.parallel([
+                Animated.timing(fadeAnim3, {
+                    toValue: 1,
+                    duration: 600,
+                    easing: Easing.out(Easing.cubic),
+                    useNativeDriver: true,
+                }),
+                Animated.spring(scaleAnim3, {
+                    toValue: 1,
+                    friction: 4,
+                    tension: 40,
+                    useNativeDriver: true,
+                }),
+            ]),
+            Animated.parallel([
+                Animated.timing(fadeAnim4, {
+                    toValue: 1,
+                    duration: 600,
+                    easing: Easing.out(Easing.cubic),
+                    useNativeDriver: true,
+                }),
+                Animated.spring(scaleAnim4, {
+                    toValue: 1,
+                    friction: 4,
+                    tension: 40,
+                    useNativeDriver: true,
+                }),
+            ]),
+        ]).start();
+    }, []);
 
     return (
         <View
             style={[
                 style.wrapper,
                 orientation === "horizontal"
+                    // eslint-disable-next-line react-native/no-inline-styles -- Dynamic orientation layout
                     ? {
+                         
                         flexDirection: "row",
                     }
                     : null,
@@ -57,36 +132,138 @@ export default function AboutSetting() {
                 contentContainerStyle={style.scrollViewContainer}
                 style={style.scrollView}>
                 
-                <View style={[style.infoCard, {backgroundColor: colors.card}]}>
-                    <ThemeText fontSize="subTitle" style={style.cardTitle}>原作者</ThemeText>
-                    <ThemeText style={style.cardContent}>猫头猫</ThemeText>
-                </View>
+                <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => {
+                        // 点击效果动画
+                        Animated.sequence([
+                            Animated.spring(scaleAnim1, {
+                                toValue: 0.95,
+                                friction: 3,
+                                tension: 100,
+                                useNativeDriver: true,
+                            }),
+                            Animated.spring(scaleAnim1, {
+                                toValue: 1,
+                                friction: 3,
+                                tension: 100,
+                                useNativeDriver: true,
+                            }),
+                        ]).start();
+                    }}>
+                    <Animated.View 
+                        style={[
+                            style.infoCard, 
+                            { backgroundColor: colors.card },
+                            {
+                                opacity: fadeAnim1,
+                                transform: [{ scale: scaleAnim1 }],
+                            },
+                        ]}>
+                        <ThemeText fontSize="subTitle" style={style.cardTitle}>原作者</ThemeText>
+                        <ThemeText style={style.cardContent}>猫头猫</ThemeText>
+                    </Animated.View>
+                </TouchableOpacity>
 
-                <View style={[style.infoCard, {backgroundColor: colors.card}]}>
-                    <ThemeText fontSize="subTitle" style={style.cardTitle}>原仓库</ThemeText>
-                    <LinkText linkTo="https://github.com/maotoumao/MusicFree">
-                        https://github.com/maotoumao/MusicFree
-                    </LinkText>
-                </View>
+                <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => {
+                        Animated.sequence([
+                            Animated.spring(scaleAnim2, {
+                                toValue: 0.95,
+                                friction: 3,
+                                tension: 100,
+                                useNativeDriver: true,
+                            }),
+                            Animated.spring(scaleAnim2, {
+                                toValue: 1,
+                                friction: 3,
+                                tension: 100,
+                                useNativeDriver: true,
+                            }),
+                        ]).start();
+                    }}>
+                    <Animated.View 
+                        style={[
+                            style.infoCard, 
+                            { backgroundColor: colors.card },
+                            {
+                                opacity: fadeAnim2,
+                                transform: [{ scale: scaleAnim2 }],
+                            },
+                        ]}>
+                        <ThemeText fontSize="subTitle" style={style.cardTitle}>原仓库</ThemeText>
+                        <LinkText linkTo="https://github.com/maotoumao/MusicFree">
+                            https://github.com/maotoumao/MusicFree
+                        </LinkText>
+                    </Animated.View>
+                </TouchableOpacity>
 
-                <View style={[style.infoCard, {backgroundColor: colors.card}]}>
-                    <ThemeText fontSize="subTitle" style={style.cardTitle}>本作者</ThemeText>
-                    <ThemeText style={style.cardContent}>Toskysun</ThemeText>
-                </View>
+                <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => {
+                        Animated.sequence([
+                            Animated.spring(scaleAnim3, {
+                                toValue: 0.95,
+                                friction: 3,
+                                tension: 100,
+                                useNativeDriver: true,
+                            }),
+                            Animated.spring(scaleAnim3, {
+                                toValue: 1,
+                                friction: 3,
+                                tension: 100,
+                                useNativeDriver: true,
+                            }),
+                        ]).start();
+                    }}>
+                    <Animated.View 
+                        style={[
+                            style.infoCard, 
+                            { backgroundColor: colors.card },
+                            {
+                                opacity: fadeAnim3,
+                                transform: [{ scale: scaleAnim3 }],
+                            },
+                        ]}>
+                        <ThemeText fontSize="subTitle" style={style.cardTitle}>本作者</ThemeText>
+                        <ThemeText style={style.cardContent}>Toskysun</ThemeText>
+                    </Animated.View>
+                </TouchableOpacity>
 
-                <View style={[style.infoCard, {backgroundColor: colors.card}]}>
-                    <ThemeText fontSize="subTitle" style={style.cardTitle}>本仓库</ThemeText>
-                    <LinkText linkTo="https://github.com/Toskysun/MusicFree">
-                        https://github.com/Toskysun/MusicFree
-                    </LinkText>
-                </View>
-
-                <Divider style={style.divider} />
-                
-                <ThemeText fontSize="title">关于本软件</ThemeText>
-                <ThemeText style={style.content}>
-                    本软件基于 AGPL3.0 协议开源，完全免费。
-                </ThemeText>
+                <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => {
+                        Animated.sequence([
+                            Animated.spring(scaleAnim4, {
+                                toValue: 0.95,
+                                friction: 3,
+                                tension: 100,
+                                useNativeDriver: true,
+                            }),
+                            Animated.spring(scaleAnim4, {
+                                toValue: 1,
+                                friction: 3,
+                                tension: 100,
+                                useNativeDriver: true,
+                            }),
+                        ]).start();
+                    }}>
+                    <Animated.View 
+                        style={[
+                            style.infoCard, 
+                            { backgroundColor: colors.card },
+                            {
+                                opacity: fadeAnim4,
+                                transform: [{ scale: scaleAnim4 }],
+                            },
+                        ]}>
+                        <ThemeText fontSize="subTitle" style={style.cardTitle}>本仓库</ThemeText>
+                        <LinkText linkTo="https://github.com/Toskysun/MusicFree">
+                            https://github.com/Toskysun/MusicFree
+                        </LinkText>
+                    </Animated.View>
+                </TouchableOpacity>
             </ScrollView>
         </View>
     );
@@ -99,9 +276,10 @@ const style = StyleSheet.create({
     },
     header: {
         width: rpx(750),
-        height: rpx(300),
+        height: rpx(400),
         justifyContent: "center",
         alignItems: "center",
+        marginBottom: rpx(40),
     },
     horizontalSize: {
         width: rpx(600),
@@ -121,20 +299,14 @@ const style = StyleSheet.create({
     },
     buildText: {
         marginTop: rpx(8),
+        marginBottom: rpx(32),
         opacity: 0.6,
         fontSize: rpx(24),
-    },
-    margin: {
-        marginTop: rpx(24),
-    },
-    content: {
-        marginTop: rpx(24),
-        lineHeight: rpx(48),
     },
     scrollView: {
         flex: 1,
         paddingHorizontal: rpx(24),
-        paddingVertical: rpx(24),
+        paddingTop: rpx(12),
     },
     scrollViewContainer: {
         paddingBottom: rpx(96),
@@ -158,8 +330,5 @@ const style = StyleSheet.create({
     },
     cardContent: {
         fontSize: rpx(28),
-    },
-    divider: {
-        marginVertical: rpx(32),
     },
 });

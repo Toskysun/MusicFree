@@ -52,7 +52,7 @@ export default function RadioDialog(props: IRadioDialogProps) {
                 animated: false,
             });
         }
-    }, []);
+    }, [defaultSelectedIndex]);
 
     return (
         <Dialog onDismiss={hideDialog}>

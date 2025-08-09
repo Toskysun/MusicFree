@@ -33,7 +33,7 @@ export default function SearchLrc(props: INewMusicSheetProps) {
         if (musicItem) {
             searchLrc(musicItem.alias || musicItem.title, 1);
         }
-    }, []);
+    }, [musicItem, searchLrc]);
 
     return (
         <PanelBase
@@ -144,12 +144,16 @@ function LyricResultBodyWrapper() {
                 <TabBar
                     {..._}
                     scrollEnabled
+                    // eslint-disable-next-line react-native/no-inline-styles -- Dynamic transparent styles for tab appearance
                     style={{
+                         
                         backgroundColor: "transparent",
                         shadowColor: "transparent",
                         borderColor: "transparent",
                     }}
+                    // eslint-disable-next-line react-native/no-inline-styles -- Dynamic width for tab flexibility
                     tabStyle={{
+                         
                         width: "auto",
                     }}
                     pressColor="transparent"
@@ -158,12 +162,14 @@ function LyricResultBodyWrapper() {
                     renderLabel={({ route, focused, color }) => (
                         <Text
                             numberOfLines={1}
+                            // eslint-disable-next-line react-native/no-inline-styles -- Dynamic focused state styles
                             style={{
                                 width: rpx(160),
                                 fontWeight: focused
                                     ? fontWeightConst.bolder
                                     : fontWeightConst.medium,
                                 color,
+                                 
                                 textAlign: "center",
                             }}>
                             {route.title ?? t("panel.searchLrc.unnamed")}

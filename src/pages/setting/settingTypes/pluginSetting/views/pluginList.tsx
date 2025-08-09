@@ -216,15 +216,15 @@ export default function PluginList() {
     }
 
     async function onUpdateAllClick() {
-        const plugins = PluginManager.getEnabledPlugins();
+        const enabledPlugins = PluginManager.getEnabledPlugins();
         setLoading(true);
 
         const successResults: IInstallPluginResult[] = [];
         const failResults: IInstallPluginResult[] = [];
 
         try {
-            for (let i = 0; i < plugins.length; ++i) {
-                const srcUrl = plugins[i].instance.srcUrl;
+            for (let i = 0; i < enabledPlugins.length; ++i) {
+                const srcUrl = enabledPlugins[i].instance.srcUrl;
                 if (srcUrl) {
                     const result = await installPluginFromUrl(srcUrl);
                     if (result[0]) {

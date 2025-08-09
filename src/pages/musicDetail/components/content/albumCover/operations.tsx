@@ -8,9 +8,9 @@ import { ImgAsset } from "@/constants/assetsConst";
 import Toast from "@/utils/toast";
 import toast from "@/utils/toast";
 import useOrientation from "@/hooks/useOrientation";
-import { showPanel, hidePanel } from "@/components/panels/usePanel";
+import { showPanel } from "@/components/panels/usePanel";
 import { showDialog, hideDialog } from "@/components/dialogs/useDialog";
-import TrackPlayer, { useCurrentMusic, useMusicQuality } from "@/core/trackPlayer";
+import TrackPlayer, { useCurrentMusic } from "@/core/trackPlayer";
 import { iconSizeConst } from "@/constants/uiConst";
 import PersistStatus from "@/utils/persistStatus";
 import HeartIcon from "../heartIcon";
@@ -21,7 +21,7 @@ import i18n from "@/core/i18n";
 
 export default function Operations() {
     const musicItem = useCurrentMusic();
-    const currentQuality = useMusicQuality();
+    // const currentQuality = useMusicQuality();
     const isDownloaded = LocalMusicSheet.useIsLocal(musicItem);
 
     const rate = PersistStatus.useValue("music.rate", 100);
@@ -68,7 +68,7 @@ export default function Operations() {
                     if (musicItem && !isDownloaded) {
                         // 显示加载状态
                         showDialog("LoadingDialog", {
-                            title: i18n.t("downloading.downloadStatus.preparing")
+                            title: i18n.t("downloading.downloadStatus.preparing"),
                         });
 
                         try {

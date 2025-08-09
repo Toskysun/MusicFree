@@ -16,7 +16,7 @@ export const qualityKeys: IMusic.IQualityKey[] = [
 
 // 音质尝试顺序
 export const TRY_QUALITYS_LIST: IMusic.IQualityKey[] = [
-    'master', 'atmos_plus', 'atmos', 'hires', 'flac24bit', 'flac', '320k', '128k'
+    "master", "atmos_plus", "atmos", "hires", "flac24bit", "flac", "320k", "128k",
 ] as const;
 
 // 保留原有硬编码翻译作为后备
@@ -71,7 +71,7 @@ export function getSmartQuality(
     
     // 从偏好音质开始，向下搜索可用音质
     const preferredIndex = TRY_QUALITYS_LIST.indexOf(preferredQuality);
-    if (preferredIndex === -1) return '320k'; // 如果偏好音质不在列表中，返回320k
+    if (preferredIndex === -1) return "320k"; // 如果偏好音质不在列表中，返回320k
     
     // 从偏好音质开始向下搜索
     for (let i = preferredIndex; i < TRY_QUALITYS_LIST.length; i++) {
@@ -105,7 +105,7 @@ export function getSmartQuality(
     }
     
     // 最后回退到128k
-    return '128k';
+    return "128k";
 }
 
 /** 获取音质顺序 */
@@ -136,13 +136,14 @@ const qualityTextToKeyMap: Record<string, IMusic.IQualityKey> = {
     "320K": "320k",
     "128K": "128k",
     
-    // QQ音乐音质映射
+    // QQ音乐音质映射和标准键直接映射
     "flac24bit": "flac24bit",
     "flac": "flac",
     "320k": "320k",
     "128k": "128k",
     "master": "master",
     "atmos": "atmos",
+    "atmos_plus": "atmos_plus",
     "hires": "hires",
     
     // 通用音质映射
@@ -151,16 +152,6 @@ const qualityTextToKeyMap: Record<string, IMusic.IQualityKey> = {
     "标准": "128k",
     "超高品质": "hires",
     "母带": "master",
-    
-    // 标准键直接映射
-    "master": "master",
-    "atmos_plus": "atmos_plus",
-    "atmos": "atmos",
-    "hires": "hires", 
-    "flac24bit": "flac24bit",
-    "flac": "flac",
-    "320k": "320k",
-    "128k": "128k",
 };
 
 /** 将API返回的音质信息转换为标准的qualities格式 */
@@ -177,7 +168,7 @@ export function convertApiQualityToQualities(apiQuality?: {
     // 从API返回的质量文本中提取标准键
     const qualityKey = qualityTextToKeyMap[apiQuality.result];
     if (!qualityKey) {
-        console.warn('未知的音质类型:', apiQuality.result);
+        console.warn("未知的音质类型:", apiQuality.result);
         return undefined;
     }
 
@@ -185,14 +176,14 @@ export function convertApiQualityToQualities(apiQuality?: {
     return {
         [qualityKey]: {
             url: undefined, // 将由插件的getMediaSource方法提供
-            size: apiQuality.size // 使用API返回的文件大小
-        }
+            size: apiQuality.size, // 使用API返回的文件大小
+        },
     };
 }
 
 /** 解析音质文本，返回对应的标准键 */
-export function parseQualityText(qualityText: string): IMusic.IQualityKey | null {
-    return qualityTextToKeyMap[qualityText] || null;
+export function parseQualityText(inputQualityText: string): IMusic.IQualityKey | null {
+    return qualityTextToKeyMap[inputQualityText] || null;
 }
 
 /**
@@ -231,7 +222,7 @@ export function buildQualitiesFromArray(qualityArray: Array<{
         if (qualityKey) {
             qualities[qualityKey] = {
                 url: qualityInfo.url,
-                size: qualityInfo.size
+                size: qualityInfo.size,
             };
         }
     }
@@ -287,7 +278,7 @@ export function getAvailableQualities(
             return plugin.supportedQualities;
         }
         // 如果没有插件信息，提供基础默认音质
-        return ['128k', '320k', 'flac'];
+        return ["128k", "320k", "flac"];
     }
     
     return availableQualities;
@@ -322,7 +313,7 @@ export function normalizePluginQualityInfo(
     pluginQualityMapping?: Record<string, IMusic.IQualityKey>
 ): IMusic.IQuality | undefined {
     // 如果已经有标准的qualities格式，直接返回
-    if (musicItem.qualities && typeof musicItem.qualities === 'object') {
+    if (musicItem.qualities && typeof musicItem.qualities === "object") {
         return musicItem.qualities as IMusic.IQuality;
     }
     
@@ -330,10 +321,10 @@ export function normalizePluginQualityInfo(
     
     // 处理网易云音乐风格的音质信息 (低音质l, 中音质m, 高音质h, 超高音质sq)
     if (musicItem.l || musicItem.m || musicItem.h || musicItem.sq) {
-        if (musicItem.l?.size) qualities['128k'] = { size: musicItem.l.size };
-        if (musicItem.m?.size) qualities['320k'] = { size: musicItem.m.size };
-        if (musicItem.h?.size) qualities['flac'] = { size: musicItem.h.size };
-        if (musicItem.sq?.size) qualities['hires'] = { size: musicItem.sq.size };
+        if (musicItem.l?.size) qualities["128k"] = { size: musicItem.l.size };
+        if (musicItem.m?.size) qualities["320k"] = { size: musicItem.m.size };
+        if (musicItem.h?.size) qualities.flac = { size: musicItem.h.size };
+        if (musicItem.sq?.size) qualities.hires = { size: musicItem.sq.size };
     }
     
     // 处理QQ音乐/酷狗风格的音质数组
@@ -344,21 +335,21 @@ export function normalizePluginQualityInfo(
             if (standardKey) {
                 qualities[standardKey] = {
                     url: qualityInfo.url,
-                    size: qualityInfo.size || qualityInfo.fileSize
+                    size: qualityInfo.size || qualityInfo.fileSize,
                 };
             }
         }
     }
     
     // 处理命名键值对格式 (如 {low: {size: 123}, standard: {size: 456}})
-    const namedQualityKeys = ['low', 'standard', 'high', 'super'];
+    const namedQualityKeys = ["low", "standard", "high", "super"];
     for (const key of namedQualityKeys) {
-        if (musicItem[key] && typeof musicItem[key] === 'object') {
+        if (musicItem[key] && typeof musicItem[key] === "object") {
             const standardKey = qualityTextToKeyMap[key];
             if (standardKey && musicItem[key].size) {
                 qualities[standardKey] = {
                     size: musicItem[key].size,
-                    url: musicItem[key].url
+                    url: musicItem[key].url,
                 };
             }
         }

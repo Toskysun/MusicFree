@@ -45,12 +45,14 @@ export default function TopListBody() {
                     renderLabel={({ route, focused, color }) => (
                         <Text
                             numberOfLines={1}
+                            // eslint-disable-next-line react-native/no-inline-styles -- Dynamic focused state styles
                             style={{
                                 width: rpx(160),
                                 fontWeight: focused
                                     ? fontWeightConst.bolder
                                     : fontWeightConst.medium,
                                 color,
+                                 
                                 textAlign: "center",
                             }}>
                             {route.title}

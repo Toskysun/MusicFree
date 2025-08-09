@@ -28,7 +28,7 @@ function Home() {
                 navigate(ROUTE_PATH.MUSIC_DETAIL);
             }, 100);
         }
-    }, []);
+    }, [navigate]);
 
     return (
         <SafeAreaView edges={["top", "bottom"]} style={styles.appWrapper}>
@@ -73,6 +73,10 @@ function HomeStatusBar() {
 // }
 
 const LeftDrawer = createDrawerNavigator();
+
+// Extract drawer content component to avoid nested component warning
+const DrawerContent = (props: any) => <HomeDrawer {...props} />;
+
 export default function App() {
     return (
         <LeftDrawer.Navigator
@@ -83,7 +87,7 @@ export default function App() {
                 },
             }}
             initialRouteName="HOME-MAIN"
-            drawerContent={props => <HomeDrawer {...props} />}>
+            drawerContent={DrawerContent}>
             <LeftDrawer.Screen name="HOME-MAIN" component={Home} />
         </LeftDrawer.Navigator>
     );

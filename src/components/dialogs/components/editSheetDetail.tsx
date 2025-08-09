@@ -118,13 +118,13 @@ export default function EditSheetDetailDialog(props: IEditSheetDetailProps) {
                         value={title}
                         hasHorizontalPadding={false}
                         onChangeText={onTitleChange}
-                        style={{
-                            height: fontSizeConst.content * 2.5,
-                            width: "50%",
-                            borderBottomWidth: 1,
-                            includeFontPadding: false,
-                            borderBottomColor: colors.text,
-                        }}
+                        style={[
+                            style.titleInput,
+                            {
+                                height: fontSizeConst.content * 2.5,
+                                borderBottomColor: colors.text,
+                            },
+                        ]}
                     />
                 </View>
             </Dialog.Content>
@@ -159,5 +159,10 @@ const style = StyleSheet.create({
         width: rpx(100),
         height: rpx(100),
         borderRadius: rpx(28),
+    },
+    titleInput: {
+        width: "50%",
+        borderBottomWidth: 1,
+        includeFontPadding: false,
     },
 });

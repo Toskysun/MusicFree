@@ -137,7 +137,7 @@ export default function FileSelector() {
             setLoading(false);
             currentPathRef.current = currentPath;
         })();
-    }, [currentPath.path]);
+    }, [currentPath, fileType, matchExtension]);
 
     useHardwareBack(() => {
         // 注意闭包
@@ -173,7 +173,7 @@ export default function FileSelector() {
                 );
             }
         },
-        [],
+        [multi],
     );
 
     const renderItem = ({ item }: { item: IFileItem }) => (

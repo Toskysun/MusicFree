@@ -23,11 +23,7 @@ export default function () {
             <View
                 style={[
                     style.wrapper,
-                    orientation === "horizontal"
-                        ? {
-                            marginTop: 0,
-                        }
-                        : null,
+                    orientation === "horizontal" ? style.horizontalWrapper : null,
                 ]}>
                 <Icon
                     color={"white"}
@@ -89,5 +85,8 @@ const style = StyleSheet.create({
         flexDirection: "row",
         justifyContent: "space-around",
         alignItems: "center",
+    },
+    horizontalWrapper: {
+        marginTop: 0,
     },
 });

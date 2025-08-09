@@ -41,7 +41,7 @@ export default function (callOnMount = true) {
         if (callOnMount) {
             checkUpdateAndShowResult(false, true);
         }
-    }, []);
+    }, [callOnMount]);
 
     return checkUpdateAndShowResult;
 }

@@ -18,11 +18,11 @@ export default function (hash: string) {
                 setTags(null);
             }
         }
-    }, []);
+    }, [hash]);
 
     useEffect(() => {
         query();
-    }, []);
+    }, [query]);
 
     return tags;
 }

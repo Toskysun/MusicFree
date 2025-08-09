@@ -31,7 +31,7 @@ function _MusicEditorItem(props: IMusicEditorItemProps) {
                 draft[index].checked = !draft[index].checked;
             }),
         );
-    }, [index]);
+    }, [index, setEditingMusicList]);
 
     return (
         <MusicItem
@@ -66,7 +66,7 @@ export default function MusicList() {
         ({ index, item }: any) => {
             return <MusicEditorItem editorMusicItem={item} index={index!} />;
         },
-        [editingMusicList],
+        [],
     );
     const colors = useColors();
 

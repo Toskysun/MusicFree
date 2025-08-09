@@ -110,7 +110,7 @@ export default function useComments(mediaItem: ICommon.IMediaBase) {
 
     useEffect(() => {
         getComments();
-    }, []);
+    }, [getComments]);
 
 
     return [commentsValue.state, commentsValue.comments, getComments] as const;

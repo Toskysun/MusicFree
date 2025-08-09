@@ -125,7 +125,7 @@ export default function MusicItemOptions(props: IMusicItemOptionsProps) {
             onPress: async () => {
                 // 显示加载状态
                 showDialog("LoadingDialog", {
-                    title: t("downloading.downloadStatus.preparing")
+                    title: t("downloading.downloadStatus.preparing"),
                 });
 
                 try {

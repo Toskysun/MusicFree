@@ -47,7 +47,7 @@ export default function PluginSubscribe() {
                 setSubscribes([]);
             }
         }
-    }, [urls]);
+    }, [urls, t]);
 
     const onSubmit = (
         subscribeItem: ISubscribeItem,

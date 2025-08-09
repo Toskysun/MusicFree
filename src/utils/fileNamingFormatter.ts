@@ -80,15 +80,15 @@ function replaceTemplateVariables(
     Object.entries(variables).forEach(([key, value]) => {
         const placeholder = `{${key}}`;
         if (value) {
-            result = result.replace(new RegExp(placeholder, 'g'), String(value));
+            result = result.replace(new RegExp(placeholder, "g"), String(value));
         } else {
             // 如果变量值为空，则删除占位符及其前后的连字符
-            result = result.replace(new RegExp(`-?${placeholder}-?`, 'g'), '');
+            result = result.replace(new RegExp(`-?${placeholder}-?`, "g"), "");
         }
     });
     
     // 清理多余的连字符
-    result = result.replace(/-+/g, '-').replace(/^-+|-+$/g, '');
+    result = result.replace(/-+/g, "-").replace(/^-+|-+$/g, "");
     
     return result;
 }
@@ -107,7 +107,7 @@ function truncateFilename(
     
     if (keepExtension) {
         // 保留扩展名，只截断主文件名部分
-        const lastDotIndex = filename.lastIndexOf('.');
+        const lastDotIndex = filename.lastIndexOf(".");
         if (lastDotIndex > 0) {
             const name = filename.slice(0, lastDotIndex);
             const ext = filename.slice(lastDotIndex);
@@ -115,7 +115,7 @@ function truncateFilename(
             if (availableLength > 0) {
                 return {
                     filename: name.slice(0, availableLength) + ext,
-                    truncated: true
+                    truncated: true,
                 };
             }
         }
@@ -124,7 +124,7 @@ function truncateFilename(
     // 直接截断
     return {
         filename: filename.slice(0, maxLength),
-        truncated: true
+        truncated: true,
     };
 }
 
@@ -132,7 +132,7 @@ function truncateFilename(
  * 验证模板字符串
  */
 export function validateTemplate(template: string): { valid: boolean; error?: string } {
-    if (!template || typeof template !== 'string') {
+    if (!template || typeof template !== "string") {
         return { valid: false, error: "模板不能为空" };
     }
     
@@ -144,16 +144,16 @@ export function validateTemplate(template: string): { valid: boolean; error?: st
     if (!hasValidVariable) {
         return { 
             valid: false, 
-            error: "模板必须包含至少一个有效变量：" + Object.keys(TEMPLATE_VARIABLES).join(", ") 
+            error: "模板必须包含至少一个有效变量：" + Object.keys(TEMPLATE_VARIABLES).join(", "), 
         };
     }
     
     // 检查是否包含非法字符
     const invalidChars = /[/|\\?*"<>:]+/;
-    if (invalidChars.test(template.replace(/\{[^}]+\}/g, ''))) {
+    if (invalidChars.test(template.replace(/\{[^}]+\}/g, ""))) {
         return { 
             valid: false, 
-            error: "模板包含非法字符：/ | \\ ? * \" < > :" 
+            error: "模板包含非法字符：/ | \\ ? * \" < > :", 
         };
     }
     
@@ -183,7 +183,7 @@ export function formatFilename(options: IFileNaming.IFormatOptions): IFileNaming
     return {
         filename: finalFilename,
         truncated,
-        originalLength
+        originalLength,
     };
 }
 

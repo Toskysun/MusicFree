@@ -82,6 +82,24 @@ jobs:
         # 使用npm ci进行更快的安装
         npm ci --prefer-offline --no-audit --progress=false
     
+    # 🔄 同步版本号到package.json
+    - name: Sync version to package.json
+      if: startsWith(github.ref, 'refs/tags/')
+      run: |
+        TAG_VERSION="${{ github.ref_name }}"
+        # 移除v前缀，获取纯版本号
+        VERSION=${TAG_VERSION#v}
+        echo "📝 Syncing version $VERSION to package.json..."
+        
+        # 使用Node.js更新package.json版本
+        node -e "
+          const fs = require('fs');
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          pkg.version = '$VERSION';
+          fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          console.log('✅ Updated package.json version to:', pkg.version);
+        "
+
     # 🔨 生成构建信息
     - name: Generate build info
       run: |
@@ -95,6 +113,17 @@ jobs:
         chmod +x android/gradlew
         # Gradle daemon预热
         cd android && ./gradlew --version
+        
+        # 预构建React Native依赖以避免超时
+        echo "🚀 Pre-building React Native native modules..."
+        cd android && ./gradlew :app:preBuild \
+          --build-cache \
+          --parallel \
+          --daemon \
+          --no-scan \
+          --max-workers=2 \
+          --quiet \
+          || echo "⚠️  Pre-build completed with warnings"
     
     # 🔐 设置签名证书
     - name: Setup keystore
@@ -127,6 +156,7 @@ jobs:
     
     # 🚀 构建 Android APK
     - name: Build Android APK
+      timeout-minutes: 45
       run: |
         cd android
         
@@ -152,7 +182,19 @@ jobs:
           --daemon \
           --no-scan \
           --stacktrace \
-          || { echo "❌ Gradle build failed!"; exit 1; }
+          --max-workers=3 \
+          2>&1 | tee build.log || BUILD_FAILED=true
+        
+        # 如果构建失败，显示Kotlin编译错误
+        if [ "$BUILD_FAILED" = true ]; then
+          echo "❌ Gradle build failed! Extracting Kotlin compilation errors..."
+          echo "=============== KOTLIN COMPILATION ERRORS ==============="
+          grep -A 10 -B 2 "e: " build.log || true
+          grep -A 10 -B 2 "error:" build.log || true
+          grep -A 10 -B 2 "FAILED" build.log || true
+          echo "========================================================="
+          exit 1
+        fi
         
         echo "✅ Android APK build completed successfully"
         

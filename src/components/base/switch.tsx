@@ -28,7 +28,7 @@ export default function ThemeSwitch(props: ISwitchProps) {
 
     useEffect(() => {
         sharedValue.value = value ? 1 : 0;
-    }, [value]);
+    }, [value, sharedValue]);
 
     const thumbStyle = useAnimatedStyle(() => {
         return {

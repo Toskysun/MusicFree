@@ -26,7 +26,6 @@ import { readdir } from "react-native-fs";
 import { FlatList, ScrollView } from "react-native-gesture-handler";
 import {
     getPresetTemplates,
-    getPresetTemplate,
     validateTemplate,
     DEFAULT_FILE_NAMING_CONFIG,
     TEMPLATE_VARIABLES,
@@ -137,12 +136,11 @@ export default function BasicSetting() {
     const showExitOnNotification = useAppConfig("basic.showExitOnNotification");
     const musicOrderInLocalSheet = useAppConfig("basic.musicOrderInLocalSheet");
     const tryChangeSourceWhenPlayFail = useAppConfig("basic.tryChangeSourceWhenPlayFail");
-
+    
     // 文件命名相关配置
     const fileNamingType = useAppConfig("basic.fileNamingType");
     const fileNamingPreset = useAppConfig("basic.fileNamingPreset");
     const fileNamingCustom = useAppConfig("basic.fileNamingCustom");
-    const fileNamingMaxLength = useAppConfig("basic.fileNamingMaxLength");
     
     // 自定义音质翻译
     const customQualityTranslations = useAppConfig("basic.qualityTranslations");
@@ -155,7 +153,6 @@ export default function BasicSetting() {
     const debugEnableDevLog = useAppConfig("debug.devLog");
 
     const navigate = useNavigate();
-    const colors = useColors();
 
     const [cacheSize, refreshCacheSize] = useCacheSize();
 
@@ -164,7 +161,7 @@ export default function BasicSetting() {
 
     useEffect(() => {
         refreshCacheSize();
-    }, []);
+    }, [refreshCacheSize]);
 
     const basicOptions = [
         {
@@ -432,7 +429,7 @@ export default function BasicSetting() {
                             title: "文件命名格式类型",
                             content: [
                                 { label: "预设模板", value: "preset" },
-                                { label: "自定义模板", value: "custom" }
+                                { label: "自定义模板", value: "custom" },
                             ],
                             onOk(val) {
                                 Config.setConfig("basic.fileNamingType", val);
@@ -500,6 +497,17 @@ export default function BasicSetting() {
                         });
                     },
                 }] : []),
+                // 音乐标签设置入口
+                {
+                    title: "音乐标签设置",
+                    desc: "配置元数据获取、内嵌字段、数据源等",
+                    right: undefined,
+                    onPress() {
+                        navigate(ROUTE_PATH.SETTING, {
+                            type: "musicTag",
+                        });
+                    },
+                },
             ],
         },
         {
@@ -539,7 +547,7 @@ export default function BasicSetting() {
                             title: t("dialog.setCacheTitle"),
                             placeholder: t("dialog.setCachePlaceholder"),
                             onOk(text, closePanel) {
-                                let val = parseInt(text);
+                                let val = parseInt(text, 10);
                                 if (val < 100) {
                                     val = 100;
                                 } else if (val > 8192) {
@@ -971,9 +979,9 @@ function LyricSetting() {
                     showPanel("ColorPicker", {
                         closePanelWhenSelected: true,
                         defaultColor: color ?? "transparent",
-                        onSelected(color) {
+                        onSelected(selectedColor) {
                             if (showStatusBarLyric) {
-                                const colorStr = color.hexa();
+                                const colorStr = selectedColor.hexa();
                                 LyricUtil.setStatusBarColors(colorStr, null);
                                 Config.setConfig("lyric.color", colorStr);
                             }
@@ -991,9 +999,9 @@ function LyricSetting() {
                         closePanelWhenSelected: true,
                         defaultColor:
                             backgroundColor ?? "transparent",
-                        onSelected(color) {
+                        onSelected(selectedBgColor) {
                             if (showStatusBarLyric) {
-                                const colorStr = color.hexa();
+                                const colorStr = selectedBgColor.hexa();
                                 LyricUtil.setStatusBarColors(null, colorStr);
                                 Config.setConfig(
                                     "lyric.backgroundColor",

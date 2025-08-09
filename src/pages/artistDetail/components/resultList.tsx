@@ -29,7 +29,7 @@ export default function ResultList(props: IResultListProps) {
 
     useEffect(() => {
         queryState === RequestStateCode.IDLE && queryArtist(artistItem, 1, tab);
-    }, []);
+    }, [artistItem, queryArtist, queryState, tab]);
 
     useEffect(() => {
         setQueryState(data?.state ?? RequestStateCode.IDLE);

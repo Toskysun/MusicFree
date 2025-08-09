@@ -25,7 +25,7 @@ export function useListenOrientationChange() {
         return () => {
             subscription?.remove();
         };
-    }, []);
+    }, [setOrientationAtom]);
 }
 
 export default function useOrientation() {

@@ -1,15 +1,14 @@
 import notifee, { 
-  AndroidCategory,
-  AndroidImportance,
-  AndroidStyle,
-  AndroidColor,
-  AndroidVisibility,
-  EventType
-} from '@notifee/react-native';
-import { Platform, Linking } from 'react-native';
-import { getMediaUniqueKey } from '@/utils/mediaUtils';
-import notificationPermissionManager from './notificationPermissionManager';
-import { errorLog } from '@/utils/log';
+    AndroidCategory,
+    AndroidImportance,
+    AndroidStyle,
+    AndroidColor,
+    AndroidVisibility,
+    EventType,
+} from "@notifee/react-native";
+import { Platform } from "react-native";
+import notificationPermissionManager from "./notificationPermissionManager";
+import { errorLog } from "@/utils/log";
 
 interface NotificationTask {
   taskId: string;
@@ -20,367 +19,367 @@ interface NotificationTask {
 }
 
 class DownloadNotificationManager implements IDownloadNotification.IDownloadNotificationManager {
-  private readonly CHANNEL_ID = 'download-progress';
-  private readonly UPDATE_THROTTLE = 500; // 限制通知更新频率，避免卡顿
+    private readonly CHANNEL_ID = "download-progress";
+    private readonly UPDATE_THROTTLE = 500; // 限制通知更新频率，避免卡顿
   
-  private activeTasks = new Map<string, NotificationTask>();
-  private isInitialized = false;
+    private activeTasks = new Map<string, NotificationTask>();
+    private isInitialized = false;
 
-  async initialize(): Promise<void> {
-    if (this.isInitialized || Platform.OS !== 'android') {
-      return;
-    }
-
-    try {
-      // 静默请求通知权限
-      const hasPermission = await notificationPermissionManager.silentRequestPermission();
-      
-      if (!hasPermission) {
-        console.warn('Notification permission not granted, notifications will be disabled');
-        // 即使没有权限也标记为已初始化，这样其他功能不会受到影响
-        this.isInitialized = true;
-        return;
-      }
-
-      // 创建通知渠道
-      await notifee.createChannel({
-        id: this.CHANNEL_ID,
-        name: '下载进度',
-        description: '音乐下载进度通知',
-        importance: AndroidImportance.LOW, // 低重要性，避免过度打扰
-        sound: undefined, // 不播放声音
-        vibration: false,
-      });
-
-      // 监听通知交互事件
-      notifee.onForegroundEvent(({ type, detail }) => {
-        if (type === EventType.ACTION_PRESS && detail.pressAction?.id === 'cancel') {
-          // 处理取消下载操作
-          const notificationId = detail.notification?.id;
-          if (notificationId) {
-            this.handleCancelDownload(notificationId);
-          }
+    async initialize(): Promise<void> {
+        if (this.isInitialized || Platform.OS !== "android") {
+            return;
         }
-      });
 
-      this.isInitialized = true;
-    } catch (error) {
-      console.error('Failed to initialize download notification manager:', error);
-      errorLog('Failed to initialize download notification manager', error);
+        try {
+            // 静默请求通知权限
+            const hasPermission = await notificationPermissionManager.silentRequestPermission();
+      
+            if (!hasPermission) {
+                console.warn("Notification permission not granted, notifications will be disabled");
+                // 即使没有权限也标记为已初始化，这样其他功能不会受到影响
+                this.isInitialized = true;
+                return;
+            }
+
+            // 创建通知渠道
+            await notifee.createChannel({
+                id: this.CHANNEL_ID,
+                name: "下载进度",
+                description: "音乐下载进度通知",
+                importance: AndroidImportance.LOW, // 低重要性，避免过度打扰
+                sound: undefined, // 不播放声音
+                vibration: false,
+            });
+
+            // 监听通知交互事件
+            notifee.onForegroundEvent(({ type, detail }) => {
+                if (type === EventType.ACTION_PRESS && detail.pressAction?.id === "cancel") {
+                    // 处理取消下载操作
+                    const notificationId = detail.notification?.id;
+                    if (notificationId) {
+                        this.handleCancelDownload(notificationId);
+                    }
+                }
+            });
+
+            this.isInitialized = true;
+        } catch (error) {
+            console.error("Failed to initialize download notification manager:", error);
+            errorLog("Failed to initialize download notification manager", error);
+        }
     }
-  }
 
-  private async handleCancelDownload(notificationId: string): Promise<void> {
+    private async handleCancelDownload(notificationId: string): Promise<void> {
     // 查找对应的任务
-    for (const [taskId, task] of this.activeTasks) {
-      if (task.notificationId === notificationId) {
-        this.activeTasks.delete(taskId);
-        await notifee.cancelNotification(notificationId);
-        // TODO: 可以在这里发送取消下载事件给下载器
-        break;
-      }
+        for (const [taskId, task] of this.activeTasks) {
+            if (task.notificationId === notificationId) {
+                this.activeTasks.delete(taskId);
+                await notifee.cancelNotification(notificationId);
+                // TODO: 可以在这里发送取消下载事件给下载器
+                break;
+            }
+        }
     }
-  }
 
-  private generateNotificationId(taskId: string): string {
-    return `download_${taskId}`;
-  }
+    private generateNotificationId(taskId: string): string {
+        return `download_${taskId}`;
+    }
 
-  private formatFileSize(bytes: number): string {
-    if (bytes === 0) return '0 B';
+    private formatFileSize(bytes: number): string {
+        if (bytes === 0) return "0 B";
     
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
+        const k = 1024;
+        const sizes = ["B", "KB", "MB", "GB"];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
     
-    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
-  }
+        return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i];
+    }
 
-  private formatSpeed(bytesPerSecond: number): string {
-    return this.formatFileSize(bytesPerSecond) + '/s';
-  }
+    private formatSpeed(bytesPerSecond: number): string {
+        return this.formatFileSize(bytesPerSecond) + "/s";
+    }
 
-  private calculateSpeed(task: NotificationTask, currentDownloaded: number): number {
-    const now = Date.now();
-    const timeDiff = now - task.lastUpdateTime;
+    private calculateSpeed(task: NotificationTask, currentDownloaded: number): number {
+        const now = Date.now();
+        const timeDiff = now - task.lastUpdateTime;
     
-    if (timeDiff > 0) {
-      const sizeDiff = currentDownloaded - task.lastDownloadedSize;
-      return Math.round((sizeDiff / timeDiff) * 1000); // bytes/s
-    }
+        if (timeDiff > 0) {
+            const sizeDiff = currentDownloaded - task.lastDownloadedSize;
+            return Math.round((sizeDiff / timeDiff) * 1000); // bytes/s
+        }
     
-    return 0;
-  }
-
-  async showDownloadNotification(taskId: string, musicItem: IMusic.IMusicItem): Promise<void> {
-    if (Platform.OS !== 'android' || !this.isInitialized) {
-      return;
+        return 0;
     }
 
-    // 检查权限
-    const hasPermission = await notificationPermissionManager.checkPermission();
-    if (!hasPermission) {
-      return;
-    }
+    async showDownloadNotification(taskId: string, musicItem: IMusic.IMusicItem): Promise<void> {
+        if (Platform.OS !== "android" || !this.isInitialized) {
+            return;
+        }
 
-    const notificationId = this.generateNotificationId(taskId);
+        // 检查权限
+        const hasPermission = await notificationPermissionManager.checkPermission();
+        if (!hasPermission) {
+            return;
+        }
+
+        const notificationId = this.generateNotificationId(taskId);
     
-    // 只记录任务信息，不显示通知
-    // 仅在实际开始下载时（updateProgress调用时）才显示通知
-    this.activeTasks.set(taskId, {
-      taskId,
-      musicItem,
-      notificationId,
-      lastUpdateTime: Date.now(),
-      lastDownloadedSize: 0,
-    });
-  }
-
-  async updateProgress(taskId: string, progress: IDownloadNotification.DownloadProgress): Promise<void> {
-    if (Platform.OS !== 'android' || !this.isInitialized) {
-      return;
+        // 只记录任务信息，不显示通知
+        // 仅在实际开始下载时（updateProgress调用时）才显示通知
+        this.activeTasks.set(taskId, {
+            taskId,
+            musicItem,
+            notificationId,
+            lastUpdateTime: Date.now(),
+            lastDownloadedSize: 0,
+        });
     }
 
-    // 检查权限
-    const hasPermission = await notificationPermissionManager.checkPermission();
-    if (!hasPermission) {
-      return;
-    }
+    async updateProgress(taskId: string, progress: IDownloadNotification.DownloadProgress): Promise<void> {
+        if (Platform.OS !== "android" || !this.isInitialized) {
+            return;
+        }
 
-    const task = this.activeTasks.get(taskId);
-    if (!task) {
-      return;
-    }
+        // 检查权限
+        const hasPermission = await notificationPermissionManager.checkPermission();
+        if (!hasPermission) {
+            return;
+        }
 
-    const now = Date.now();
+        const task = this.activeTasks.get(taskId);
+        if (!task) {
+            return;
+        }
+
+        const now = Date.now();
     
-    // 检查是否为首次显示通知（刚开始下载）
-    const isFirstDisplay = task.lastDownloadedSize === 0 && progress.downloadedSize > 0;
+        // 检查是否为首次显示通知（刚开始下载）
+        const isFirstDisplay = task.lastDownloadedSize === 0 && progress.downloadedSize > 0;
     
-    // 限制更新频率，避免过度更新导致性能问题（首次显示除外）
-    if (!isFirstDisplay && now - task.lastUpdateTime < this.UPDATE_THROTTLE) {
-      return;
-    }
+        // 限制更新频率，避免过度更新导致性能问题（首次显示除外）
+        if (!isFirstDisplay && now - task.lastUpdateTime < this.UPDATE_THROTTLE) {
+            return;
+        }
 
-    // 计算下载速度
-    const speed = this.calculateSpeed(task, progress.downloadedSize);
+        // 计算下载速度
+        const speed = this.calculateSpeed(task, progress.downloadedSize);
     
-    // 更新任务状态
-    task.lastUpdateTime = now;
-    task.lastDownloadedSize = progress.downloadedSize;
+        // 更新任务状态
+        task.lastUpdateTime = now;
+        task.lastDownloadedSize = progress.downloadedSize;
 
-    const progressPercent = Math.round(progress.progress);
-    const downloadedFormatted = this.formatFileSize(progress.downloadedSize);
-    const totalFormatted = this.formatFileSize(progress.fileSize);
-    const speedFormatted = speed > 0 ? this.formatSpeed(speed) : '';
+        const progressPercent = Math.round(progress.progress);
+        const downloadedFormatted = this.formatFileSize(progress.downloadedSize);
+        const totalFormatted = this.formatFileSize(progress.fileSize);
+        const speedFormatted = speed > 0 ? this.formatSpeed(speed) : "";
 
-    let bodyText = `${downloadedFormatted}/${totalFormatted}`;
-    if (speedFormatted) {
-      bodyText += ` (${speedFormatted})`;
+        let bodyText = `${downloadedFormatted}/${totalFormatted}`;
+        if (speedFormatted) {
+            bodyText += ` (${speedFormatted})`;
+        }
+
+        // 根据进度显示不同的标题
+        let title = `下载中 ${progressPercent}%`;
+        if (isFirstDisplay) {
+            title = `开始下载 ${progressPercent}%`;
+        }
+
+        try {
+            await notifee.displayNotification({
+                id: task.notificationId,
+                title,
+                body: `${task.musicItem.title} - ${task.musicItem.artist}\n${bodyText}`,
+                android: {
+                    channelId: this.CHANNEL_ID,
+                    category: AndroidCategory.PROGRESS,
+                    importance: AndroidImportance.LOW,
+                    visibility: AndroidVisibility.PUBLIC,
+                    ongoing: true,
+                    autoCancel: false,
+                    progress: {
+                        max: 100,
+                        current: progressPercent,
+                        indeterminate: false,
+                    },
+                    actions: [
+                        {
+                            title: "取消",
+                            pressAction: {
+                                id: "cancel",
+                            },
+                        },
+                    ],
+                    color: AndroidColor.BLUE,
+                    smallIcon: "ic_launcher",
+                    largeIcon: task.musicItem.artwork,
+                    style: {
+                        type: AndroidStyle.BIGTEXT,
+                        text: bodyText,
+                    },
+                },
+            });
+        } catch (error) {
+            console.error("Failed to update download progress:", error);
+        }
     }
 
-    // 根据进度显示不同的标题
-    let title = `下载中 ${progressPercent}%`;
-    if (isFirstDisplay) {
-      title = `开始下载 ${progressPercent}%`;
+    async showCompleted(taskId: string, musicItem: IMusic.IMusicItem, _filePath: string): Promise<void> {
+        if (Platform.OS !== "android" || !this.isInitialized) {
+            return;
+        }
+
+        // 检查权限
+        const hasPermission = await notificationPermissionManager.checkPermission();
+        if (!hasPermission) {
+            return;
+        }
+
+        const task = this.activeTasks.get(taskId);
+        if (!task) {
+            return;
+        }
+
+        try {
+            await notifee.displayNotification({
+                id: task.notificationId,
+                title: "下载完成",
+                body: `${musicItem.title} - ${musicItem.artist}`,
+                android: {
+                    channelId: this.CHANNEL_ID,
+                    category: AndroidCategory.STATUS,
+                    importance: AndroidImportance.DEFAULT,
+                    visibility: AndroidVisibility.PUBLIC,
+                    ongoing: false,
+                    autoCancel: true,
+                    color: AndroidColor.GREEN,
+                    smallIcon: "ic_launcher",
+                    largeIcon: musicItem.artwork,
+                    actions: [
+                        {
+                            title: "打开文件",
+                            pressAction: {
+                                id: "open",
+                                // TODO: 可以实现点击打开文件的功能
+                            },
+                        },
+                    ],
+                },
+            });
+
+            // 清理任务记录
+            this.activeTasks.delete(taskId);
+        } catch (error) {
+            console.error("Failed to show completion notification:", error);
+        }
     }
 
-    try {
-      await notifee.displayNotification({
-        id: task.notificationId,
-        title,
-        body: `${task.musicItem.title} - ${task.musicItem.artist}\n${bodyText}`,
-        android: {
-          channelId: this.CHANNEL_ID,
-          category: AndroidCategory.PROGRESS,
-          importance: AndroidImportance.LOW,
-          visibility: AndroidVisibility.PUBLIC,
-          ongoing: true,
-          autoCancel: false,
-          progress: {
-            max: 100,
-            current: progressPercent,
-            indeterminate: false,
-          },
-          actions: [
-            {
-              title: '取消',
-              pressAction: {
-                id: 'cancel',
-              },
-            },
-          ],
-          color: AndroidColor.BLUE,
-          smallIcon: 'ic_launcher',
-          largeIcon: task.musicItem.artwork,
-          style: {
-            type: AndroidStyle.BIGTEXT,
-            text: bodyText,
-          },
-        },
-      });
-    } catch (error) {
-      console.error('Failed to update download progress:', error);
-    }
-  }
+    async showError(taskId: string, error: string): Promise<void> {
+        if (Platform.OS !== "android" || !this.isInitialized) {
+            return;
+        }
 
-  async showCompleted(taskId: string, musicItem: IMusic.IMusicItem, filePath: string): Promise<void> {
-    if (Platform.OS !== 'android' || !this.isInitialized) {
-      return;
-    }
+        // 检查权限
+        const hasPermission = await notificationPermissionManager.checkPermission();
+        if (!hasPermission) {
+            return;
+        }
 
-    // 检查权限
-    const hasPermission = await notificationPermissionManager.checkPermission();
-    if (!hasPermission) {
-      return;
+        const task = this.activeTasks.get(taskId);
+        if (!task) {
+            return;
+        }
+
+        try {
+            await notifee.displayNotification({
+                id: task.notificationId,
+                title: "下载失败",
+                body: `${task.musicItem.title} - ${task.musicItem.artist}\n${error}`,
+                android: {
+                    channelId: this.CHANNEL_ID,
+                    category: AndroidCategory.ERROR,
+                    importance: AndroidImportance.DEFAULT,
+                    visibility: AndroidVisibility.PUBLIC,
+                    ongoing: false,
+                    autoCancel: true,
+                    color: AndroidColor.RED,
+                    smallIcon: "ic_launcher",
+                    largeIcon: task.musicItem.artwork,
+                    style: {
+                        type: AndroidStyle.BIGTEXT,
+                        text: error,
+                    },
+                },
+            });
+
+            // 清理任务记录
+            this.activeTasks.delete(taskId);
+        } catch (notificationError) {
+            console.error("Failed to show error notification:", notificationError);
+        }
     }
 
-    const task = this.activeTasks.get(taskId);
-    if (!task) {
-      return;
+    async cancelNotification(taskId: string): Promise<void> {
+        if (Platform.OS !== "android" || !this.isInitialized) {
+            return;
+        }
+
+        const task = this.activeTasks.get(taskId);
+        if (!task) {
+            return;
+        }
+
+        try {
+            await notifee.cancelNotification(task.notificationId);
+            this.activeTasks.delete(taskId);
+        } catch (error) {
+            console.error("Failed to cancel notification:", error);
+        }
     }
 
-    try {
-      await notifee.displayNotification({
-        id: task.notificationId,
-        title: '下载完成',
-        body: `${musicItem.title} - ${musicItem.artist}`,
-        android: {
-          channelId: this.CHANNEL_ID,
-          category: AndroidCategory.STATUS,
-          importance: AndroidImportance.DEFAULT,
-          visibility: AndroidVisibility.PUBLIC,
-          ongoing: false,
-          autoCancel: true,
-          color: AndroidColor.GREEN,
-          smallIcon: 'ic_launcher',
-          largeIcon: musicItem.artwork,
-          actions: [
-            {
-              title: '打开文件',
-              pressAction: {
-                id: 'open',
-                // TODO: 可以实现点击打开文件的功能
-              },
-            },
-          ],
-        },
-      });
+    /** 清理所有下载通知 */
+    async clearAllNotifications(): Promise<void> {
+        if (Platform.OS !== "android" || !this.isInitialized) {
+            return;
+        }
 
-      // 清理任务记录
-      this.activeTasks.delete(taskId);
-    } catch (error) {
-      console.error('Failed to show completion notification:', error);
-    }
-  }
-
-  async showError(taskId: string, error: string): Promise<void> {
-    if (Platform.OS !== 'android' || !this.isInitialized) {
-      return;
+        try {
+            // 取消所有下载相关的通知
+            for (const task of this.activeTasks.values()) {
+                await notifee.cancelNotification(task.notificationId);
+            }
+            this.activeTasks.clear();
+        } catch (error) {
+            console.error("Failed to clear all notifications:", error);
+        }
     }
 
-    // 检查权限
-    const hasPermission = await notificationPermissionManager.checkPermission();
-    if (!hasPermission) {
-      return;
+    /** 获取当前活跃的下载通知数量 */
+    getActiveTaskCount(): number {
+        return this.activeTasks.size;
     }
 
-    const task = this.activeTasks.get(taskId);
-    if (!task) {
-      return;
+    /** 请求通知权限（显式请求，带用户提示） */
+    async requestNotificationPermission(): Promise<boolean> {
+        if (Platform.OS !== "android") {
+            return true;
+        }
+
+        return await notificationPermissionManager.requestPermission(true);
     }
 
-    try {
-      await notifee.displayNotification({
-        id: task.notificationId,
-        title: '下载失败',
-        body: `${task.musicItem.title} - ${task.musicItem.artist}\n${error}`,
-        android: {
-          channelId: this.CHANNEL_ID,
-          category: AndroidCategory.ERROR,
-          importance: AndroidImportance.DEFAULT,
-          visibility: AndroidVisibility.PUBLIC,
-          ongoing: false,
-          autoCancel: true,
-          color: AndroidColor.RED,
-          smallIcon: 'ic_launcher',
-          largeIcon: task.musicItem.artwork,
-          style: {
-            type: AndroidStyle.BIGTEXT,
-            text: error,
-          },
-        },
-      });
+    /** 检查通知权限状态 */
+    async checkNotificationPermission(): Promise<boolean> {
+        if (Platform.OS !== "android") {
+            return true;
+        }
 
-      // 清理任务记录
-      this.activeTasks.delete(taskId);
-    } catch (error) {
-      console.error('Failed to show error notification:', error);
-    }
-  }
-
-  async cancelNotification(taskId: string): Promise<void> {
-    if (Platform.OS !== 'android' || !this.isInitialized) {
-      return;
+        return await notificationPermissionManager.checkPermission();
     }
 
-    const task = this.activeTasks.get(taskId);
-    if (!task) {
-      return;
+    /** 获取权限状态描述 */
+    async getPermissionStatusDescription(): Promise<string> {
+        return await notificationPermissionManager.getPermissionStatusDescription();
     }
-
-    try {
-      await notifee.cancelNotification(task.notificationId);
-      this.activeTasks.delete(taskId);
-    } catch (error) {
-      console.error('Failed to cancel notification:', error);
-    }
-  }
-
-  /** 清理所有下载通知 */
-  async clearAllNotifications(): Promise<void> {
-    if (Platform.OS !== 'android' || !this.isInitialized) {
-      return;
-    }
-
-    try {
-      // 取消所有下载相关的通知
-      for (const task of this.activeTasks.values()) {
-        await notifee.cancelNotification(task.notificationId);
-      }
-      this.activeTasks.clear();
-    } catch (error) {
-      console.error('Failed to clear all notifications:', error);
-    }
-  }
-
-  /** 获取当前活跃的下载通知数量 */
-  getActiveTaskCount(): number {
-    return this.activeTasks.size;
-  }
-
-  /** 请求通知权限（显式请求，带用户提示） */
-  async requestNotificationPermission(): Promise<boolean> {
-    if (Platform.OS !== 'android') {
-      return true;
-    }
-
-    return await notificationPermissionManager.requestPermission(true);
-  }
-
-  /** 检查通知权限状态 */
-  async checkNotificationPermission(): Promise<boolean> {
-    if (Platform.OS !== 'android') {
-      return true;
-    }
-
-    return await notificationPermissionManager.checkPermission();
-  }
-
-  /** 获取权限状态描述 */
-  async getPermissionStatusDescription(): Promise<string> {
-    return await notificationPermissionManager.getPermissionStatusDescription();
-  }
 }
 
 // 单例模式

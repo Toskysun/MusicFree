@@ -11,11 +11,11 @@ export default function BoardPanelWrapper(props: IBoardPanelProps) {
     const { hash } = props ?? {};
     const topLists = useAtomValue(pluginsTopListAtom);
     const getTopList = useGetTopList();
-    const topListData = useMemo(() => topLists[hash], [topLists]);
+    const topListData = useMemo(() => topLists[hash], [topLists, hash]);
 
     useEffect(() => {
         getTopList(hash);
-    }, []);
+    }, [getTopList, hash]);
 
     return <BoardPanel topListData={topListData} hash={hash} />;
 }

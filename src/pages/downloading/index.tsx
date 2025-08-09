@@ -6,9 +6,8 @@ import VerticalSafeAreaView from "@/components/base/verticalSafeAreaView";
 import globalStyle from "@/constants/globalStyle";
 import AppBar from "@/components/base/appBar";
 import { useI18N } from "@/core/i18n";
-import downloader, { DownloadStatus, useDownloadQueue, useDownloadTask } from "@/core/downloader";
+import downloader, { useDownloadQueue } from "@/core/downloader";
 import Toast from "@/utils/toast";
-import { getMediaUniqueKey } from "@/utils/mediaUtils";
 
 export default function Downloading() {
     const { t } = useI18N();

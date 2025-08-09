@@ -30,6 +30,7 @@ export default function LoadingDialog(props: ILoadingDialogProps) {
             .catch(e => {
                 onReject?.(e, hideDialog);
             });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     return (
