@@ -8,6 +8,7 @@ import { patchMediaExtra } from "@/utils/mediaExtra";
 import { getMediaUniqueKey, isSameMediaItem } from "@/utils/mediaUtils";
 import network from "@/utils/network";
 import { getQualityOrder } from "@/utils/qualities";
+import { generateFileNameFromConfig, DEFAULT_FILE_NAMING_CONFIG } from "@/utils/fileNamingFormatter";
 import EventEmitter from "eventemitter3";
 import { atom, getDefaultStore, useAtomValue } from "jotai";
 import { nanoid } from "nanoid";
@@ -16,6 +17,7 @@ import { useEffect, useState } from "react";
 import { copyFile, downloadFile, exists, unlink } from "react-native-fs";
 import LocalMusicSheet from "./localMusicSheet";
 import { IPluginManager } from "@/types/core/pluginManager";
+import downloadNotificationManager from "./downloadNotificationManager";
 
 
 export enum DownloadStatus {
@@ -99,18 +101,47 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
 
     private downloadingCount = 0;
 
-    private static generateFilename(musicItem: IMusic.IMusicItem) {
-        return `${escapeCharacter(musicItem.platform)}@${escapeCharacter(
-            musicItem.id,
-        )}@${escapeCharacter(musicItem.title)}@${escapeCharacter(
-            musicItem.artist,
-        )}`.slice(0, 200);
+    private generateFilename(musicItem: IMusic.IMusicItem, quality?: IMusic.IQualityKey): string {
+        // 获取文件命名配置
+        const config: IFileNaming.IFileNamingConfig = {
+            type: this.configService.getConfig("basic.fileNamingType") ?? DEFAULT_FILE_NAMING_CONFIG.type,
+            preset: this.configService.getConfig("basic.fileNamingPreset") ?? DEFAULT_FILE_NAMING_CONFIG.preset,
+            custom: this.configService.getConfig("basic.fileNamingCustom") ?? DEFAULT_FILE_NAMING_CONFIG.custom,
+            showQuality: this.configService.getConfig("basic.fileNamingShowQuality") ?? DEFAULT_FILE_NAMING_CONFIG.showQuality,
+            maxLength: this.configService.getConfig("basic.fileNamingMaxLength") ?? DEFAULT_FILE_NAMING_CONFIG.maxLength,
+            keepExtension: DEFAULT_FILE_NAMING_CONFIG.keepExtension,
+        };
+
+        // 使用新的文件命名格式化函数
+        const result = generateFileNameFromConfig(musicItem, config, quality);
+        
+        // 如果格式化失败，回退到旧的命名方式
+        if (!result.filename) {
+            return `${escapeCharacter(musicItem.platform)}@${escapeCharacter(
+                musicItem.id,
+            )}@${escapeCharacter(musicItem.title)}@${escapeCharacter(
+                musicItem.artist,
+            )}`.slice(0, 200);
+        }
+        
+        return result.filename;
     }
 
 
     injectDependencies(configService: IAppConfig, pluginManager: IPluginManager): void {
         this.configService = configService;
         this.pluginManagerService = pluginManager;
+        
+        // 初始化下载通知管理器
+        this.initializeNotificationManager();
+    }
+    
+    private async initializeNotificationManager(): Promise<void> {
+        try {
+            await downloadNotificationManager.initialize();
+        } catch (error) {
+            errorLog("Failed to initialize download notification manager", error);
+        }
     }
 
     private updateDownloadTask(musicItem: IMusic.IMusicItem, patch: Partial<IDownloadTaskInfo>) {
@@ -129,13 +160,27 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
         this.updateDownloadTask(musicItem, {
             status: DownloadStatus.Preparing,
         });
+        
+        // 显示下载开始通知
+        const taskId = getMediaUniqueKey(musicItem);
+        downloadNotificationManager.showDownloadNotification(taskId, musicItem).catch(error => {
+            errorLog("Failed to show download notification", error);
+        });
     }
 
-    private markTaskAsCompleted(musicItem: IMusic.IMusicItem) {
+    private markTaskAsCompleted(musicItem: IMusic.IMusicItem, filePath?: string) {
         this.downloadingCount--;
         this.updateDownloadTask(musicItem, {
             status: DownloadStatus.Completed,
         });
+        
+        // 显示下载完成通知
+        const taskId = getMediaUniqueKey(musicItem);
+        if (filePath) {
+            downloadNotificationManager.showCompleted(taskId, musicItem, filePath).catch(error => {
+                errorLog("Failed to show completion notification", error);
+            });
+        }
     }
 
     private markTaskAsError(musicItem: IMusic.IMusicItem, reason: DownloadFailReason, error?: Error) {
@@ -145,6 +190,30 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
             errorReason: reason,
         });
         this.emit(DownloaderEvent.DownloadTaskError, reason, musicItem, error);
+        
+        // 显示下载错误通知
+        const taskId = getMediaUniqueKey(musicItem);
+        const errorMessage = this.getErrorMessage(reason);
+        downloadNotificationManager.showError(taskId, errorMessage).catch(err => {
+            errorLog("Failed to show error notification", err);
+        });
+    }
+
+    /** 获取错误信息的友好提示 */
+    private getErrorMessage(reason: DownloadFailReason): string {
+        switch (reason) {
+            case DownloadFailReason.NetworkOffline:
+                return "网络连接已断开";
+            case DownloadFailReason.NotAllowToDownloadInCellular:
+                return "移动网络下禁止下载";
+            case DownloadFailReason.FailToFetchSource:
+                return "无法获取音乐源";
+            case DownloadFailReason.NoWritePermission:
+                return "没有存储写入权限";
+            case DownloadFailReason.Unknown:
+            default:
+                return "下载失败";
+        }
     }
 
     /** 匹配文件后缀 */
@@ -299,6 +368,7 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
         }
 
         // 下载
+        const taskId = getMediaUniqueKey(musicItem);
         const { promise } = downloadFile({
             fromUrl: url ?? "",
             toFile: cacheDownloadPath,
@@ -319,6 +389,18 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
                     fileSize: res.contentLength,
                     jobId: res.jobId,
                 });
+                
+                // 更新通知进度
+                if (res.contentLength > 0) {
+                    const progress = Math.round((res.bytesWritten / res.contentLength) * 100);
+                    downloadNotificationManager.updateProgress(taskId, {
+                        downloadedSize: res.bytesWritten,
+                        fileSize: res.contentLength,
+                        progress: progress,
+                    }).catch(error => {
+                        errorLog("Failed to update notification progress", error);
+                    });
+                }
             },
         });
 
@@ -339,7 +421,7 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
                 localPath: targetDownloadPath,
             });
 
-            this.markTaskAsCompleted(musicItem);
+            this.markTaskAsCompleted(musicItem, targetDownloadPath);
         } catch (e: any) {
             this.markTaskAsError(musicItem, DownloadFailReason.Unknown, e);
         }
@@ -389,7 +471,7 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
             // 设置下载任务
             downloadTasks.set(getMediaUniqueKey(m), {
                 status: DownloadStatus.Pending,
-                filename: Downloader.generateFilename(m),
+                filename: this.generateFilename(m, quality),
                 quality: quality,
                 musicItem: m,
             });
@@ -421,6 +503,12 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
             const downloadQueue = getDefaultStore().get(downloadQueueAtom);
             const newDownloadQueue = downloadQueue.filter(item => !isSameMediaItem(item, musicItem));
             getDefaultStore().set(downloadQueueAtom, newDownloadQueue);
+            
+            // 取消通知
+            downloadNotificationManager.cancelNotification(key).catch(error => {
+                errorLog("Failed to cancel notification", error);
+            });
+            
             return true;
         }
         return false;

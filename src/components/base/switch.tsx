@@ -14,12 +14,14 @@ import Animated, {
 } from "react-native-reanimated";
 import { timingConfig } from "@/constants/commonConst";
 
-interface ISwitchProps extends SwitchProps {}
+interface ISwitchProps extends SwitchProps {
+    disabled?: boolean;
+}
 
 const fixedWidth = rpx(40);
 
 export default function ThemeSwitch(props: ISwitchProps) {
-    const { value, onValueChange } = props;
+    const { value, onValueChange, disabled } = props;
     const colors = useColors();
 
     const sharedValue = useSharedValue(value ? 1 : 0);
@@ -44,7 +46,9 @@ export default function ThemeSwitch(props: ISwitchProps) {
     return (
         <TouchableWithoutFeedback
             onPress={() => {
-                onValueChange?.(!value);
+                if (!disabled) {
+                    onValueChange?.(!value);
+                }
             }}>
             <View
                 style={[

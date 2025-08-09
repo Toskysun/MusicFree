@@ -87,6 +87,8 @@
     "permissionSetting.floatWindowPermissionDescription": "Used to display desktop lyrics",
     "permissionSetting.fileReadWritePermission": "File Read/Write Permission",
     "permissionSetting.fileReadWritePermissionDescription": "Used to download songs and cache data",
+    "permissionSetting.notificationPermission": "Notification Permission",
+    "permissionSetting.notificationPermissionDescription": "Used to display download progress notifications",
     "recommendSheet.title": "Recommended",
     "searchMusicList.searchPlaceHolder": "Search songs in list",
     "searchMusicList.searchLabel.a11y": "Search Box",

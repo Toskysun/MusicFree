@@ -87,6 +87,8 @@
     "permissionSetting.floatWindowPermissionDescription": "用以展示桌面歌詞",
     "permissionSetting.fileReadWritePermission": "文件讀寫權限",
     "permissionSetting.fileReadWritePermissionDescription": "用以下載歌曲、快取資料",
+    "permissionSetting.notificationPermission": "通知權限",
+    "permissionSetting.notificationPermissionDescription": "用以顯示下載進度通知",
     "recommendSheet.title": "推薦歌單",
     "searchMusicList.searchPlaceHolder": "在列表中搜尋歌曲",
     "searchMusicList.searchLabel.a11y": "搜尋框",

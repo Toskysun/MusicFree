@@ -589,7 +589,8 @@ class TrackPlayer extends EventEmitter<{
                     source = {
                         url: musicItem.url,
                     };
-                    this.setQuality("320k");
+                    // 使用用户设置的默认音质，而不是硬编码
+                    this.setQuality(preferredQuality);
                 }
             }
 

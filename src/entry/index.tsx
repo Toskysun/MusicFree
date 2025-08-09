@@ -17,6 +17,7 @@ import { StatusBar } from "react-native";
 import { ReduceMotion, ReducedMotionConfig } from "react-native-reanimated";
 import { routes } from "@/core/router/routes.tsx";
 import ErrorBoundary from "@/components/errorBoundary";
+import { NotificationLifecycleManager } from "@/core/notificationLifecycleManager";
 
 /**
  * 字体颜色
@@ -34,6 +35,7 @@ export default function Pages() {
     return (
         <ErrorBoundary>
             <BootstrapComponent />
+            <NotificationLifecycleManager />
             <ReducedMotionConfig mode={ReduceMotion.Never} />
             <GestureHandlerRootView style={globalStyle.flex1}>
                 <SafeAreaProvider>

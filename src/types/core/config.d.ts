@@ -30,6 +30,10 @@ export interface IAppConfigProperties {
     "basic.showExitOnNotification": boolean;
     "basic.musicOrderInLocalSheet": SortType;
     "basic.tryChangeSourceWhenPlayFail": boolean;
+    "basic.fileNamingType": "preset" | "custom";
+    "basic.fileNamingPreset": IFileNaming.IPresetTemplate;
+    "basic.fileNamingCustom": string;
+    "basic.fileNamingMaxLength": number;
 
     // Lyric
     "lyric.showStatusBarLyric": boolean;

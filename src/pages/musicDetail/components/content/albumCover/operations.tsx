@@ -42,7 +42,7 @@ export default function Operations() {
             <HeartIcon />
             <Icon
                 name="quality-button"
-                size={rpx(52)}
+                size={iconSizeConst.normal}
                 color="white"
                 onPress={() => {
                     if (!musicItem) {

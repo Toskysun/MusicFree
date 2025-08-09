@@ -61,9 +61,9 @@ export function getSmartQuality(
     // 从偏好音质开始向下搜索
     for (let i = preferredIndex; i < TRY_QUALITYS_LIST.length; i++) {
         const quality = TRY_QUALITYS_LIST[i];
-        const hasQuality = availableQualities[quality] && 
-                          (availableQualities[quality]!.url || 
-                           availableQualities[quality]!.size !== undefined);
+        // 修复：只要存在该音质的键，就认为可用（不管是否有url）
+        const hasQuality = availableQualities[quality] !== undefined && 
+                          availableQualities[quality] !== null;
         
         // 检查平台是否支持该音质
         const platformSupported = !platformSupportedQualities || 
@@ -77,9 +77,9 @@ export function getSmartQuality(
     // 如果向下没找到，向上搜索
     for (let i = preferredIndex - 1; i >= 0; i--) {
         const quality = TRY_QUALITYS_LIST[i];
-        const hasQuality = availableQualities[quality] && 
-                          (availableQualities[quality]!.url || 
-                           availableQualities[quality]!.size !== undefined);
+        // 修复：只要存在该音质的键，就认为可用（不管是否有url）
+        const hasQuality = availableQualities[quality] !== undefined && 
+                          availableQualities[quality] !== null;
         
         const platformSupported = !platformSupportedQualities || 
                                  platformSupportedQualities.includes(quality);

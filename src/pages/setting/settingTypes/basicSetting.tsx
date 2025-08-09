@@ -24,6 +24,13 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { SectionList, StyleSheet, TouchableOpacity, View } from "react-native";
 import { readdir } from "react-native-fs";
 import { FlatList, ScrollView } from "react-native-gesture-handler";
+import {
+    getPresetTemplates,
+    getPresetTemplate,
+    validateTemplate,
+    DEFAULT_FILE_NAMING_CONFIG,
+    TEMPLATE_VARIABLES,
+} from "@/utils/fileNamingFormatter";
 
 function createSwitch(
     title: string,
@@ -130,6 +137,12 @@ export default function BasicSetting() {
     const musicOrderInLocalSheet = useAppConfig("basic.musicOrderInLocalSheet");
     const tryChangeSourceWhenPlayFail = useAppConfig("basic.tryChangeSourceWhenPlayFail");
 
+    // 文件命名相关配置
+    const fileNamingType = useAppConfig("basic.fileNamingType");
+    const fileNamingPreset = useAppConfig("basic.fileNamingPreset");
+    const fileNamingCustom = useAppConfig("basic.fileNamingCustom");
+    const fileNamingMaxLength = useAppConfig("basic.fileNamingMaxLength");
+
     const { t, getLanguage } = useI18N();
     const qualityTextI18n = getQualityText(getLanguage().languageData);
 
@@ -138,6 +151,7 @@ export default function BasicSetting() {
     const debugEnableDevLog = useAppConfig("debug.devLog");
 
     const navigate = useNavigate();
+    const colors = useColors();
 
     const [cacheSize, refreshCacheSize] = useCacheSize();
 
@@ -383,6 +397,89 @@ export default function BasicSetting() {
                         desc: t("basicSettings.downloadQualityOrder.desc"),
                     },
                 ),
+                // 文件命名格式设置
+                {
+                    title: "文件命名格式",
+                    right: (
+                        <ThemeText
+                            fontSize="subTitle"
+                            style={styles.centerText}>
+                            {fileNamingType === "custom" ? "自定义" : (fileNamingPreset || "歌曲名-歌手")}
+                        </ThemeText>
+                    ),
+                    onPress() {
+                        showDialog("RadioDialog", {
+                            title: "文件命名格式类型",
+                            content: [
+                                { label: "预设模板", value: "preset" },
+                                { label: "自定义模板", value: "custom" }
+                            ],
+                            onOk(val) {
+                                Config.setConfig("basic.fileNamingType", val);
+                                // 设置默认值
+                                if (val === "preset" && !fileNamingPreset) {
+                                    Config.setConfig("basic.fileNamingPreset", DEFAULT_FILE_NAMING_CONFIG.preset);
+                                } else if (val === "custom" && !fileNamingCustom) {
+                                    Config.setConfig("basic.fileNamingCustom", "{title}-{artist}");
+                                }
+                            },
+                        });
+                    },
+                },
+                // 预设模板选择（仅当选择预设模板时显示）
+                ...(fileNamingType === "preset" || !fileNamingType ? [{
+                    title: "预设模板",
+                    right: (
+                        <ThemeText
+                            fontSize="subTitle"
+                            style={styles.centerText}>
+                            {fileNamingPreset || "歌曲名-歌手"}
+                        </ThemeText>
+                    ),
+                    onPress() {
+                        const presetTemplates = getPresetTemplates();
+                        showDialog("RadioDialog", {
+                            title: "选择预设模板",
+                            content: presetTemplates.map(template => ({
+                                label: template,
+                                value: template,
+                            })),
+                            onOk(val) {
+                                Config.setConfig("basic.fileNamingPreset", val);
+                            },
+                        });
+                    },
+                }] : []),
+                // 自定义模板输入（仅当选择自定义模板时显示）
+                ...(fileNamingType === "custom" ? [{
+                    title: "自定义模板",
+                    right: (
+                        <ThemeText
+                            fontSize="subTitle"
+                            style={styles.centerText}
+                            numberOfLines={2}>
+                            {fileNamingCustom || "{title}-{artist}"}
+                        </ThemeText>
+                    ),
+                    onPress() {
+                        showPanel("SimpleInput", {
+                            title: "自定义文件命名模板",
+                            placeholder: "例如: {title}-{artist}-{album}",
+                            defaultValue: fileNamingCustom || "{title}-{artist}",
+                            tips: `可用变量：${Object.entries(TEMPLATE_VARIABLES).map(([key, desc]) => `${key}(${desc})`).join(", ")}`,
+                            onOk(text, closePanel) {
+                                const validation = validateTemplate(text);
+                                if (!validation.valid) {
+                                    Toast.warn(validation.error || "模板格式错误");
+                                    return;
+                                }
+                                Config.setConfig("basic.fileNamingCustom", text);
+                                closePanel();
+                                Toast.success("模板设置成功");
+                            },
+                        });
+                    },
+                }] : []),
             ],
         },
         {
