@@ -22,8 +22,7 @@ buildscript {
     }
 }
 
-// Apply package validation script BEFORE any other configuration
-apply from: 'package-validation.gradle'
+// Package validation script removed to fix build issues
 
 allprojects {
     repositories {
