@@ -3,22 +3,20 @@
 const fs = require('fs');
 const path = require('path');
 
-// 获取当前日期时间（带时区）
+// 获取中国时区的当前日期时间
 const now = new Date();
-const tzOffset = -now.getTimezoneOffset();
-const tzSign = tzOffset >= 0 ? '+' : '-';
-const tzHours = Math.floor(Math.abs(tzOffset) / 60).toString().padStart(2, '0');
-const tzMinutes = (Math.abs(tzOffset) % 60).toString().padStart(2, '0');
+// 强制使用中国时区 UTC+8
+const chinaTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Shanghai"}));
 
 // 格式化为 YYYY-MM-DDTHH:mm:ss+08:00 格式
-const year = now.getFullYear();
-const month = (now.getMonth() + 1).toString().padStart(2, '0');
-const day = now.getDate().toString().padStart(2, '0');
-const hours = now.getHours().toString().padStart(2, '0');
-const minutes = now.getMinutes().toString().padStart(2, '0');
-const seconds = now.getSeconds().toString().padStart(2, '0');
+const year = chinaTime.getFullYear();
+const month = (chinaTime.getMonth() + 1).toString().padStart(2, '0');
+const day = chinaTime.getDate().toString().padStart(2, '0');
+const hours = chinaTime.getHours().toString().padStart(2, '0');
+const minutes = chinaTime.getMinutes().toString().padStart(2, '0');
+const seconds = chinaTime.getSeconds().toString().padStart(2, '0');
 
-const buildTime = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${tzSign}${tzHours}:${tzMinutes}`;
+const buildTime = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}+08:00`;
 
 // 获取 Git 信息（如果可用）
 let gitCommit = 'unknown';

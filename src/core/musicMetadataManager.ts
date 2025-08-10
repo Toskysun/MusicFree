@@ -1,5 +1,5 @@
 import Mp3Util from '@/native/mp3Util';
-import { errorLog } from '@/utils/log';
+import { errorLog, devLog } from '@/utils/log';
 import { removeFileScheme } from '@/utils/fileUtils';
 import lyricManager from '@/core/lyricManager';
 import type { 
@@ -139,22 +139,44 @@ class MusicMetadataManager {
     taskInfo: IDownloadTaskMetadata,
     config: IDownloadMetadataConfig
   ): Promise<boolean> {
-    if (!config.enabled || !Mp3Util.isAvailable()) {
+    devLog('info', '🔧[元数据管理器] 开始写入元数据', {
+      enabled: config.enabled,
+      Mp3UtilAvailable: Mp3Util.isAvailable(),
+      musicTitle: taskInfo.musicItem.title,
+      filePath: taskInfo.filePath
+    });
+    
+    if (!config.enabled) {
+      devLog('warn', '⚠️[元数据管理器] 元数据写入功能未启用，请在设置→基础设置→音乐标签设置中开启');
+      return false;
+    }
+    
+    if (!Mp3Util.isAvailable()) {
+      devLog('error', '❌[元数据管理器] Mp3Util原生模块不可用，请检查构建配置');
       return false;
     }
 
     try {
       // 移除file://前缀，确保路径格式正确
       const cleanFilePath = removeFileScheme(taskInfo.filePath);
+      devLog('info', '📁[元数据管理器] 处理文件路径', {
+        原始路径: taskInfo.filePath,
+        清理后路径: cleanFilePath
+      });
       
       // 构建基础元数据
       const metadata = this.buildMetadataFromMusicItem(taskInfo.musicItem);
+      devLog('info', '📝[元数据管理器] 构建基础元数据', metadata);
 
       // 如果启用歌词写入，获取歌词
       if (config.writeLyric) {
+        devLog('info', '🎵[元数据管理器] 开始获取歌词');
         const lyricContent = await this.getLyricContent(taskInfo.musicItem);
         if (lyricContent) {
           metadata.lyric = lyricContent;
+          devLog('info', '✅[元数据管理器] 歌词获取成功', { 长度: lyricContent.length });
+        } else {
+          devLog('warn', '⚠️[元数据管理器] 未获取到歌词');
         }
       }
 
@@ -166,22 +188,38 @@ class MusicMetadataManager {
       // 如果启用封面写入，获取封面URL
       let coverUrl: string | undefined;
       if (config.writeCover) {
+        devLog('info', '🖼️[元数据管理器] 开始获取封面URL');
         coverUrl = taskInfo.coverUrl || await this.getCoverUrl(taskInfo.musicItem);
+        devLog('info', '🖼️[元数据管理器] 封面URL获取结果', { url: coverUrl });
       }
 
       // 写入元数据和封面
+      devLog('info', '💾[元数据管理器] 开始调用原生模块写入元数据', {
+        是否包含封面: !!coverUrl,
+        元数据字段数: Object.keys(metadata).length
+      });
+      
       if (coverUrl) {
+        devLog('info', '🎯[元数据管理器] 调用 setMediaTagWithCover');
         await Mp3Util.setMediaTagWithCover(cleanFilePath, metadata, coverUrl);
       } else {
+        devLog('info', '🎯[元数据管理器] 调用 setMediaTag');
         await Mp3Util.setMediaTag(cleanFilePath, metadata);
       }
-
+      
+      devLog('info', '✅[元数据管理器] 元数据写入成功!');
       return true;
     } catch (error) {
+      devLog('error', '❌[元数据管理器] 元数据写入失败', error);
       errorLog('写入音乐元数据失败', {
         filePath: taskInfo.filePath,
-        musicItem: taskInfo.musicItem,
-        error: error instanceof Error ? error.message : String(error)
+        musicItem: {
+          title: taskInfo.musicItem.title,
+          artist: taskInfo.musicItem.artist,
+          platform: taskInfo.musicItem.platform
+        },
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
       });
       return false;
     }

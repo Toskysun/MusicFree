@@ -134,7 +134,7 @@ class TrackPlayer extends EventEmitter<{
         const quality =
             PersistStatus.get("music.quality") ||
             this.configService.getConfig("basic.defaultPlayQuality") ||
-            "320k";
+            "master";
 
         // 状态恢复
         if (rate) {
@@ -476,7 +476,7 @@ class TrackPlayer extends EventEmitter<{
             const plugin = this.pluginManagerService.getByName(musicItem.platform);
             
             // 5.2 智能音质选择
-            const preferredQuality = this.configService.getConfig("basic.defaultPlayQuality") ?? "320k";
+            const preferredQuality = this.configService.getConfig("basic.defaultPlayQuality") ?? "master";
             let selectedQuality: IMusic.IQualityKey;
             
             // 如果音乐项包含音质信息，使用智能选择

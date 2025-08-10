@@ -5,6 +5,7 @@ import { ImgAsset } from "@/constants/assetsConst";
 import { getMediaUniqueKey } from "@/utils/mediaUtils";
 import rpx from "@/utils/rpx";
 import Toast from "@/utils/toast";
+import { devLog } from "@/utils/log";
 import Clipboard from "@react-native-clipboard/clipboard";
 import React from "react";
 import { StyleSheet, View } from "react-native";
@@ -147,7 +148,7 @@ export default function MusicItemLyricOptions(
                     Toast.success(t("toast.settingSuccess"));
                     hidePanel();
                 } catch (e: any) {
-                    console.log(e);
+                    devLog("warn", "🎤[歌词选项] 上传本地歌词失败", e);
                     Toast.warn(t("panel.musicItemLyricOptions.settingFail", {
                         reason: e?.message,
                     }));
@@ -172,7 +173,7 @@ export default function MusicItemLyricOptions(
                     Toast.success(t("toast.settingSuccess"));
                     hidePanel();
                 } catch (e: any) {
-                    console.log(e);
+                    devLog("warn", "🎤[歌词选项] 上传翻译歌词失败", e);
                     Toast.warn(t("panel.musicItemLyricOptions.settingFail", {
                         reason: e?.message,
                     }));
@@ -187,7 +188,7 @@ export default function MusicItemLyricOptions(
                     lyricManager.removeLocalLyric(musicItem);
                     hidePanel();
                 } catch (e: any) {
-                    console.log(e);
+                    devLog("warn", "🎤[歌词选项] 删除本地歌词失败", e);
                     Toast.warn(t("panel.musicItemLyricOptions.deleteFail", {
                         reason: e?.message,
                     }));

@@ -2,6 +2,7 @@ import { getStorage as oldGetStorage } from "@/utils/storage";
 import storage from "@/core/musicSheet/storage.ts";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import appMeta from "../appMeta";
+import { devLog } from "@/utils/log";
 
 export default async function migrate() {
     const dbUpdated = appMeta.musicSheetVersion > 1;
@@ -27,7 +28,7 @@ export default async function migrate() {
         }
         appMeta.setMusicSheetVersion(1);
     } catch (e) {
-        console.warn("升级失败", e);
+        devLog("warn", "⚙️[歌单迁移] 升级失败", e);
     }
 }
 

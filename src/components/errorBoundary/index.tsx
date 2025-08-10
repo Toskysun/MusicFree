@@ -6,6 +6,7 @@ import rpx from "@/utils/rpx";
 import LinkText from "@/components/base/linkText";
 import { ImgAsset } from "@/constants/assetsConst";
 import ThemeText from "@/components/base/themeText";
+import { devLog } from "@/utils/log";
 
 interface DeviceInfoProps {
     colors: any;
@@ -47,7 +48,7 @@ function DeviceInfoSection({ colors }: DeviceInfoProps) {
                     deviceBrand: brand,
                 });
             } catch (error) {
-                console.warn("获取设备信息失败:", error);
+                devLog("warn", "📱[错误边界] 获取设备信息失败", error);
             }
         };
 
@@ -115,7 +116,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
         });
         
         // 这里可以添加错误日志上报
-        console.error("ErrorBoundary caught an error:", error, errorInfo);
+        devLog("error", "🛑[错误边界] 捕获到应用错误", { error: error.message, errorInfo });
     }
 
     render() {

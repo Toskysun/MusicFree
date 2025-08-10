@@ -21,4 +21,26 @@ buildscript {
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin")
     }
 }
+
+allprojects {
+    repositories {
+        maven { url 'https://maven.aliyun.com/repository/central'}
+        maven { url 'https://maven.aliyun.com/repository/public' }
+        google()
+        mavenCentral()
+        maven { url 'https://jitpack.io' }
+    }
+    
+    tasks.withType(JavaCompile).configureEach {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+    
+    tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+        kotlinOptions {
+            jvmTarget = "17"
+        }
+    }
+}
+
 apply plugin: "com.facebook.react.rootproject"

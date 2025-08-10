@@ -1,4 +1,5 @@
 import { NativeModules } from 'react-native';
+import { devLog } from '@/utils/log';
 import type { IMp3Util } from '@/types/metadata';
 
 // 获取原生Mp3Util模块
@@ -28,7 +29,18 @@ class Mp3UtilManager implements IMp3Util {
   }
 
   async setMediaTag(filePath: string, meta: import('@/types/metadata').IMusicMetadata) {
-    return this.nativeModule.setMediaTag(filePath, meta);
+    devLog('info', '🔧[Mp3Util] 调用 setMediaTag', {
+      filePath,
+      metadataKeys: Object.keys(meta)
+    });
+    try {
+      const result = await this.nativeModule.setMediaTag(filePath, meta);
+      devLog('info', '✅[Mp3Util] setMediaTag 成功', result);
+      return result;
+    } catch (error) {
+      devLog('error', '❌[Mp3Util] setMediaTag 失败', error);
+      throw error;
+    }
   }
 
   async getMediaTag(filePath: string) {
@@ -44,14 +56,66 @@ class Mp3UtilManager implements IMp3Util {
     meta: import('@/types/metadata').IMusicMetadata, 
     coverPath?: string
   ) {
-    return this.nativeModule.setMediaTagWithCover(filePath, meta, coverPath || null);
+    devLog('info', '🎨[Mp3Util] 调用 setMediaTagWithCover', {
+      filePath,
+      metadataKeys: Object.keys(meta),
+      coverPath
+    });
+    try {
+      const result = await this.nativeModule.setMediaTagWithCover(filePath, meta, coverPath || null);
+      devLog('info', '✅[Mp3Util] setMediaTagWithCover 成功', result);
+      return result;
+    } catch (error) {
+      devLog('error', '❌[Mp3Util] setMediaTagWithCover 失败', error);
+      throw error;
+    }
   }
 
   /**
    * 检查原生模块是否可用
    */
   isAvailable(): boolean {
-    return !!this.nativeModule;
+    const available = !!this.nativeModule;
+    devLog('info', '🔍[Mp3Util] 原生模块可用性检查', {
+      nativeModuleExists: !!this.nativeModule,
+      moduleKeys: this.nativeModule ? Object.keys(this.nativeModule) : [],
+      available
+    });
+    return available;
+  }
+
+  /**
+   * 使用系统下载管理器下载文件
+   */
+  async downloadWithSystemManager(
+    url: string,
+    destinationPath: string,
+    title: string,
+    description: string,
+    headers?: Record<string, string>
+  ): Promise<string> {
+    devLog('info', '📥[Mp3Util] 调用系统下载管理器', {
+      url,
+      destinationPath,
+      title,
+      description,
+      headers
+    });
+    
+    try {
+      const downloadId = await this.nativeModule.downloadWithSystemManager(
+        url,
+        destinationPath,
+        title,
+        description,
+        headers || null
+      );
+      devLog('info', '✅[Mp3Util] 系统下载任务创建成功', { downloadId });
+      return downloadId;
+    } catch (error) {
+      devLog('error', '❌[Mp3Util] 系统下载任务创建失败', error);
+      throw error;
+    }
   }
 }
 

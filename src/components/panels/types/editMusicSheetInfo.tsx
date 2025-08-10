@@ -15,6 +15,7 @@ import useColors from "@/hooks/useColors.ts";
 import { addFileScheme, addRandomHash } from "@/utils/fileUtils.ts";
 import rpx from "@/utils/rpx";
 import Toast from "@/utils/toast.ts";
+import { devLog } from "@/utils/log";
 import { readAsStringAsync } from "expo-file-system";
 import React, { useState } from "react";
 import { StyleSheet, TouchableOpacity, View } from "react-native";
@@ -42,10 +43,10 @@ export default function EditMusicSheetInfo(props: IEditSheetDetailProps) {
             if (!uri) {
                 return;
             }
-            console.log(uri);
+            devLog("info", "📁[编辑歌单信息] 选择封面图片", { uri });
             setCoverImg(uri);
         } catch (e) {
-            console.log(e);
+            devLog("warn", "📁[编辑歌单信息] 选择图片失败", e);
         }
     };
 
@@ -81,7 +82,7 @@ export default function EditMusicSheetInfo(props: IEditSheetDetailProps) {
                 });
                 await writeFile(newCoverImg, rawImage, "base64");
             } catch (e) {
-                console.log(e);
+                devLog("warn", "📁[编辑歌单信息] 写入图片失败", e);
             }
         }
         let _title = title;

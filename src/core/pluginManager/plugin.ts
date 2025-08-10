@@ -701,7 +701,7 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
             });
             return result;
         } catch (e: any) {
-            console.log(e);
+            devLog("warn", "导入歌单异常", e);
             devLog("error", "导入歌单失败", e, e?.message);
 
             return [];
@@ -1021,7 +1021,7 @@ const localFilePluginDefine: IPlugin.IPluginDefine = {
             try {
                 rawLrc = await Mp3Util.getLyric(localPath);
             } catch (e) {
-                console.log("读取内嵌歌词失败", e);
+                devLog("warn", "读取内嵌歌词失败", e);
             }
             if (!rawLrc) {
                 // 读取配置歌词

@@ -102,9 +102,12 @@ jobs:
 
     # 🔨 生成构建信息
     - name: Generate build info
+      id: build-info
       run: |
         echo "📝 Generating build info..."
         npm run generate-build-info
+        BUILD_TIME=$(node -e "console.log(require('./src/constants/buildInfo.ts').buildInfo.buildTime)")
+        echo "build-time=$BUILD_TIME" >> $GITHUB_OUTPUT
         echo "✅ Build info generated"
     
     # 🔧 Gradle 权限和缓存预热
@@ -282,6 +285,7 @@ jobs:
       uses: softprops/action-gh-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        TZ: Asia/Shanghai
       with:
         tag_name: ${{ github.ref_name }}
         name: MusicFree ${{ github.ref_name }}
@@ -308,9 +312,10 @@ jobs:
           3. 下载通知与多种文件名功能
           4. 根据喜好定制音质标签
           5. 软件启动时打开播放详情页
+          6. 下载时写入音乐标签
           
           ### ⚡ 构建信息
-          - 构建时间: ${{ github.event.head_commit.timestamp }}
+          - 构建时间: ${{ steps.build-info.outputs.build-time }}
           - 提交SHA: ${{ github.sha }}
         draft: false
         prerelease: false

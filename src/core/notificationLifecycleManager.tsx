@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { AppState, AppStateStatus } from "react-native";
 import downloadNotificationManager from "@/core/downloadNotificationManager";
 import notificationPermissionManager from "@/core/notificationPermissionManager";
-import { errorLog } from "@/utils/log";
+import { errorLog, devLog } from "@/utils/log";
 
 /**
  * 应用生命周期通知管理组件
@@ -42,7 +42,7 @@ export function useAppLifecycleNotifications() {
             const hasPermission = await downloadNotificationManager.checkNotificationPermission();
             if (hasPermission) {
                 // 权限已获得，可以记录日志或执行其他操作
-                console.log("Notification permission is available");
+                devLog("info", "🗿[通知管理] 通知权限已可用");
             }
         } catch (error) {
             errorLog("Error handling app become active", error);
@@ -53,7 +53,7 @@ export function useAppLifecycleNotifications() {
         try {
             // 应用进入后台时，可以进行一些清理操作
             // 例如：暂停非必要的任务等
-            console.log("App became inactive");
+            devLog("info", "🔄[通知管理] 应用进入后台");
         } catch (error) {
             errorLog("Error handling app become inactive", error);
         }

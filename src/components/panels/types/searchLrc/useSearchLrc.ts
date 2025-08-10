@@ -20,7 +20,7 @@ export default function useSearchLrc() {
         pluginHash?: string,
     ) {
         /** 如果没有指定插件，就用所有插件搜索 */
-        console.log("SEARCH LRC", query, queryPage);
+        devLog("info", "🔍[搜索歌词] 开始搜索", { query, queryPage });
         let plugins: Plugin[] = [];
         if (pluginHash) {
             const tgtPlugin = PluginManager.getByHash(pluginHash);
