@@ -1,0 +1,85 @@
+// Package validation script to prevent build failures
+// This script runs before any compilation tasks to ensure package structure is correct
+
+task validatePackageStructure {
+    description 'Validates package structure and naming before compilation'
+    group 'verification'
+    
+    doLast {
+        println "🔍 ===== PACKAGE STRUCTURE VALIDATION ====="
+        
+        // Define expected package structure
+        def expectedPackage = 'fun.musicfree'
+        def baseDir = project.file('app/src/main/java/fun/musicfree')
+        
+        // Check if base directory exists
+        if (!baseDir.exists()) {
+            throw new GradleException("""
+                ❌ CRITICAL ERROR: Package directory does not exist!
+                Expected: ${baseDir.absolutePath}
+                
+                This indicates a serious package structure problem.
+                Please verify the source code is properly checked out.
+            """.stripIndent())
+        }
+        
+        // Define critical files that must exist
+        def criticalFiles = [
+            new File(baseDir, 'MainActivity.kt'),
+            new File(baseDir, 'MainApplication.kt')
+        ]
+        
+        // Validate each critical file
+        criticalFiles.each { file ->
+            if (!file.exists()) {
+                throw new GradleException("""
+                    ❌ CRITICAL ERROR: Required file missing!
+                    File: ${file.absolutePath}
+                    
+                    This will cause compilation failure.
+                """.stripIndent())
+            }
+            
+            // Read first line to check package declaration
+            def firstLine = file.readLines().find { it.trim().startsWith('package') }
+            if (!firstLine?.contains(expectedPackage)) {
+                throw new GradleException("""
+                    ❌ CRITICAL ERROR: Incorrect package declaration!
+                    File: ${file.name}
+                    Expected: package ${expectedPackage}
+                    Found: ${firstLine ?: 'No package declaration'}
+                    
+                    This will cause compilation failure with "Package name must be a '.'-separated identifier list" error.
+                """.stripIndent())
+            }
+            
+            println "✅ ${file.name}: package ${expectedPackage}"
+        }
+        
+        // Validate build.gradle namespace
+        def buildGradle = project.file('app/build.gradle')
+        if (buildGradle.exists()) {
+            def content = buildGradle.text
+            if (!content.contains('namespace "fun.musicfree"')) {
+                println "⚠️  WARNING: build.gradle namespace might not be correctly set"
+            } else {
+                println "✅ build.gradle namespace: fun.musicfree"
+            }
+        }
+        
+        println "✅ Package structure validation PASSED"
+        println "========================================="
+    }
+}
+
+// Ensure validation runs before any Kotlin compilation
+tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile) {
+    dependsOn validatePackageStructure
+}
+
+// Also run before Android compilation tasks
+tasks.whenTaskAdded { task ->
+    if (task.name.contains('compile') && task.name.contains('Kotlin')) {
+        task.dependsOn validatePackageStructure
+    }
+}

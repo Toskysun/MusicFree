@@ -22,6 +22,9 @@ buildscript {
     }
 }
 
+// Apply package validation script BEFORE any other configuration
+apply from: 'package-validation.gradle'
+
 allprojects {
     repositories {
         maven { url 'https://maven.aliyun.com/repository/central'}
