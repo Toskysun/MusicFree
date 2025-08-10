@@ -294,7 +294,7 @@ class PluginManager implements IPluginManager {
     async uninstallPlugin(hash: string) {
         let plugins = [...this.getPlugins()];
         const targetIndex = plugins.findIndex(_ => _.hash === hash);
-        console.log("卸载", targetIndex);
+        devLog("info", "📤[插件管理器] 卸载插件", { targetIndex, hash });
         if (targetIndex !== -1) {
             try {
                 const pluginName = plugins[targetIndex].name;

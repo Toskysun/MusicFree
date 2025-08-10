@@ -340,14 +340,14 @@ export default function BasicSetting() {
                     t("basicSettings.defaultPlayQuality"),
                     "basic.defaultPlayQuality",
                     qualityKeys,
-                    defaultPlayQuality ?? "320k",
+                    defaultPlayQuality ?? "master",
                     qualityTextI18n,
                 ),
                 createRadio(
                     t("basicSettings.playQualityOrder"),
                     "basic.playQualityOrder",
                     ["asc", "desc"],
-                    playQualityOrder ?? "asc",
+                    playQualityOrder ?? "desc",
                     {
                         asc: t("basicSettings.playQualityOrder.asc"),
                         desc: t("basicSettings.playQualityOrder.desc"),
@@ -401,14 +401,14 @@ export default function BasicSetting() {
                     t("basicSettings.defaultDownloadQuality"),
                     "basic.defaultDownloadQuality",
                     qualityKeys,
-                    defaultDownloadQuality ?? "320k",
+                    defaultDownloadQuality ?? "master",
                     qualityTextI18n,
                 ),
                 createRadio(
                     t("basicSettings.downloadQualityOrder"),
                     "basic.downloadQualityOrder",
                     ["asc", "desc"],
-                    downloadQualityOrder ?? "asc",
+                    downloadQualityOrder ?? "desc",
                     {
                         asc: t("basicSettings.downloadQualityOrder.asc"),
                         desc: t("basicSettings.downloadQualityOrder.desc"),
@@ -497,6 +497,18 @@ export default function BasicSetting() {
                         });
                     },
                 }] : []),
+                // 音乐标签设置
+                {
+                    title: "音乐标签设置",
+                    right: (
+                        <ThemeText fontSize="subTitle" style={styles.centerText}>
+                            自定义
+                        </ThemeText>
+                    ),
+                    onPress() {
+                        showPanel("MusicMetadataSettingsPanel");
+                    },
+                },
             ],
         },
         {

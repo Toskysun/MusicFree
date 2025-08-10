@@ -13,6 +13,7 @@ import { hideDialog } from "../useDialog";
 import Dialog from "./base";
 import Input from "@/components/base/input";
 import { fontSizeConst } from "@/constants/uiConst";
+import { devLog } from "@/utils/log";
 import { copyAsync, deleteAsync, getInfoAsync } from "expo-file-system";
 import MusicSheet from "@/core/musicSheet";
 import { useI18N } from "@/core/i18n";
@@ -40,10 +41,10 @@ export default function EditSheetDetailDialog(props: IEditSheetDetailProps) {
             if (!uri) {
                 return;
             }
-            console.log(uri);
+            devLog("info", "📁[编辑歌单] 选择封面图片", { uri });
             setCoverImg(uri);
         } catch (e) {
-            console.log(e);
+            devLog("warn", "📁[编辑歌单] 选择图片失败", e);
         }
     };
 
@@ -76,7 +77,7 @@ export default function EditSheetDetailDialog(props: IEditSheetDetailProps) {
                     to: newCoverImg,
                 });
             } catch (e) {
-                console.log(e);
+                devLog("warn", "📁[编辑歌单] 复制封面图片失败", e);
             }
         }
         let _title = title;

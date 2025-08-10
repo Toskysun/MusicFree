@@ -9,6 +9,7 @@ import TrackPlayer, { useMusicState, useRepeatMode } from "@/core/trackPlayer";
 import useOrientation from "@/hooks/useOrientation";
 import delay from "@/utils/delay";
 import { musicIsPaused } from "@/utils/trackUtils";
+import { devLog } from "@/utils/log";
 
 export default function () {
     const repeatMode = useRepeatMode();
@@ -16,7 +17,10 @@ export default function () {
 
     const orientation = useOrientation();
 
-    console.log(repeatMode, repeatModeConst[repeatMode]);
+    devLog("info", "🎵[播放控制] 重复模式状态", { 
+        repeatMode, 
+        repeatModeText: repeatModeConst[repeatMode] 
+    });
 
     return (
         <>

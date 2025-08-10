@@ -1,6 +1,6 @@
 import { Platform, Alert, AppState, AppStateStatus } from "react-native";
 import notifee from "@notifee/react-native";
-import { errorLog } from "@/utils/log";
+import { errorLog, devLog } from "@/utils/log";
 import Toast from "@/utils/toast";
 
 interface PermissionState {
@@ -69,7 +69,7 @@ class NotificationPermissionManager {
                 // 如果用户在系统设置中开启了权限
                 if (hasPermission && this.permissionState.userDeniedPermanently) {
                     this.permissionState.userDeniedPermanently = false;
-                    console.log("Notification permission granted in system settings");
+                    devLog("info", "🔔[通知权限] 用户在系统设置中授予了通知权限");
                 }
             }
         } catch (error) {

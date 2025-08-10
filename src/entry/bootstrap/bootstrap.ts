@@ -6,6 +6,7 @@ import { emptyFunction, localPluginHash, supportLocalMediaType } from "@/constan
 import pathConst from "@/constants/pathConst";
 import Config from "@/core/appConfig";
 import downloader, { DownloadFailReason, DownloaderEvent } from "@/core/downloader";
+import downloadNotificationManager from "@/core/downloadNotificationManager";
 import LocalMusicSheet from "@/core/localMusicSheet";
 import lyricManager from "@/core/lyricManager";
 import musicHistory from "@/core/musicHistory";
@@ -15,7 +16,7 @@ import Theme from "@/core/theme";
 import TrackPlayer from "@/core/trackPlayer";
 import NativeUtils from "@/native/utils";
 import { checkAndCreateDir } from "@/utils/fileUtils";
-import { errorLog, trace } from "@/utils/log";
+import { errorLog, trace, devLog } from "@/utils/log";
 import { IPerfLogger, perfLogger } from "@/utils/perfLogger";
 import PersistStatus from "@/utils/persistStatus";
 import Toast from "@/utils/toast";
@@ -35,15 +36,15 @@ downloader.injectDependencies(Config, PluginManager);
 lyricManager.injectDependencies(TrackPlayer, Config, PluginManager);
 MusicSheet.injectDependencies(Config);
 
+devLog('info', '🚀[Bootstrap] 所有依赖注入完成');
+
 
 async function bootstrapImpl() {
     await SplashScreen.preventAutoHideAsync()
         .then(result =>
-            console.log(
-                `SplashScreen.preventAutoHideAsync() succeeded: ${result}`,
-            ),
+            devLog('info', '✅[Bootstrap] SplashScreen防自动隐藏成功', { result }),
         )
-        .catch(console.warn); // it's good to explicitly catch and inspect any error
+        .catch((error) => devLog('warn', '⚠️[Bootstrap] SplashScreen防自动隐藏失败', error)); // it's good to explicitly catch and inspect any error
     const logger = perfLogger();
     // 1. 检查权限
     if (Platform.OS === "android" && Platform.Version >= 30) {
@@ -124,6 +125,17 @@ async function bootstrapImpl() {
 
     i18n.setup();
     logger.mark("语言模块初始化完成");
+    
+    // 初始化下载通知管理器
+    devLog('info', '📲[Bootstrap] 开始初始化下载通知管理器');
+    try {
+        await downloadNotificationManager.initialize();
+        devLog('info', '✅[Bootstrap] 下载通知管理器初始化成功');
+    } catch (error) {
+        devLog('error', '❌[Bootstrap] 下载通知管理器初始化失败', error);
+        errorLog("Failed to initialize download notification manager during bootstrap", error);
+    }
+    logger.mark("下载通知管理器初始化完成");
     
     ErrorUtils.setGlobalHandler(error => {
         errorLog("未捕获的错误", error);
@@ -250,7 +262,7 @@ async function extraMakeup() {
                         }
                     })
                     .catch(e => {
-                        console.log(e);
+                        devLog('warn', '⚠️[Bootstrap] 插件安装失败', e);
                         Toast.warn(e?.message ?? "无法识别此插件");
                     });
             } else if (supportLocalMediaType.some(it => url.endsWith(it))) {
@@ -258,7 +270,7 @@ async function extraMakeup() {
                 const musicItem = await PluginManager.getByHash(
                     localPluginHash,
                 )?.instance?.importMusicItem?.(url);
-                console.log(musicItem);
+                devLog('info', '🎵[Bootstrap] 导入本地音乐项目', musicItem);
                 if (musicItem) {
                     TrackPlayer.play(musicItem);
                 }
@@ -323,6 +335,6 @@ export default async function () {
         }
     }
     // 隐藏开屏动画
-    console.log("HIDE");
+    devLog('info', '🎯[Bootstrap] 隐藏启动屏幕');
     await SplashScreen.hideAsync();
 }

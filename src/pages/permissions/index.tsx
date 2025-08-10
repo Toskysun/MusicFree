@@ -10,6 +10,7 @@ import LyricUtil from "@/native/lyricUtil";
 import NativeUtils from "@/native/utils";
 import downloadNotificationManager from "@/core/downloadNotificationManager";
 import rpx from "@/utils/rpx";
+import { devLog } from "@/utils/log";
 import React, { useEffect, useRef, useState } from "react";
 import { AppState, StyleSheet } from "react-native";
 
@@ -36,7 +37,7 @@ export default function Permissions() {
         }
         if (!type || type === "fileStorage") {
             const hasPermission = await NativeUtils.checkStoragePermission();
-            console.log("HAS", hasPermission);
+            devLog("info", "📁[权限页面] 存储权限检查", { hasPermission });
             newPermissions.fileStorage = hasPermission;
         }
         if (!type || type === "notification") {

@@ -5,6 +5,7 @@ import Toast from "@/utils/toast";
 import { compare } from "compare-versions";
 import { useEffect } from "react";
 import i18n from "@/core/i18n";
+import { devLog } from "@/utils/log";
 
 export const checkUpdateAndShowResult = (
     showToast = false,
@@ -14,7 +15,7 @@ export const checkUpdateAndShowResult = (
         if (updateInfo?.needUpdate) {
             const { data } = updateInfo;
             const skipVersion = PersistStatus.get("app.skipVersion");
-            console.log(skipVersion, data);
+            devLog("info", "🔄[更新检查] 检查版本更新", { skipVersion, newVersion: data.version });
             if (
                 checkSkip &&
                 skipVersion &&

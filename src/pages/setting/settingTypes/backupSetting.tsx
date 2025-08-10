@@ -14,7 +14,7 @@ import Config, { useAppConfig } from "@/core/appConfig";
 import { useI18N } from "@/core/i18n";
 import delay from "@/utils/delay";
 import { writeInChunks } from "@/utils/fileUtils.ts";
-import { errorLog } from "@/utils/log.ts";
+import { errorLog, devLog } from "@/utils/log.ts";
 import { getDocumentAsync } from "expo-document-picker";
 import { readAsStringAsync } from "expo-file-system";
 import { AuthType, createClient } from "webdav";
@@ -58,7 +58,7 @@ export default function BackupSetting() {
                         onReject(reason, hideDialog) {
                             hideDialog();
                             resolve(false);
-                            console.log(reason);
+                            devLog("warn", "💾[备份设置] 备份被拒绝", reason);
                             Toast.warn(t("toast.backupFail", { reason: reason?.message ?? reason }));
                         },
                     });
@@ -97,7 +97,7 @@ export default function BackupSetting() {
                     onReject(reason, hideDialog) {
                         hideDialog();
                         resolve(false);
-                        console.log(reason);
+                        devLog("warn", "💾[备份设置] 恢复被拒绝", reason);
                         Toast.warn(t("toast.resumeFail", { reason: reason?.message ?? reason }));
                     },
                 });
