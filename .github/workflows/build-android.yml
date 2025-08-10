@@ -110,23 +110,42 @@ jobs:
         echo "build-time=$BUILD_TIME" >> $GITHUB_OUTPUT
         echo "✅ Build info generated"
     
-    # 🔧 Gradle 权限和缓存预热
-    - name: Setup Gradle with permissions and cache warmup
+    # 🔧 Gradle 权限和缓存清理
+    - name: Setup Gradle with permissions and cache cleanup
       run: |
         chmod +x android/gradlew
-        # Gradle daemon预热
-        cd android && ./gradlew --version
         
-        # 预构建React Native依赖以避免超时
-        echo "🚀 Pre-building React Native native modules..."
-        cd android && ./gradlew :app:preBuild \
-          --build-cache \
-          --parallel \
-          --daemon \
-          --no-scan \
-          --max-workers=2 \
-          --quiet \
-          || echo "⚠️  Pre-build completed with warnings"
+        # 强制清理所有可能的缓存和生成文件
+        echo "🧹 Force cleaning all caches and generated files..."
+        cd android
+        
+        # 删除所有构建缓存
+        rm -rf .gradle
+        rm -rf build
+        rm -rf app/build
+        rm -rf app/.cxx
+        
+        # 删除 autolinking 相关文件
+        rm -rf build/generated/autolinking
+        find . -name "autolinking.json" -delete
+        
+        # 删除可能损坏的配置
+        rm -rf ~/.gradle/caches
+        rm -rf ~/.android/build-cache
+        
+        echo "🔄 Force regenerating React Native autolinking..."
+        cd ..
+        # 强制重新生成 autolinking
+        npx react-native config || echo "Config command not available"
+        
+        cd android
+        # Gradle daemon预热
+        ./gradlew --version
+        
+        # 只做clean，不做实际构建
+        ./gradlew clean --no-daemon --no-build-cache --refresh-dependencies
+        
+        echo "✅ Gradle setup and cleanup completed"
     
     # 🔐 设置签名证书
     - name: Setup keystore
@@ -176,14 +195,14 @@ jobs:
           exit 1
         fi
         
-        # Build with comprehensive error handling
+        # Build with comprehensive error handling and forced refresh
         set +e  # Don't exit immediately on error so we can capture logs
         
         ./gradlew assembleRelease \
-          --build-cache \
-          --parallel \
-          --daemon \
-          --no-scan \
+          --no-daemon \
+          --no-build-cache \
+          --refresh-dependencies \
+          --rerun-tasks \
           --stacktrace \
           --max-workers=3 \
           2>&1 | tee build.log
