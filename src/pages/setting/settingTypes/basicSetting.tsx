@@ -497,6 +497,18 @@ export default function BasicSetting() {
                         });
                     },
                 }] : []),
+                // 音乐标签设置
+                {
+                    title: "音乐标签设置",
+                    right: (
+                        <ThemeText fontSize="subTitle" style={styles.centerText}>
+                            自定义
+                        </ThemeText>
+                    ),
+                    onPress() {
+                        showPanel("MusicMetadataSettingsPanel");
+                    },
+                },
             ],
         },
         {

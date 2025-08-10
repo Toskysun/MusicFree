@@ -18,6 +18,8 @@ import { copyFile, downloadFile, exists, unlink, stopDownload } from "react-nati
 import LocalMusicSheet from "./localMusicSheet";
 import { IPluginManager } from "@/types/core/pluginManager";
 import downloadNotificationManager from "./downloadNotificationManager";
+import musicMetadataManager from "./musicMetadataManager";
+import type { IDownloadMetadataConfig, IDownloadTaskMetadata } from "@/types/metadata";
 
 
 export enum DownloadStatus {
@@ -133,18 +135,25 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
         this.configService = configService;
         this.pluginManagerService = pluginManager;
         
+        // 注入插件管理器到音乐元数据管理器
+        musicMetadataManager.injectPluginManager(pluginManager);
+        
         // 初始化下载通知管理器
         this.initializeNotificationManager();
     }
     
     private async initializeNotificationManager(): Promise<void> {
         if (this.notificationManagerInitialized) {
+            console.log("[下载器] 通知管理器已经初始化过了");
             return;
         }
+        console.log("[下载器] 开始初始化通知管理器");
         try {
             await downloadNotificationManager.initialize();
             this.notificationManagerInitialized = true;
+            console.log("[下载器] 通知管理器初始化成功");
         } catch (error) {
+            console.error("[下载器] 通知管理器初始化失败:", error);
             errorLog("Failed to initialize download notification manager", error);
         }
     }
@@ -155,6 +164,15 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
             ...patch,
         } as IDownloadTaskInfo;
         downloadTasks.set(getMediaUniqueKey(musicItem), newValue);
+        
+        console.log(`[下载器] 触发下载任务更新事件:`, {
+            status: newValue.status,
+            musicTitle: newValue.musicItem?.title,
+            downloadedSize: newValue.downloadedSize,
+            fileSize: newValue.fileSize,
+            hasListeners: this.listenerCount(DownloaderEvent.DownloadTaskUpdate)
+        });
+        
         this.emit(DownloaderEvent.DownloadTaskUpdate, newValue);
         return newValue;
     }
@@ -219,6 +237,55 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
             return `${cachePath}/${fileName ?? ""}`;
         }
         return fileName ? cachePath + fileName : cachePath;
+    }
+
+    /** 获取元数据写入配置 */
+    private getMetadataConfig(): IDownloadMetadataConfig {
+        return {
+            enabled: this.configService.getConfig("basic.writeMetadata") ?? false,
+            writeCover: this.configService.getConfig("basic.writeMetadataCover") ?? true,
+            writeLyric: this.configService.getConfig("basic.writeMetadataLyric") ?? true,
+            fetchExtendedInfo: this.configService.getConfig("basic.writeMetadataExtended") ?? false,
+        };
+    }
+
+    /** 写入音乐元数据到文件 */
+    private async writeMetadataToFile(musicItem: IMusic.IMusicItem, filePath: string): Promise<void> {
+        const config = this.getMetadataConfig();
+        
+        if (!config.enabled || !musicMetadataManager.isAvailable()) {
+            return;
+        }
+
+        try {
+            const taskMetadata: IDownloadTaskMetadata = {
+                musicItem,
+                filePath,
+                coverUrl: musicItem.artwork?.toString(),
+            };
+
+            const success = await musicMetadataManager.writeMetadataForDownloadTask(taskMetadata, config);
+            
+            if (success) {
+                errorLog('音乐元数据写入成功', {
+                    title: musicItem.title,
+                    artist: musicItem.artist,
+                    filePath,
+                });
+            }
+        } catch (error) {
+            // 元数据写入失败不影响下载任务完成
+            errorLog('音乐元数据写入失败', {
+                musicItem: {
+                    id: musicItem.id,
+                    title: musicItem.title,
+                    artist: musicItem.artist,
+                    platform: musicItem.platform,
+                },
+                filePath,
+                error: error instanceof Error ? error.message : String(error),
+            });
+        }
     }
 
 
@@ -393,6 +460,9 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
             await downloadResult.promise;
             // 下载完成，移动文件
             await copyFile(cacheDownloadPath, targetDownloadPath);
+
+            // 写入音乐元数据（标签、歌词、封面）
+            await this.writeMetadataToFile(musicItem, targetDownloadPath);
 
             LocalMusicSheet.addMusic({
                 ...musicItem,

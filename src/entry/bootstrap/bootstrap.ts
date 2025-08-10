@@ -6,6 +6,7 @@ import { emptyFunction, localPluginHash, supportLocalMediaType } from "@/constan
 import pathConst from "@/constants/pathConst";
 import Config from "@/core/appConfig";
 import downloader, { DownloadFailReason, DownloaderEvent } from "@/core/downloader";
+import downloadNotificationManager from "@/core/downloadNotificationManager";
 import LocalMusicSheet from "@/core/localMusicSheet";
 import lyricManager from "@/core/lyricManager";
 import musicHistory from "@/core/musicHistory";
@@ -34,6 +35,8 @@ TrackPlayer.injectDependencies(Config, musicHistory, PluginManager);
 downloader.injectDependencies(Config, PluginManager);
 lyricManager.injectDependencies(TrackPlayer, Config, PluginManager);
 MusicSheet.injectDependencies(Config);
+
+console.log("[Bootstrap] 所有依赖注入完成");
 
 
 async function bootstrapImpl() {
@@ -124,6 +127,17 @@ async function bootstrapImpl() {
 
     i18n.setup();
     logger.mark("语言模块初始化完成");
+    
+    // 初始化下载通知管理器
+    console.log("[Bootstrap] 开始初始化下载通知管理器");
+    try {
+        await downloadNotificationManager.initialize();
+        console.log("[Bootstrap] 下载通知管理器初始化成功");
+    } catch (error) {
+        console.error("[Bootstrap] 下载通知管理器初始化失败:", error);
+        errorLog("Failed to initialize download notification manager during bootstrap", error);
+    }
+    logger.mark("下载通知管理器初始化完成");
     
     ErrorUtils.setGlobalHandler(error => {
         errorLog("未捕获的错误", error);

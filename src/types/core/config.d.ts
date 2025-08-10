@@ -36,6 +36,11 @@ export interface IAppConfigProperties {
     "basic.fileNamingCustom": string;
     "basic.fileNamingMaxLength": number;
     "basic.qualityTranslations": Record<IMusic.IQualityKey, string>;
+    // 音乐标签写入相关配置
+    "basic.writeMetadata": boolean;
+    "basic.writeMetadataCover": boolean;
+    "basic.writeMetadataLyric": boolean;
+    "basic.writeMetadataExtended": boolean;
 
     // Lyric
     "lyric.showStatusBarLyric": boolean;

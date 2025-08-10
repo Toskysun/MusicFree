@@ -35,24 +35,32 @@ class DownloadNotificationManager implements IDownloadNotification.IDownloadNoti
     private isEventListenerSetup = false; // 追踪事件监听器状态
 
     async initialize(): Promise<void> {
+        console.log(`[通知管理器] 开始初始化 - Platform: ${Platform.OS}, isInitialized: ${this.isInitialized}`);
+        
         if (this.isInitialized || Platform.OS !== "android") {
+            console.log(`[通知管理器] 跳过初始化 - 已初始化或非Android平台`);
             return;
         }
 
         // 如果正在初始化，返回现有的Promise
         if (this.initializePromise) {
+            console.log(`[通知管理器] 返回现有的初始化Promise`);
             return this.initializePromise;
         }
 
         // 创建新的初始化Promise
+        console.log(`[通知管理器] 创建新的初始化Promise`);
         this.initializePromise = this.doInitialize();
         return this.initializePromise;
     }
 
     private async doInitialize(): Promise<void> {
+        console.log(`[通知管理器] 执行初始化逻辑`);
         try {
             // 静默请求通知权限
+            console.log(`[通知管理器] 检查通知权限`);
             const hasPermission = await notificationPermissionManager.silentRequestPermission();
+            console.log(`[通知管理器] 通知权限检查结果: ${hasPermission}`);
       
             if (!hasPermission) {
                 console.warn("Notification permission not granted, notifications will be disabled");
@@ -66,10 +74,12 @@ class DownloadNotificationManager implements IDownloadNotification.IDownloadNoti
                     this.hasShownPermissionWarning = true;
                     Toast.info("下载通知已关闭，下载仍可正常进行");
                 }
+                console.log(`[通知管理器] 由于权限问题初始化结束，但标记为已初始化`);
                 return;
             }
 
             // 创建通知渠道
+            console.log(`[通知管理器] 创建通知渠道`);
             await notifee.createChannel({
                 id: this.CHANNEL_ID,
                 name: "下载进度",
@@ -78,8 +88,10 @@ class DownloadNotificationManager implements IDownloadNotification.IDownloadNoti
                 sound: undefined, // 不播放声音
                 vibration: false,
             });
+            console.log(`[通知管理器] 通知渠道创建成功`);
 
             // 监听通知交互事件
+            console.log(`[通知管理器] 设置通知交互事件监听`);
             notifee.onForegroundEvent(({ type, detail }) => {
                 if (type === EventType.ACTION_PRESS && detail.pressAction?.id === "cancel") {
                     // 处理取消下载操作
@@ -94,8 +106,10 @@ class DownloadNotificationManager implements IDownloadNotification.IDownloadNoti
             this.initializeAttempts = 0; // 重置尝试次数
             this.initializePromise = null;
             
+            console.log(`[通知管理器] 基础初始化完成，准备设置事件监听器`);
             // 设置事件监听器
             this.setupEventListeners();
+            console.log(`[通知管理器] 完整初始化成功`);
         } catch (error) {
             console.error("Failed to initialize download notification manager:", error);
             errorLog("Failed to initialize download notification manager", error);
@@ -153,7 +167,17 @@ class DownloadNotificationManager implements IDownloadNotification.IDownloadNoti
      * 处理下载任务更新事件
      */
     private handleDownloadTaskUpdate(taskInfo: IDownloadTaskInfo): void {
+        console.log(`[通知管理器] 接收到下载任务更新事件:`, {
+            status: taskInfo.status,
+            musicTitle: taskInfo.musicItem?.title,
+            downloadedSize: taskInfo.downloadedSize,
+            fileSize: taskInfo.fileSize,
+            progress: taskInfo.downloadedSize && taskInfo.fileSize ? 
+                Math.round((taskInfo.downloadedSize / taskInfo.fileSize) * 100) : 0
+        });
+        
         if (!taskInfo || !taskInfo.musicItem) {
+            console.log(`[通知管理器] 无效的任务信息，跳过处理`);
             return;
         }
         
@@ -166,12 +190,14 @@ class DownloadNotificationManager implements IDownloadNotification.IDownloadNoti
                     // 开始下载或更新进度
                     if (taskInfo.downloadedSize === 0) {
                         // 开始下载
+                        console.log(`[通知管理器] 开始下载通知: ${taskInfo.musicItem.title}`);
                         this.showDownloadNotification(taskId, taskInfo.musicItem).catch(error => {
                             errorLog("Failed to start notification from event", error);
                         });
                     } else if (taskInfo.fileSize > 0) {
                         // 更新进度
                         const progress = Math.round((taskInfo.downloadedSize / taskInfo.fileSize) * 100);
+                        console.log(`[通知管理器] 更新下载进度: ${progress}% (${taskInfo.downloadedSize}/${taskInfo.fileSize})`);
                         this.updateProgress(taskId, {
                             downloadedSize: taskInfo.downloadedSize,
                             fileSize: taskInfo.fileSize,
@@ -184,6 +210,7 @@ class DownloadNotificationManager implements IDownloadNotification.IDownloadNoti
                 break;
                 
             case DownloadStatus.Completed:
+                console.log(`[通知管理器] 下载完成通知: ${taskInfo.musicItem.title}`);
                 this.showCompleted(taskId, taskInfo.musicItem, "").catch(error => {
                     errorLog("Failed to show completion notification from event", error);
                 });
@@ -191,6 +218,7 @@ class DownloadNotificationManager implements IDownloadNotification.IDownloadNoti
                 
             case DownloadStatus.Error:
                 if (taskInfo.errorReason) {
+                    console.log(`[通知管理器] 下载错误通知: ${taskInfo.musicItem.title}, 原因: ${taskInfo.errorReason}`);
                     const errorMessage = this.getErrorMessage(taskInfo.errorReason);
                     this.showError(taskId, errorMessage).catch(error => {
                         errorLog("Failed to show error notification from event", error);
