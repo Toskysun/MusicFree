@@ -63,7 +63,7 @@ export default function useQueryArtist(pluginHash: string) {
                 );
             }
         },
-        [queryResults],
+        [queryResults, pluginHash, setQueryResults],
     );
 
     return queryArtist;

@@ -26,11 +26,12 @@ export default function ThemeCard(props: IThemeCardProps) {
                 style={[
                     styles.borderContainer,
                     selected
-                        ? {
-                            borderWidth: 2,
-                            borderStyle: "solid",
-                            borderColor: colors.primary,
-                        }
+                        ? [
+                            styles.selectedBorder,
+                            {
+                                borderColor: colors.primary,
+                            },
+                        ]
                         : null,
                 ]}>
                 <View
@@ -70,6 +71,10 @@ const styles = StyleSheet.create({
         marginRight: rpx(24),
         justifyContent: "center",
         alignItems: "center",
+    },
+    selectedBorder: {
+        borderWidth: 2,
+        borderStyle: "solid",
     },
     container: {
         width: rpx(136),

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { StyleSheet } from "react-native";
 
 import NavBar from "./components/navBar";
@@ -13,9 +13,22 @@ import Theme from "@/core/theme";
 import HomeBody from "./components/homeBody";
 import HomeBodyHorizontal from "./components/homeBodyHorizontal";
 import useOrientation from "@/hooks/useOrientation";
+import { ROUTE_PATH, useNavigate } from "@/core/router";
+import Config from "@/core/appConfig";
 
 function Home() {
     const orientation = useOrientation();
+    const navigate = useNavigate();
+    
+    useEffect(() => {
+        // 检查是否需要在启动后打开播放详情页
+        if (Config.getConfig("basic.openPlayDetailOnLaunch")) {
+            // 延迟一下导航，确保页面已经渲染完成
+            setTimeout(() => {
+                navigate(ROUTE_PATH.MUSIC_DETAIL);
+            }, 100);
+        }
+    }, [navigate]);
 
     return (
         <SafeAreaView edges={["top", "bottom"]} style={styles.appWrapper}>
@@ -60,6 +73,10 @@ function HomeStatusBar() {
 // }
 
 const LeftDrawer = createDrawerNavigator();
+
+// Extract drawer content component to avoid nested component warning
+const DrawerContent = (props: any) => <HomeDrawer {...props} />;
+
 export default function App() {
     return (
         <LeftDrawer.Navigator
@@ -70,7 +87,7 @@ export default function App() {
                 },
             }}
             initialRouteName="HOME-MAIN"
-            drawerContent={props => <HomeDrawer {...props} />}>
+            drawerContent={DrawerContent}>
             <LeftDrawer.Screen name="HOME-MAIN" component={Home} />
         </LeftDrawer.Navigator>
     );

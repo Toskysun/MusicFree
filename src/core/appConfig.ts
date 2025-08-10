@@ -165,6 +165,22 @@ class AppConfig implements IAppConfig {
             configStore.set("$schema", "2");
         }
 
+        // 设置文件命名相关的默认值
+        if (!this.getConfig("basic.fileNamingType")) {
+            this.setConfig("basic.fileNamingType", "preset");
+        }
+        if (!this.getConfig("basic.fileNamingPreset")) {
+            this.setConfig("basic.fileNamingPreset", "歌曲名-歌手");
+        }
+        if (!this.getConfig("basic.fileNamingCustom")) {
+            this.setConfig("basic.fileNamingCustom", "{title}-{artist}");
+        }
+        if (this.getConfig("basic.fileNamingShowQuality") === undefined) {
+            this.setConfig("basic.fileNamingShowQuality", false);
+        }
+        if (!this.getConfig("basic.fileNamingMaxLength")) {
+            this.setConfig("basic.fileNamingMaxLength", 200);
+        }
 
     }
 

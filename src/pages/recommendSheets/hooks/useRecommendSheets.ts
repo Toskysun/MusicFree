@@ -58,11 +58,11 @@ export default function (pluginHash: string, tag: ICommon.IUnique) {
         } catch {
             setRequestState(RequestStateCode.ERROR);
         }
-    }, [tag, requestState]);
+    }, [tag, requestState, pluginHash]);
 
     useEffect(() => {
         query();
-    }, [tag]);
+    }, [tag, query]);
 
 
     return [query, sheets, requestState] as const;

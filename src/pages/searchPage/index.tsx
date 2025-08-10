@@ -30,7 +30,7 @@ export default function () {
             setPageStatus(PageStatus.EDITING);
             setQuery("");
         };
-    }, []);
+    }, [setPageStatus, setQuery, setSearchResultsState]);
 
     return (
         <SafeAreaView edges={["bottom", "top"]} style={style.wrapper}>

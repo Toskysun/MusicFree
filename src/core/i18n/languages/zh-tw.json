@@ -87,6 +87,8 @@
     "permissionSetting.floatWindowPermissionDescription": "用以展示桌面歌詞",
     "permissionSetting.fileReadWritePermission": "文件讀寫權限",
     "permissionSetting.fileReadWritePermissionDescription": "用以下載歌曲、快取資料",
+    "permissionSetting.notificationPermission": "通知權限",
+    "permissionSetting.notificationPermissionDescription": "用以顯示下載進度通知",
     "recommendSheet.title": "推薦歌單",
     "searchMusicList.searchPlaceHolder": "在列表中搜尋歌曲",
     "searchMusicList.searchLabel.a11y": "搜尋框",
@@ -250,6 +252,7 @@
     "basicSettings.notCheckPluginVersion": "安裝外掛時不校驗版本",
     "basicSettings.playback": "播放",
     "basicSettings.notInterrupt": "允許與其他應用同時播放",
+    "basicSettings.openPlayDetailOnLaunch": "軟體啟動時打開播放詳情頁",
     "basicSettings.autoPlayWhenAppStart": "軟體啟動時自動播放歌曲",
     "basicSettings.tryChangeSourceWhenPlayFail": "播放失敗時嘗試更換音源",
     "basicSettings.autoStopWhenError": "播放失敗時自動暫停",
@@ -320,10 +323,6 @@
     "toast.logCleared": "日誌已清空",
     "toast.noFloatWindowPermission": "無懸浮窗權限",
     "toast.folderNotExistOrNoPermission": "文件夾不存在或無權限",
-    "musicQuality.low": "低音質",
-    "musicQuality.standard": "標準音質",
-    "musicQuality.high": "高音質",
-    "musicQuality.super": "超高音質",
     "common.emptyList": "什麼都沒有呀~",
     "common.loading": "加載中...",
     "common.error": "出錯啦...",
@@ -428,5 +427,15 @@
     "panel.sheetTags.title": "歌單類別",
     "repeatMode.SHUFFLE": "隨機播放",
     "repeatMode.QUEUE": "清單循環",
-    "repeatMode.SINGLE": "單曲循環"
+    "repeatMode.SINGLE": "單曲循環",
+    
+    // 音質翻譯
+    "quality.128k": "普通音質 128K",
+    "quality.320k": "高清音質 320K",
+    "quality.flac": "高清音質 FLAC",
+    "quality.flac24bit": "無損音質 FLAC Hires",
+    "quality.hires": "無損音質 Hires",
+    "quality.atmos": "無損音質 Atmos",
+    "quality.atmos_plus": "無損音質 Atmos 2.0",
+    "quality.master": "無損音質 Master"
 }

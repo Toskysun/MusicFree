@@ -93,14 +93,18 @@ function ResultSubPanel(props: IResultSubPanelProps) {
                 <TabBar
                     {..._}
                     scrollEnabled
+                    // eslint-disable-next-line react-native/no-inline-styles -- Dynamic transparent styles for tab appearance
                     style={{
+                         
                         backgroundColor: "transparent",
                         shadowColor: "transparent",
                         borderColor: "transparent",
                     }}
                     inactiveColor={colors.text}
                     activeColor={colors.primary}
+                    // eslint-disable-next-line react-native/no-inline-styles -- Dynamic width for tab flexibility
                     tabStyle={{
+                         
                         width: "auto",
                     }}
                     renderIndicator={() => null}
@@ -108,12 +112,14 @@ function ResultSubPanel(props: IResultSubPanelProps) {
                     renderLabel={({ route, focused, color }) => (
                         <Text
                             numberOfLines={1}
+                            // eslint-disable-next-line react-native/no-inline-styles -- Dynamic focused state styles
                             style={{
                                 width: rpx(140),
                                 fontWeight: focused
                                     ? fontWeightConst.bolder
                                     : fontWeightConst.medium,
                                 color,
+                                 
                                 textAlign: "center",
                             }}>
                             {route.title ?? `(${t("common.unknownName")})`}

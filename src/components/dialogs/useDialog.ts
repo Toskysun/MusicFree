@@ -30,7 +30,7 @@ export function hideDialog() {
 }
 
 export default function useDialog() {
-    const showDialog = useCallback(
+    const showDialogCallback = useCallback(
         <T extends keyof IDialogType>(
             name: T,
             payload?: Parameters<IDialogType[T]>[0],
@@ -43,14 +43,14 @@ export default function useDialog() {
         [],
     );
 
-    const hideDialog = useCallback(() => {
+    const hideDialogCallback = useCallback(() => {
         dialogInfoStore.setValue({
             name: null,
             payload: null,
         });
     }, []);
 
-    return { showDialog, hideDialog };
+    return { showDialog: showDialogCallback, hideDialog: hideDialogCallback };
 }
 
 export function getCurrentDialog() {

@@ -93,14 +93,11 @@ const calculateTipPosition = (
 const Triangle = ({ size, color, style }: { size: number; color: string; style?: any }) => (
     <View
         style={[
+            styles.triangle,
             {
-                width: 0,
-                height: 0,
                 borderLeftWidth: size / 2,
                 borderRightWidth: size / 2,
                 borderBottomWidth: size,
-                borderLeftColor: "transparent",
-                borderRightColor: "transparent",
                 borderBottomColor: color,
             },
             style,
@@ -306,5 +303,9 @@ const styles = StyleSheet.create({
     },
     triangle: {
         position: "absolute",
+        width: 0,
+        height: 0,
+        borderLeftColor: "transparent",
+        borderRightColor: "transparent",
     },
 });

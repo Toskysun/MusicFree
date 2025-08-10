@@ -255,7 +255,7 @@ export default function MarkdownDialog(props: IMarkdownDialogProps) {
             }
         });
 
-    }, [markdownContent, onMounted, colors]);
+    }, [markdownContent, onMounted, colors, title]);
 
     const actions = [
         {

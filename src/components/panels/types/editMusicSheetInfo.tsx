@@ -126,13 +126,13 @@ export default function EditMusicSheetInfo(props: IEditSheetDetailProps) {
                         value={title}
                         hasHorizontalPadding={false}
                         onChangeText={onTitleChange}
-                        style={{
-                            height: fontSizeConst.content * 2.5,
-                            width: "50%",
-                            borderBottomWidth: 1,
-                            includeFontPadding: false,
-                            borderBottomColor: colors.text,
-                        }}
+                        style={[
+                            style.titleInput,
+                            {
+                                height: fontSizeConst.content * 2.5,
+                                borderBottomColor: colors.text,
+                            },
+                        ]}
                     />
                 </View>
                 <TouchableOpacity
@@ -173,5 +173,10 @@ const style = StyleSheet.create({
         marginTop: rpx(24),
         justifyContent: "center",
         alignItems: "center",
+    },
+    titleInput: {
+        width: "50%",
+        borderBottomWidth: 1,
+        includeFontPadding: false,
     },
 });

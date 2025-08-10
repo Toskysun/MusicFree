@@ -15,7 +15,7 @@ import {
 } from "@/utils/mediaUtils";
 import Network from "@/utils/network";
 import PersistStatus from "@/utils/persistStatus";
-import { getQualityOrder } from "@/utils/qualities";
+import { getQualityOrder, getSmartQuality } from "@/utils/qualities";
 import { musicIsPaused } from "@/utils/trackUtils";
 import EventEmitter from "eventemitter3";
 import { produce } from "immer";
@@ -44,7 +44,7 @@ import { resolveImportedAssetOrPath } from "@/utils/fileUtils";
 
 const currentMusicAtom = atom<IMusic.IMusicItem | null>(null);
 const repeatModeAtom = atom<MusicRepeatMode>(MusicRepeatMode.QUEUE);
-const qualityAtom = atom<IMusic.IQualityKey>("standard");
+const qualityAtom = atom<IMusic.IQualityKey>("320k");
 const playListAtom = atom<IMusic.IMusicItem[]>([]);
 
 
@@ -134,7 +134,7 @@ class TrackPlayer extends EventEmitter<{
         const quality =
             PersistStatus.get("music.quality") ||
             this.configService.getConfig("basic.defaultPlayQuality") ||
-            "standard";
+            "320k";
 
         // 状态恢复
         if (rate) {
@@ -474,28 +474,59 @@ class TrackPlayer extends EventEmitter<{
 
             // 5.1 通过插件获取音源
             const plugin = this.pluginManagerService.getByName(musicItem.platform);
-            // 5.2 获取音质排序
+            
+            // 5.2 智能音质选择
+            const preferredQuality = this.configService.getConfig("basic.defaultPlayQuality") ?? "320k";
+            let selectedQuality: IMusic.IQualityKey;
+            
+            // 如果音乐项包含音质信息，使用智能选择
+            if (musicItem.qualities || musicItem.source) {
+                selectedQuality = getSmartQuality(
+                    preferredQuality,
+                    musicItem.qualities || musicItem.source,
+                    plugin?.supportedQualities // 假设插件提供支持的音质列表
+                );
+            } else {
+                // 回退到传统的音质排序方法
+                selectedQuality = preferredQuality;
+            }
+            
+            // 5.3 获取音质排序作为后备
             const qualityOrder = getQualityOrder(
-                this.configService.getConfig("basic.defaultPlayQuality") ?? "standard",
+                selectedQuality,
                 this.configService.getConfig("basic.playQualityOrder") ?? "asc",
             );
-            // 5.3 插件返回音源
+            
+            // 5.4 插件返回音源
             let source: IPlugin.IMediaSourceResult | null = null;
-            for (let quality of qualityOrder) {
-                if (this.isCurrentMusic(musicItem)) {
-                    source =
-                        (await plugin?.methods?.getMediaSource(
-                            musicItem,
-                            quality,
-                        )) ?? null;
-                    // 5.3.1 获取到真实源
-                    if (source) {
-                        this.setQuality(quality);
-                        break;
-                    }
+            
+            // 首先尝试智能选择的音质
+            if (this.isCurrentMusic(musicItem)) {
+                source = (await plugin?.methods?.getMediaSource(
+                    musicItem,
+                    selectedQuality,
+                )) ?? null;
+                
+                if (source) {
+                    this.setQuality(selectedQuality);
                 } else {
-                    // 5.3.2 已经切换到其他歌曲了，
-                    return;
+                    // 智能选择失败，回退到遍历所有音质
+                    for (let quality of qualityOrder) {
+                        if (this.isCurrentMusic(musicItem)) {
+                            source = (await plugin?.methods?.getMediaSource(
+                                musicItem,
+                                quality,
+                            )) ?? null;
+                            // 5.4.1 获取到真实源
+                            if (source) {
+                                this.setQuality(quality);
+                                break;
+                            }
+                        } else {
+                            // 5.4.2 已经切换到其他歌曲了，
+                            return;
+                        }
+                    }
                 }
             }
 
@@ -558,7 +589,8 @@ class TrackPlayer extends EventEmitter<{
                     source = {
                         url: musicItem.url,
                     };
-                    this.setQuality("standard");
+                    // 使用用户设置的默认音质，而不是硬编码
+                    this.setQuality(preferredQuality);
                 }
             }
 

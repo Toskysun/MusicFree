@@ -55,7 +55,7 @@ export default function (props: IPanelBaseProps) {
     const orientation = useOrientation();
     const useAnimatedBase = useMemo(
         () => (orientation === "horizontal" ? rpx(750) : height),
-        [orientation],
+        [orientation, height],
     );
 
     const backHandlerRef = useRef<NativeEventSubscription>();
@@ -104,6 +104,7 @@ export default function (props: IPanelBaseProps) {
             }
             listenerSubscription.remove();
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const maskAnimated = useAnimatedStyle(() => {
@@ -162,9 +163,10 @@ export default function (props: IPanelBaseProps) {
                 style.wrapper,
                 orientation === "horizontal" ? {
                     height: vh(100) - safeAreaInsets.top,
-                    bottom: 0,
+                    ...style.bottomPosition,
                 } : {
                     top: positionMethod === "top" ? (NativeUtils.getWindowDimensions().height + safeAreaInsets.top) - height - safeAreaInsets.bottom : undefined,
+                     
                     bottom: positionMethod === "bottom" ? 0 : undefined,
                     height: height,
                 },
@@ -223,6 +225,12 @@ const style = StyleSheet.create({
         borderTopLeftRadius: rpx(28),
         borderTopRightRadius: rpx(28),
         zIndex: 15010,
+    },
+    bottomPosition: {
+        bottom: 0,
+    },
+    bottomPositionDynamic: {
+        bottom: 0,
     },
     kbContainer: {
         zIndex: 15010,

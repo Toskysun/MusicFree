@@ -1,27 +1,28 @@
 {
   "name": "MusicFree",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "private": true,
   "license": "AGPL",
   "author": {
-    "name": "猫头猫",
-    "email": "lhx_xjtu@163.com"
+    "name": "Toskysun"
   },
   "scripts": {
     "android": "react-native run-android",
     "ios": "react-native run-ios",
-    "lint": "eslint . --ext .js,.jsx,.ts,.tsx src --fix",
+    "lint": "eslint src --fix",
     "start": "react-native start",
     "clean": "cd ./android && ./gradlew clean",
     "test": "jest",
     "commit-lint": "commitlint --edit",
     "lint-staged": "lint-staged",
     "connect-mumu": "adb kill-server & adb connect localhost:7555",
-    "build-android": "cd .\\android\\ && .\\gradlew assembleRelease",
+    "build-android": "node ./scripts/generate-build-info.js && cd .\\android\\ && .\\gradlew assembleRelease",
     "generate-assets": "node ./generator/generate-assets.mjs",
+    "generate-build-info": "node ./scripts/generate-build-info.js",
     "prepare": "husky"
   },
   "dependencies": {
+    "@notifee/react-native": "^9.0.3",
     "@react-native-async-storage/async-storage": "1.23.1",
     "@react-native-clipboard/clipboard": "^1.15.0",
     "@react-native-community/netinfo": "11.4.1",
@@ -89,6 +90,8 @@
     "@babel/runtime": "^7.25.0",
     "@commitlint/cli": "^19.3.0",
     "@commitlint/config-conventional": "^19.2.2",
+    "@eslint/eslintrc": "^3.3.1",
+    "@eslint/js": "^9.33.0",
     "@react-native-community/cli": "15.0.1",
     "@react-native-community/cli-platform-android": "15.0.1",
     "@react-native-community/cli-platform-ios": "15.0.1",
@@ -130,6 +133,6 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/maotoumao/MusicFree.git"
+    "url": "git+https://github.com/Toskysun/MusicFree.git"
   }
 }

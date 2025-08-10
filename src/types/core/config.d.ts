@@ -5,6 +5,7 @@ export interface IAppConfigProperties {
     $schema: "2";
     // Basic
     "basic.autoPlayWhenAppStart": boolean;
+    "basic.openPlayDetailOnLaunch": boolean;
     "basic.useCelluarNetworkPlay": boolean;
     "basic.useCelluarNetworkDownload": boolean;
     "basic.maxDownload": number;
@@ -30,6 +31,11 @@ export interface IAppConfigProperties {
     "basic.showExitOnNotification": boolean;
     "basic.musicOrderInLocalSheet": SortType;
     "basic.tryChangeSourceWhenPlayFail": boolean;
+    "basic.fileNamingType": "preset" | "custom";
+    "basic.fileNamingPreset": IFileNaming.IPresetTemplate;
+    "basic.fileNamingCustom": string;
+    "basic.fileNamingMaxLength": number;
+    "basic.qualityTranslations": Record<IMusic.IQualityKey, string>;
 
     // Lyric
     "lyric.showStatusBarLyric": boolean;

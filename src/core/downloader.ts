@@ -8,14 +8,16 @@ import { patchMediaExtra } from "@/utils/mediaExtra";
 import { getMediaUniqueKey, isSameMediaItem } from "@/utils/mediaUtils";
 import network from "@/utils/network";
 import { getQualityOrder } from "@/utils/qualities";
+import { generateFileNameFromConfig, DEFAULT_FILE_NAMING_CONFIG } from "@/utils/fileNamingFormatter";
 import EventEmitter from "eventemitter3";
 import { atom, getDefaultStore, useAtomValue } from "jotai";
 import { nanoid } from "nanoid";
 import path from "path-browserify";
 import { useEffect, useState } from "react";
-import { copyFile, downloadFile, exists, unlink } from "react-native-fs";
+import { copyFile, downloadFile, exists, unlink, stopDownload } from "react-native-fs";
 import LocalMusicSheet from "./localMusicSheet";
 import { IPluginManager } from "@/types/core/pluginManager";
+import downloadNotificationManager from "./downloadNotificationManager";
 
 
 export enum DownloadStatus {
@@ -98,19 +100,53 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
     private pluginManagerService!: IPluginManager;
 
     private downloadingCount = 0;
+    private notificationManagerInitialized = false;
 
-    private static generateFilename(musicItem: IMusic.IMusicItem) {
-        return `${escapeCharacter(musicItem.platform)}@${escapeCharacter(
-            musicItem.id,
-        )}@${escapeCharacter(musicItem.title)}@${escapeCharacter(
-            musicItem.artist,
-        )}`.slice(0, 200);
+    private generateFilename(musicItem: IMusic.IMusicItem, quality?: IMusic.IQualityKey): string {
+        // 获取文件命名配置
+        const config: IFileNaming.IFileNamingConfig = {
+            type: this.configService.getConfig("basic.fileNamingType") ?? DEFAULT_FILE_NAMING_CONFIG.type,
+            preset: this.configService.getConfig("basic.fileNamingPreset") ?? DEFAULT_FILE_NAMING_CONFIG.preset,
+            custom: this.configService.getConfig("basic.fileNamingCustom") ?? DEFAULT_FILE_NAMING_CONFIG.custom,
+            showQuality: this.configService.getConfig("basic.fileNamingShowQuality") ?? DEFAULT_FILE_NAMING_CONFIG.showQuality,
+            maxLength: this.configService.getConfig("basic.fileNamingMaxLength") ?? DEFAULT_FILE_NAMING_CONFIG.maxLength,
+            keepExtension: DEFAULT_FILE_NAMING_CONFIG.keepExtension,
+        };
+
+        // 使用新的文件命名格式化函数
+        const result = generateFileNameFromConfig(musicItem, config, quality);
+        
+        // 如果格式化失败，回退到旧的命名方式
+        if (!result.filename) {
+            return `${escapeCharacter(musicItem.platform)}@${escapeCharacter(
+                musicItem.id,
+            )}@${escapeCharacter(musicItem.title)}@${escapeCharacter(
+                musicItem.artist,
+            )}`.slice(0, 200);
+        }
+        
+        return result.filename;
     }
 
 
     injectDependencies(configService: IAppConfig, pluginManager: IPluginManager): void {
         this.configService = configService;
         this.pluginManagerService = pluginManager;
+        
+        // 初始化下载通知管理器
+        this.initializeNotificationManager();
+    }
+    
+    private async initializeNotificationManager(): Promise<void> {
+        if (this.notificationManagerInitialized) {
+            return;
+        }
+        try {
+            await downloadNotificationManager.initialize();
+            this.notificationManagerInitialized = true;
+        } catch (error) {
+            errorLog("Failed to initialize download notification manager", error);
+        }
     }
 
     private updateDownloadTask(musicItem: IMusic.IMusicItem, patch: Partial<IDownloadTaskInfo>) {
@@ -129,13 +165,17 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
         this.updateDownloadTask(musicItem, {
             status: DownloadStatus.Preparing,
         });
+        
+        // 通知现在通过事件系统处理
     }
 
-    private markTaskAsCompleted(musicItem: IMusic.IMusicItem) {
+    private markTaskAsCompleted(musicItem: IMusic.IMusicItem, filePath?: string) {
         this.downloadingCount--;
         this.updateDownloadTask(musicItem, {
             status: DownloadStatus.Completed,
         });
+        
+        // 通知现在通过事件系统处理
     }
 
     private markTaskAsError(musicItem: IMusic.IMusicItem, reason: DownloadFailReason, error?: Error) {
@@ -145,11 +185,14 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
             errorReason: reason,
         });
         this.emit(DownloaderEvent.DownloadTaskError, reason, musicItem, error);
+        
+        // 通知现在通过事件系统处理
     }
 
     /** 匹配文件后缀 */
     private getExtensionName(url: string) {
         const regResult = url.match(
+            // eslint-disable-next-line no-useless-escape
             /^https?\:\/\/.+\.([^\?\.]+?$)|(?:([^\.]+?)\?.+$)/,
         );
         if (regResult) {
@@ -180,6 +223,9 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
 
 
     private async downloadNextPendingTask() {
+        // 确保通知管理器已初始化
+        await this.initializeNotificationManager();
+        
         const maxDownloadCount = Math.max(1, Math.min(+(this.configService.getConfig("basic.maxDownload") || 3), 10));
         const downloadQueue = getDefaultStore().get(downloadQueueAtom);
 
@@ -222,7 +268,7 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
                 const qualityOrder = getQualityOrder(
                     nextTask.quality ??
                     this.configService.getConfig("basic.defaultDownloadQuality") ??
-                    "standard",
+                    "320k",
                     this.configService.getConfig("basic.downloadQualityOrder") ?? "asc",
                 );
                 let data: IPlugin.IMediaSourceResult | null = null;
@@ -268,6 +314,17 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
 
         // 预处理完成，可以开始处理下一个任务
         this.downloadNextPendingTask();
+        
+        // 从musicItem.qualities中获取预期文件大小
+        let expectedFileSize = 0;
+        const taskQuality = nextTask.quality ?? 
+            this.configService.getConfig("basic.defaultDownloadQuality") ?? 
+            "320k";
+        
+        if (musicItem.qualities && musicItem.qualities[taskQuality] && musicItem.qualities[taskQuality].size) {
+            expectedFileSize = musicItem.qualities[taskQuality].size;
+            console.log(`[下载器] 从音质信息获取文件大小: ${expectedFileSize} bytes (${taskQuality})`);
+        }
 
         // 下载逻辑
         // 识别文件后缀
@@ -299,31 +356,41 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
         }
 
         // 下载
-        const { promise } = downloadFile({
+        const downloadResult = downloadFile({
             fromUrl: url ?? "",
             toFile: cacheDownloadPath,
             headers: headers,
             background: true,
             begin: (res) => {
+                const finalFileSize = res.contentLength > 0 ? res.contentLength : expectedFileSize;
                 this.updateDownloadTask(musicItem, {
                     status: DownloadStatus.Downloading,
                     downloadedSize: 0,
-                    fileSize: res.contentLength,
+                    fileSize: finalFileSize,
                     jobId: res.jobId,
                 });
             },
             progress: (res) => {
+                const finalFileSize = res.contentLength > 0 ? res.contentLength : expectedFileSize;
                 this.updateDownloadTask(musicItem, {
                     status: DownloadStatus.Downloading,
                     downloadedSize: res.bytesWritten,
-                    fileSize: res.contentLength,
+                    fileSize: finalFileSize,
                     jobId: res.jobId,
                 });
+                
+                // 通知更新现在通过事件系统处理，移除直接调用
+                // downloadNotificationManager.updateProgress(...) 已移至事件处理器中
             },
+        });
+        
+        // 保存jobId以便取消下载
+        this.updateDownloadTask(musicItem, {
+            jobId: downloadResult.jobId,
         });
 
         try {
-            await promise;
+            await downloadResult.promise;
             // 下载完成，移动文件
             await copyFile(cacheDownloadPath, targetDownloadPath);
 
@@ -339,7 +406,7 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
                 localPath: targetDownloadPath,
             });
 
-            this.markTaskAsCompleted(musicItem);
+            this.markTaskAsCompleted(musicItem, targetDownloadPath);
         } catch (e: any) {
             this.markTaskAsError(musicItem, DownloadFailReason.Unknown, e);
         }
@@ -352,8 +419,8 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
         const key = getMediaUniqueKey(musicItem);
         if (downloadTasks.get(key)?.status === DownloadStatus.Completed) {
             downloadTasks.delete(key);
-            const downloadQueue = getDefaultStore().get(downloadQueueAtom);
-            const newDownloadQueue = downloadQueue.filter(item => !isSameMediaItem(item, musicItem));
+            const currentQueue = getDefaultStore().get(downloadQueueAtom);
+            const newDownloadQueue = currentQueue.filter(item => !isSameMediaItem(item, musicItem));
             getDefaultStore().set(downloadQueueAtom, newDownloadQueue);
         }
     }
@@ -381,15 +448,11 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
             if (downloadTasks.has(key)) {
                 return false;
             }
-            // TODO: 如果已经下载了，也应该返回false
-            if (LocalMusicSheet.isLocalMusic(m)) {
-                return false;
-            }
 
             // 设置下载任务
             downloadTasks.set(getMediaUniqueKey(m), {
                 status: DownloadStatus.Pending,
-                filename: Downloader.generateFilename(m),
+                filename: this.generateFilename(m, quality),
                 quality: quality,
                 musicItem: m,
             });
@@ -416,11 +479,41 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
         if (!task) {
             return false;
         }
-        if (task.status === DownloadStatus.Pending || task.status === DownloadStatus.Error) {
+        
+        // 可以删除等待中、错误和正在下载的任务
+        if (task.status === DownloadStatus.Pending || 
+            task.status === DownloadStatus.Error ||
+            task.status === DownloadStatus.Preparing ||
+            task.status === DownloadStatus.Downloading) {
+            
+            // 如果正在下载，先停止下载
+            if (task.status === DownloadStatus.Downloading && task.jobId) {
+                try {
+                    stopDownload(task.jobId);
+                } catch (error) {
+                    errorLog("Failed to stop download", error);
+                }
+            }
+            
+            // 如果正在下载，需要减少下载计数
+            if (task.status === DownloadStatus.Downloading || task.status === DownloadStatus.Preparing) {
+                this.downloadingCount--;
+            }
+            
+            // 删除任务
             downloadTasks.delete(key);
             const downloadQueue = getDefaultStore().get(downloadQueueAtom);
             const newDownloadQueue = downloadQueue.filter(item => !isSameMediaItem(item, musicItem));
             getDefaultStore().set(downloadQueueAtom, newDownloadQueue);
+            
+            // 取消通知
+            downloadNotificationManager.cancelNotification(key).catch(error => {
+                errorLog("Failed to cancel notification", error);
+            });
+            
+            // 触发下一个任务
+            this.downloadNextPendingTask();
+            
             return true;
         }
         return false;

@@ -17,7 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import PanelBase from "../base/panelBase";
 import { FlatList } from "react-native-gesture-handler";
 import musicHistory from "@/core/musicHistory";
-import { showDialog } from "@/components/dialogs/useDialog";
+import { showDialog, hideDialog } from "@/components/dialogs/useDialog";
 import { hidePanel, showPanel } from "../usePanel";
 import Divider from "@/components/base/divider";
 import { iconSizeConst } from "@/constants/uiConst";
@@ -120,22 +120,58 @@ export default function MusicItemOptions(props: IMusicItemOptionsProps) {
         },
         {
             icon: "arrow-down-tray",
-            title: t("common.download"),
-            show: !downloaded,
+            title: downloaded ? t("panel.musicItemOptions.redownload") : t("common.download"),
+            show: true,
             onPress: async () => {
-                showPanel("MusicQuality", {
-                    musicItem,
-                    type: "download",
-                    async onQualityPress(quality) {
-                        downloader.download(musicItem, quality);
-                    },
+                // 显示加载状态
+                showDialog("LoadingDialog", {
+                    title: t("downloading.downloadStatus.preparing"),
                 });
+
+                try {
+                    // 获取插件实例
+                    const plugin = pluginManager.getPlugin(musicItem.platform);
+                    let enhancedMusicItem = musicItem;
+                    
+                    // 如果插件支持getMusicInfo且当前音乐没有qualities信息，则获取完整信息
+                    if (plugin?.methods?.getMusicInfo && !musicItem.qualities) {
+                        const additionalInfo = await plugin.methods.getMusicInfo(musicItem);
+                        if (additionalInfo) {
+                            enhancedMusicItem = {
+                                ...musicItem,
+                                ...additionalInfo,
+                                // 保持原有的基本信息不被覆盖
+                                id: musicItem.id,
+                                platform: musicItem.platform,
+                            };
+                        }
+                    }
+
+                    // 隐藏加载对话框
+                    hideDialog("LoadingDialog");
+
+                    // 显示音质选择面板
+                    showPanel("MusicQuality", {
+                        musicItem: enhancedMusicItem,
+                        type: "download",
+                        async onQualityPress(quality) {
+                            downloader.download(enhancedMusicItem, quality);
+                        },
+                    });
+                } catch (error) {
+                    // 隐藏加载对话框
+                    hideDialog("LoadingDialog");
+                    
+                    // 出错时使用原始音乐信息
+                    showPanel("MusicQuality", {
+                        musicItem,
+                        type: "download",
+                        async onQualityPress(quality) {
+                            downloader.download(musicItem, quality);
+                        },
+                    });
+                }
             },
-        },
-        {
-            icon: "check-circle-outline",
-            title: t("panel.musicItemOptions.downloaded"),
-            show: !!downloaded,
         },
         {
             icon: "trash-outline",

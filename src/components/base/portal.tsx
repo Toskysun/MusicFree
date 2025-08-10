@@ -36,7 +36,7 @@ export default function Portal(props: IPortalProps) {
                 ),
             );
         }
-    }, [children]);
+    }, [children, setPortalsAtoms]);
 
     useEffect(() => {
         return () => {
@@ -47,7 +47,7 @@ export default function Portal(props: IPortalProps) {
                 );
             }
         };
-    }, []);
+    }, [setPortalsAtoms]);
 
     return null;
 }

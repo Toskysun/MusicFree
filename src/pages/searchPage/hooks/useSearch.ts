@@ -126,7 +126,7 @@ export default function useSearch() {
                     setSearchResults(
                         produce(draft => {
                             const prevMediaResult = draft[searchType];
-                            const prevPluginResult: any = prevMediaResult[
+                            const currentPluginResult: any = prevMediaResult[
                                 _hash
                             ] ?? {
                                 data: [],
@@ -143,7 +143,7 @@ export default function useSearch() {
                                 page,
                                 data: newSearch
                                     ? currResult
-                                    : (prevPluginResult.data ?? []).concat(
+                                    : (currentPluginResult.data ?? []).concat(
                                         currResult,
                                     ),
                             };
@@ -167,11 +167,11 @@ export default function useSearch() {
                     setSearchResults(
                         produce(draft => {
                             const prevMediaResult = draft[searchType];
-                            const prevPluginResult = prevMediaResult[_hash] ?? {
+                            const failedPluginResult = prevMediaResult[_hash] ?? {
                                 data: [],
                             };
 
-                            prevPluginResult.state =
+                            failedPluginResult.state =
                                 RequestStateCode.ERROR;
                             return draft;
                         }),

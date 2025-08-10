@@ -15,7 +15,7 @@ import LyricUtil, { NativeTextAlignment } from "@/native/lyricUtil";
 import { AppConfigPropertyKey } from "@/types/core/config";
 import { clearCache, getCacheSize, sizeFormatter } from "@/utils/fileUtils";
 import { clearLog, getErrorLogContent } from "@/utils/log";
-import { qualityKeys } from "@/utils/qualities";
+import { qualityKeys, getQualityText } from "@/utils/qualities";
 import rpx from "@/utils/rpx";
 import Toast from "@/utils/toast";
 import Clipboard from "@react-native-clipboard/clipboard";
@@ -24,6 +24,12 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { SectionList, StyleSheet, TouchableOpacity, View } from "react-native";
 import { readdir } from "react-native-fs";
 import { FlatList, ScrollView } from "react-native-gesture-handler";
+import {
+    getPresetTemplates,
+    validateTemplate,
+    DEFAULT_FILE_NAMING_CONFIG,
+    TEMPLATE_VARIABLES,
+} from "@/utils/fileNamingFormatter";
 
 function createSwitch(
     title: string,
@@ -105,6 +111,7 @@ function useCacheSize() {
 export default function BasicSetting() {
 
     const autoPlayWhenAppStart = useAppConfig("basic.autoPlayWhenAppStart");
+    const openPlayDetailOnLaunch = useAppConfig("basic.openPlayDetailOnLaunch");
     const useCelluarNetworkPlay = useAppConfig("basic.useCelluarNetworkPlay");
     const useCelluarNetworkDownload = useAppConfig("basic.useCelluarNetworkDownload");
     const maxDownload = useAppConfig("basic.maxDownload");
@@ -129,8 +136,17 @@ export default function BasicSetting() {
     const showExitOnNotification = useAppConfig("basic.showExitOnNotification");
     const musicOrderInLocalSheet = useAppConfig("basic.musicOrderInLocalSheet");
     const tryChangeSourceWhenPlayFail = useAppConfig("basic.tryChangeSourceWhenPlayFail");
+    
+    // 文件命名相关配置
+    const fileNamingType = useAppConfig("basic.fileNamingType");
+    const fileNamingPreset = useAppConfig("basic.fileNamingPreset");
+    const fileNamingCustom = useAppConfig("basic.fileNamingCustom");
+    
+    // 自定义音质翻译
+    const customQualityTranslations = useAppConfig("basic.qualityTranslations");
 
-    const { t } = useI18N();
+    const { t, getLanguage } = useI18N();
+    const qualityTextI18n = getQualityText(getLanguage().languageData, customQualityTranslations);
 
     const debugEnableErrorLog = useAppConfig("debug.errorLog");
     const debugEnableTraceLog = useAppConfig("debug.traceLog");
@@ -145,7 +161,7 @@ export default function BasicSetting() {
 
     useEffect(() => {
         refreshCacheSize();
-    }, []);
+    }, [refreshCacheSize]);
 
     const basicOptions = [
         {
@@ -187,6 +203,17 @@ export default function BasicSetting() {
                     "basic.showExitOnNotification",
                     showExitOnNotification ?? false,
                 ),
+                {
+                    title: "音质标签",
+                    right: (
+                        <ThemeText fontSize="subTitle" style={styles.centerText}>
+                            自定义
+                        </ThemeText>
+                    ),
+                    onPress() {
+                        showPanel("QualityTranslationPanel");
+                    },
+                },
             ],
         },
         {
@@ -272,6 +299,11 @@ export default function BasicSetting() {
                     autoPlayWhenAppStart ?? false,
                 ),
                 createSwitch(
+                    t("basicSettings.openPlayDetailOnLaunch"),
+                    "basic.openPlayDetailOnLaunch",
+                    openPlayDetailOnLaunch ?? false,
+                ),
+                createSwitch(
                     t("basicSettings.tryChangeSourceWhenPlayFail"),
                     "basic.tryChangeSourceWhenPlayFail",
                     tryChangeSourceWhenPlayFail ?? false,
@@ -308,13 +340,8 @@ export default function BasicSetting() {
                     t("basicSettings.defaultPlayQuality"),
                     "basic.defaultPlayQuality",
                     qualityKeys,
-                    defaultPlayQuality ?? "standard",
-                    {
-                        low: t("musicQuality.low"),
-                        standard: t("musicQuality.standard"),
-                        high: t("musicQuality.high"),
-                        super: t("musicQuality.super"),
-                    },
+                    defaultPlayQuality ?? "320k",
+                    qualityTextI18n,
                 ),
                 createRadio(
                     t("basicSettings.playQualityOrder"),
@@ -374,13 +401,8 @@ export default function BasicSetting() {
                     t("basicSettings.defaultDownloadQuality"),
                     "basic.defaultDownloadQuality",
                     qualityKeys,
-                    defaultDownloadQuality ?? "standard",
-                    {
-                        low: t("musicQuality.low"),
-                        standard: t("musicQuality.standard"),
-                        high: t("musicQuality.high"),
-                        super: t("musicQuality.super"),
-                    },
+                    defaultDownloadQuality ?? "320k",
+                    qualityTextI18n,
                 ),
                 createRadio(
                     t("basicSettings.downloadQualityOrder"),
@@ -392,6 +414,89 @@ export default function BasicSetting() {
                         desc: t("basicSettings.downloadQualityOrder.desc"),
                     },
                 ),
+                // 文件命名格式设置
+                {
+                    title: "文件命名格式",
+                    right: (
+                        <ThemeText
+                            fontSize="subTitle"
+                            style={styles.centerText}>
+                            {fileNamingType === "custom" ? "自定义" : (fileNamingPreset || "歌曲名-歌手")}
+                        </ThemeText>
+                    ),
+                    onPress() {
+                        showDialog("RadioDialog", {
+                            title: "文件命名格式类型",
+                            content: [
+                                { label: "预设模板", value: "preset" },
+                                { label: "自定义模板", value: "custom" },
+                            ],
+                            onOk(val) {
+                                Config.setConfig("basic.fileNamingType", val);
+                                // 设置默认值
+                                if (val === "preset" && !fileNamingPreset) {
+                                    Config.setConfig("basic.fileNamingPreset", DEFAULT_FILE_NAMING_CONFIG.preset);
+                                } else if (val === "custom" && !fileNamingCustom) {
+                                    Config.setConfig("basic.fileNamingCustom", "{title}-{artist}");
+                                }
+                            },
+                        });
+                    },
+                },
+                // 预设模板选择（仅当选择预设模板时显示）
+                ...(fileNamingType === "preset" || !fileNamingType ? [{
+                    title: "预设模板",
+                    right: (
+                        <ThemeText
+                            fontSize="subTitle"
+                            style={styles.centerText}>
+                            {fileNamingPreset || "歌曲名-歌手"}
+                        </ThemeText>
+                    ),
+                    onPress() {
+                        const presetTemplates = getPresetTemplates();
+                        showDialog("RadioDialog", {
+                            title: "选择预设模板",
+                            content: presetTemplates.map(template => ({
+                                label: template,
+                                value: template,
+                            })),
+                            onOk(val) {
+                                Config.setConfig("basic.fileNamingPreset", val);
+                            },
+                        });
+                    },
+                }] : []),
+                // 自定义模板输入（仅当选择自定义模板时显示）
+                ...(fileNamingType === "custom" ? [{
+                    title: "自定义模板",
+                    right: (
+                        <ThemeText
+                            fontSize="subTitle"
+                            style={styles.centerText}
+                            numberOfLines={2}>
+                            {fileNamingCustom || "{title}-{artist}"}
+                        </ThemeText>
+                    ),
+                    onPress() {
+                        showPanel("SimpleInput", {
+                            title: "自定义文件命名模板",
+                            placeholder: "例如: {title}-{artist}-{album}",
+                            defaultValue: fileNamingCustom || "{title}-{artist}",
+                            tips: `可用变量：${Object.entries(TEMPLATE_VARIABLES).map(([key, desc]) => `${key}(${desc})`).join(", ")}`,
+                            onOk(text, closePanel) {
+                                const validation = validateTemplate(text);
+                                if (!validation.valid) {
+                                    Toast.warn(validation.error || "模板格式错误");
+                                    return;
+                                }
+                                Config.setConfig("basic.fileNamingCustom", text);
+                                closePanel();
+                                Toast.success("模板设置成功");
+                            },
+                        });
+                    },
+                }] : []),
             ],
         },
         {
@@ -431,7 +536,7 @@ export default function BasicSetting() {
                             title: t("dialog.setCacheTitle"),
                             placeholder: t("dialog.setCachePlaceholder"),
                             onOk(text, closePanel) {
-                                let val = parseInt(text);
+                                let val = parseInt(text, 10);
                                 if (val < 100) {
                                     val = 100;
                                 } else if (val > 8192) {
@@ -863,9 +968,9 @@ function LyricSetting() {
                     showPanel("ColorPicker", {
                         closePanelWhenSelected: true,
                         defaultColor: color ?? "transparent",
-                        onSelected(color) {
+                        onSelected(selectedColor) {
                             if (showStatusBarLyric) {
-                                const colorStr = color.hexa();
+                                const colorStr = selectedColor.hexa();
                                 LyricUtil.setStatusBarColors(colorStr, null);
                                 Config.setConfig("lyric.color", colorStr);
                             }
@@ -883,9 +988,9 @@ function LyricSetting() {
                         closePanelWhenSelected: true,
                         defaultColor:
                             backgroundColor ?? "transparent",
-                        onSelected(color) {
+                        onSelected(selectedBgColor) {
                             if (showStatusBarLyric) {
-                                const colorStr = color.hexa();
+                                const colorStr = selectedBgColor.hexa();
                                 LyricUtil.setStatusBarColors(null, colorStr);
                                 Config.setConfig(
                                     "lyric.backgroundColor",

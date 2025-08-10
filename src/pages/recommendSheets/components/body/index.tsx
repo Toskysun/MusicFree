@@ -24,12 +24,16 @@ export default function Body() {
         <TabBar
             {..._}
             scrollEnabled
+            // eslint-disable-next-line react-native/no-inline-styles -- Dynamic transparent styles for tab appearance
             style={{
+                 
                 backgroundColor: "transparent",
                 shadowColor: "transparent",
                 borderColor: "transparent",
             }}
+            // eslint-disable-next-line react-native/no-inline-styles -- Dynamic width for tab flexibility
             tabStyle={{
+                 
                 width: "auto",
             }}
             pressColor="transparent"
@@ -38,12 +42,14 @@ export default function Body() {
             renderLabel={({ route, focused, color }) => (
                 <Text
                     numberOfLines={1}
+                    // eslint-disable-next-line react-native/no-inline-styles -- Dynamic focused state styles
                     style={{
                         width: rpx(160),
                         fontWeight: focused
                             ? fontWeightConst.bolder
                             : fontWeightConst.medium,
                         color,
+                         
                         textAlign: "center",
                     }}>
                     {route.title ?? `(${t("common.unknownName")})`}

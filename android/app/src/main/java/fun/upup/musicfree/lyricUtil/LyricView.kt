@@ -79,7 +79,9 @@ class LyricView(private val reactContext: ReactContext) : Activity(), View.OnTou
                 layoutParams?.gravity = Gravity.TOP or Gravity.START
 
                 this.leftPercent = leftPercent?.toString()?.toDouble() ?: 0.5
-                layoutParams?.x = (this.leftPercent * (windowWidth - layoutParams!!.width)).toInt()
+                layoutParams?.let { params ->
+                    params.x = (this.leftPercent * (windowWidth - params.width)).toInt()
+                }
                 layoutParams?.y = 0
 
                 layoutParams?.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
@@ -121,9 +123,13 @@ class LyricView(private val reactContext: ReactContext) : Activity(), View.OnTou
                         windowManager?.defaultDisplay?.getMetrics(outMetrics)
                         windowWidth = outMetrics.widthPixels.toDouble()
                         windowHeight = outMetrics.heightPixels.toDouble()
-                        layoutParams?.width = (widthPercent * windowWidth).toInt()
-                        layoutParams?.x = (leftPercent * (windowWidth - layoutParams!!.width)).toInt()
-                        layoutParams?.y = (topPercent * (windowHeight - tv!!.height)).toInt()
+                        layoutParams?.let { params ->
+                            params.width = (widthPercent * windowWidth).toInt()
+                            params.x = (leftPercent * (windowWidth - params.width)).toInt()
+                            tv?.let { textView ->
+                                params.y = (topPercent * (windowHeight - textView.height)).toInt()
+                            }
+                        }
                         windowManager?.updateViewLayout(tv, layoutParams)
                     }
                 }
@@ -185,7 +191,9 @@ class LyricView(private val reactContext: ReactContext) : Activity(), View.OnTou
     fun setLeftPercent(pct: Double) {
         var percent = pct.coerceIn(0.0, 1.0)
         tv?.let {
-            layoutParams?.x = (percent * (windowWidth - layoutParams!!.width)).toInt()
+            layoutParams?.let { params ->
+                params.x = (percent * (windowWidth - params.width)).toInt()
+            }
             windowManager?.updateViewLayout(it, layoutParams)
         }
         this.leftPercent = percent
@@ -204,13 +212,15 @@ class LyricView(private val reactContext: ReactContext) : Activity(), View.OnTou
         var percent = pct.coerceIn(0.3, 1.0)
         tv?.let {
             val width = (percent * windowWidth).toInt()
-            val originalWidth = layoutParams?.width ?: 0
-            layoutParams?.x = if (width <= originalWidth) {
-                layoutParams!!.x + (originalWidth - width) / 2
-            } else {
-                layoutParams!!.x - (width - originalWidth) / 2
-            }.coerceAtLeast(0).coerceAtMost((windowWidth - width).toInt())
-            layoutParams?.width = width
+            layoutParams?.let { params ->
+                val originalWidth = params.width
+                params.x = if (width <= originalWidth) {
+                    params.x + (originalWidth - width) / 2
+                } else {
+                    params.x - (width - originalWidth) / 2
+                }.coerceAtLeast(0).coerceAtMost((windowWidth - width).toInt())
+                params.width = width
+            }
             windowManager?.updateViewLayout(it, layoutParams)
         }
         this.widthPercent = percent

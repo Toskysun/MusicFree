@@ -25,21 +25,12 @@ export default function ImageViewer(props: IImageViewerProps) {
             animationType="Scale"
             containerStyle={styles.container}>
             <Image
-                style={
+                style={[
+                    styles.image,
                     orientation === "vertical"
-                        ? {
-                            width: vw(100),
-                            minHeight: vw(100),
-                            maxHeight: vh(100),
-                            resizeMode: "cover",
-                        }
-                        : {
-                            maxWidth: vw(80),
-                            height: vh(60),
-                            minWidth: vh(60),
-                            resizeMode: "cover",
-                        }
-                }
+                        ? styles.imageVertical
+                        : styles.imageHorizontal,
+                ]}
                 source={{
                     uri: url,
                 }}
@@ -71,6 +62,19 @@ const styles = StyleSheet.create({
         justifyContent: "center",
         alignItems: "center",
         gap: rpx(48),
+    },
+    image: {
+        resizeMode: "cover",
+    },
+    imageVertical: {
+        width: vw(100),
+        minHeight: vw(100),
+        maxHeight: vh(100),
+    },
+    imageHorizontal: {
+        maxWidth: vw(80),
+        height: vh(60),
+        minWidth: vh(60),
     },
     button: {
         marginHorizontal: rpx(24),

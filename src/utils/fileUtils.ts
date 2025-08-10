@@ -126,6 +126,13 @@ export function addFileScheme(fileName: string) {
     return fileName;
 }
 
+export function removeFileScheme(filePath: string) {
+    if (filePath.startsWith("file://")) {
+        return filePath.slice(7);
+    }
+    return filePath;
+}
+
 export function addRandomHash(url: string) {
     if (url.indexOf("#") === -1) {
         return `${url}#${Date.now()}`;

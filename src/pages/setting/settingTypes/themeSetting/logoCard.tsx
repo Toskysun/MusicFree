@@ -22,11 +22,12 @@ export default function LogoCard(props: ILogoCardProps) {
                 style={[
                     styles.borderContainer,
                     selected
-                        ? {
-                            borderWidth: 2,
-                            borderStyle: "solid",
-                            borderColor: colors.primary,
-                        }
+                        ? [
+                            styles.selectedBorder,
+                            {
+                                borderColor: colors.primary,
+                            },
+                        ]
                         : null,
                 ]}>
                 <View style={styles.imageContainer}>
@@ -52,6 +53,10 @@ const styles = StyleSheet.create({
         marginRight: rpx(24),
         justifyContent: "center",
         alignItems: "center",
+    },
+    selectedBorder: {
+        borderWidth: 2,
+        borderStyle: "solid",
     },
     imageContainer: {
         width: rpx(136),

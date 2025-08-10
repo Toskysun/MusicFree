@@ -6,13 +6,7 @@ export const ImgAsset = {
     author: require("@/assets/imgs/author.jpg"),
     logoTransparent: require("@/assets/imgs/logo-transparent.png"),
     wechatChannel: require("@/assets/imgs/wechat_channel.jpg"),
-    // 音质
-    quality: {
-        low: require("@/assets/imgs/low-quality.png"),
-        standard: require("@/assets/imgs/standard-quality.png"),
-        high: require("@/assets/imgs/high-quality.png"),
-        super: require("@/assets/imgs/super-quality.png"),
-    },
+    // 音质按钮现在通过 Icon 组件系统使用
     rate: {
         50: require("@/assets/imgs/50x.png"),
         75: require("@/assets/imgs/75x.png"),

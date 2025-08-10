@@ -30,7 +30,7 @@ import { devLog, errorLog, trace } from "../../utils/log";
 import Network from "../../utils/network";
 import MediaCache from "../mediaCache";
 import _internalPluginMeta from "./meta";
-import { IPluginManager } from "@/types/core/pluginManager";
+import { normalizePluginMusicItem } from "@/utils/qualities";
 
 
 axios.defaults.timeout = 2000;
@@ -161,6 +161,10 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
             (await this.plugin.instance.search(query, page, type)) ?? {};
         if (Array.isArray(result.data)) {
             result.data.forEach(_ => {
+                // 标准化音质信息
+                const normalized = normalizePluginMusicItem(_);
+                Object.assign(_, normalized);
+                
                 resetMediaItem(_, this.plugin.name);
             });
             return {
@@ -177,7 +181,7 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
     /** 获取真实源 */
     async getMediaSource(
         musicItem: IMusic.IMusicItemBase,
-        quality: IMusic.IQualityKey = "standard",
+        quality: IMusic.IQualityKey = "320k",
         retryCount = 1,
         notUpdateCache = false,
     ): Promise<IPlugin.IMediaSourceResult | null> {
@@ -313,11 +317,17 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
             return null;
         }
         try {
-            return (
-                this.plugin.instance.getMusicInfo(
-                    resetMediaItem(musicItem, undefined, true),
-                ) ?? null
-            );
+            const result = this.plugin.instance.getMusicInfo(
+                resetMediaItem(musicItem, undefined, true),
+            ) ?? null;
+            
+            if (result) {
+                // 标准化音质信息
+                const normalized = normalizePluginMusicItem(result);
+                Object.assign(result, normalized);
+            }
+            
+            return result;
         } catch (e: any) {
             devLog("error", "获取音乐详情失败", e, e?.message);
             return null;
@@ -556,6 +566,10 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
                 throw new Error();
             }
             result?.musicList?.forEach(_ => {
+                // 标准化音质信息
+                const normalized = normalizePluginMusicItem(_);
+                Object.assign(_, normalized);
+                
                 resetMediaItem(_, this.plugin.name);
                 _.album = albumItem.title;
             });
@@ -602,6 +616,10 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
                 throw new Error();
             }
             result?.musicList?.forEach(_ => {
+                // 标准化音质信息
+                const normalized = normalizePluginMusicItem(_);
+                Object.assign(_, normalized);
+                
                 resetMediaItem(_, this.plugin.name);
             });
 
@@ -650,7 +668,13 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
                     data: [],
                 };
             }
-            result.data?.forEach(_ => resetMediaItem(_, this.plugin.name));
+            result.data?.forEach(_ => {
+                // 标准化音质信息
+                const normalized = normalizePluginMusicItem(_);
+                Object.assign(_, normalized);
+                
+                resetMediaItem(_, this.plugin.name);
+            });
             return {
                 isEnd: result.isEnd ?? true,
                 data: result.data,
@@ -668,7 +692,13 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
         try {
             const result =
                 (await this.plugin.instance?.importMusicSheet?.(urlLike)) ?? [];
-            result.forEach(_ => resetMediaItem(_, this.plugin.name));
+            result.forEach(_ => {
+                // 标准化音质信息
+                const normalized = normalizePluginMusicItem(_);
+                Object.assign(_, normalized);
+                
+                resetMediaItem(_, this.plugin.name);
+            });
             return result;
         } catch (e: any) {
             console.log(e);
@@ -687,6 +717,11 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
             if (!result) {
                 throw new Error();
             }
+            
+            // 标准化音质信息
+            const normalized = normalizePluginMusicItem(result);
+            Object.assign(result, normalized);
+            
             resetMediaItem(result, this.plugin.name);
             return result;
         } catch (e: any) {
@@ -723,9 +758,13 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
             throw new Error();
         }
         if (result.musicList) {
-            result.musicList.forEach(_ =>
-                resetMediaItem(_, this.plugin.name),
-            );
+            result.musicList.forEach(_ => {
+                // 标准化音质信息
+                const normalized = normalizePluginMusicItem(_);
+                Object.assign(_, normalized);
+                
+                resetMediaItem(_, this.plugin.name);
+            });
         } else {
             result.musicList = [];
         }
@@ -1033,7 +1072,7 @@ const localFilePluginDefine: IPlugin.IPluginDefine = {
         };
     },
     async getMediaSource(musicItem, quality) {
-        if (quality === "standard") {
+        if (quality === "320k") {
             return {
                 url: addFileScheme(musicItem.$?.localPath || musicItem.url),
             };

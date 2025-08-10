@@ -122,7 +122,7 @@ export function useNavigate() {
     ) {
         navigation.navigate(route, params);
     },
-    []);
+    [navigation]);
 
     return navigate;
 }

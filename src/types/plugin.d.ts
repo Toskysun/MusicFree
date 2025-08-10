@@ -82,6 +82,8 @@ declare namespace IPlugin {
         author?: string;
         /** 插件描述，支持markdown */
         description?: string;
+        /** 支持的音质列表 */
+        supportedQualities?: IMusic.IQualityKey[];
         /** 用户自定义输入 */
         userVariables?: IUserVariable[];
         /** 提示文本 */

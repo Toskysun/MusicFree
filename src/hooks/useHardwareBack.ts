@@ -23,5 +23,6 @@ export default function (
                 backHandlerRef.current = undefined;
             }
         };
-    }, deps);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [onHardwareBackPress, ...deps]);
 }
