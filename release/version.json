@@ -1,7 +1,10 @@
-{"version":"0.6.22","changeLog":[
-  "1. 全面支持ikun音源8种音质级别",
-  "2. 下载通知和多种文件名选项",
-  "3. 自定义音乐音质标签",
-  "4. 应用启动打开播放详情页",
-  "5. 下载时写入音乐标签"
-],"download":["https://github.com/Toskysun/MusicFree/releases/download/v0.6.22/app-arm64-v8a-release.apk","https://github.com/Toskysun/MusicFree/releases/download/v0.6.22/app-universal-release.apk"]}
+{
+  "version": "0.6.23",
+  "changeLog": [
+    "fix: bugs"
+  ],
+  "download": [
+    "https://github.com/Toskysun/MusicFree/releases/download/v0.6.23/app-arm64-v8a-release.apk",
+    "https://github.com/Toskysun/MusicFree/releases/download/v0.6.23/app-universal-release.apk"
+  ]
+}
