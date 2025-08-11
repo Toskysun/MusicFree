@@ -82,14 +82,14 @@ jobs:
         # 使用npm ci进行更快的安装
         npm ci --prefer-offline --no-audit --progress=false
     
-    # 🔄 同步版本号到package.json
-    - name: Sync version to package.json
+    # 🔄 同步版本号到package.json和version.json
+    - name: Sync version to package.json and version.json
       if: startsWith(github.ref, 'refs/tags/')
       run: |
         TAG_VERSION="${{ github.ref_name }}"
         # 移除v前缀，获取纯版本号
         VERSION=${TAG_VERSION#v}
-        echo "📝 Syncing version $VERSION to package.json..."
+        echo "📝 Syncing version $VERSION to package.json and version.json..."
         
         # 使用Node.js更新package.json版本
         node -e "
@@ -99,12 +99,60 @@ jobs:
           fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
           console.log('✅ Updated package.json version to:', pkg.version);
         "
+        
+        # 更新version.json文件
+        node -e "
+          const fs = require('fs');
+          const version = '$VERSION';
+          const tagVersion = '${{ github.ref_name }}';
+          
+          // 从Git提交信息中提取更新日志（如果有的话）
+          const { execSync } = require('child_process');
+          let changeLog = [];
+          
+          try {
+            // 获取最新的tag消息作为更新日志
+            const tagMessage = execSync('git tag -l --format=\"%(contents)\" ' + tagVersion, { encoding: 'utf8' }).trim();
+            if (tagMessage) {
+              changeLog = tagMessage.split('\n').filter(line => line.trim()).slice(0, 10);
+            }
+          } catch (e) {
+            console.log('⚠️ Could not extract tag message, using default changelog');
+          }
+          
+          // 如果没有从tag获取到更新日志，使用默认内容
+          if (changeLog.length === 0) {
+            changeLog = [
+              '版本 ' + version + ' 更新',
+              '修复Bug和性能优化',
+              '详细更新内容请查看GitHub Release页面'
+            ];
+          }
+          
+          // 生成下载链接
+          const downloadUrls = [
+            'https://github.com/${{ github.repository }}/releases/download/' + tagVersion + '/app-arm64-v8a-release.apk',
+            'https://github.com/${{ github.repository }}/releases/download/' + tagVersion + '/app-universal-release.apk'
+          ];
+          
+          const versionInfo = {
+            version: version,
+            changeLog: changeLog,
+            download: downloadUrls
+          };
+          
+          fs.writeFileSync('release/version.json', JSON.stringify(versionInfo, null, 2) + '\n');
+          console.log('✅ Updated version.json:', JSON.stringify(versionInfo, null, 2));
+        "
 
     # 🔨 生成构建信息
     - name: Generate build info
+      id: build-info
       run: |
         echo "📝 Generating build info..."
         npm run generate-build-info
+        BUILD_TIME=$(node -e "console.log(require('./src/constants/buildInfo.ts').buildInfo.buildTime)")
+        echo "build-time=$BUILD_TIME" >> $GITHUB_OUTPUT
         echo "✅ Build info generated"
     
     # 🔧 Gradle 权限和缓存预热
@@ -282,6 +330,7 @@ jobs:
       uses: softprops/action-gh-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        TZ: Asia/Shanghai
       with:
         tag_name: ${{ github.ref_name }}
         name: MusicFree ${{ github.ref_name }}
@@ -308,9 +357,10 @@ jobs:
           3. 下载通知与多种文件名功能
           4. 根据喜好定制音质标签
           5. 软件启动时打开播放详情页
+          6. 下载时写入音乐标签
           
           ### ⚡ 构建信息
-          - 构建时间: ${{ github.event.head_commit.timestamp }}
+          - 构建时间: ${{ steps.build-info.outputs.build-time }}
           - 提交SHA: ${{ github.sha }}
         draft: false
         prerelease: false
@@ -320,6 +370,29 @@ jobs:
           android/app/build/outputs/apk/release/app-armeabi-v7a-release.apk
           android/app/build/outputs/apk/release/app-x86_64-release.apk
           android/app/build/outputs/apk/release/app-x86-release.apk
+
+    # 📤 提交更新的version.json回到仓库
+    - name: Commit updated version.json
+      if: startsWith(github.ref, 'refs/tags/')
+      run: |
+        echo "📝 Committing updated version.json..."
+        
+        # 配置Git用户信息
+        git config --local user.email "3ssa@163.com"
+        git config --local user.name "Toskysun"
+        
+        # 检查是否有变更需要提交
+        if git diff --quiet release/version.json; then
+          echo "ℹ️ No changes to version.json, skipping commit"
+        else
+          echo "📝 Changes detected in version.json, committing..."
+          git add release/version.json
+          git commit -m "chore: update version.json to ${{ github.ref_name }} [skip ci]"
+          
+          # 推送回master分支
+          git push origin HEAD:master
+          echo "✅ version.json updated and pushed to master branch"
+        fi
 
     # 🧹 安全清理步骤
     - name: Security cleanup

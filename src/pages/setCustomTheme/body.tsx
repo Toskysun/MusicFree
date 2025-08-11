@@ -9,6 +9,7 @@ import Theme from "@/core/theme";
 import { CustomizedColors } from "@/hooks/useColors";
 import { grayRate } from "@/utils/colorUtil";
 import rpx from "@/utils/rpx";
+import { devLog } from "@/utils/log";
 import Slider from "@react-native-community/slider";
 import Color from "color";
 import React from "react";
@@ -68,14 +69,14 @@ export default function Body() {
             if (primaryGrayRate < -0.4) {
                 const primaryColor = Color(colors.primary!);
 
-                console.log(
-                    colors.primary,
-                    primaryGrayRate,
-                    primaryColor
+                devLog("info", "🎨[自定义主题] 主色调分析", {
+                    primaryColor: colors.primary,
+                    grayRate: primaryGrayRate,
+                    whitenedColor: primaryColor
                         .whiten(3 * primaryGrayRate)
                         .hex()
-                        .toString(),
-                );
+                        .toString()
+                });
                 themeColors = {
                     appBar: colors.primary,
                     primary: primaryColor
@@ -119,7 +120,7 @@ export default function Body() {
             //     accent: textHighlight,
             // });
         } catch (e) {
-            console.log(e);
+            devLog("warn", "🎨[自定义主题] 主题生成异常", e);
         }
     }
 

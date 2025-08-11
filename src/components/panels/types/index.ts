@@ -20,6 +20,7 @@ import MusicComment from "./musicComment";
 import MusicItemLyricOptions from "./musicItemLyricOptions";
 import EditMusicSheetInfo from "./editMusicSheetInfo";
 import QualityTranslation from "./qualityTranslation";
+import MusicMetadataSettings from "./musicMetadataSettings";
 
 export default {
     /** 加入歌单 */
@@ -64,4 +65,6 @@ export default {
     EditMusicSheetInfo,
     /** 音质翻译 */
     QualityTranslationPanel: QualityTranslation,
+    /** 音乐标签设置 */
+    MusicMetadataSettingsPanel: MusicMetadataSettings,
 };

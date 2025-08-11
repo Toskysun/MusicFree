@@ -1,4 +1,5 @@
 import Color from "color";
+import { devLog } from "@/utils/log";
 
 export function grayRate(color: string | Color) {
     let _color = typeof color === "string" ? Color(color) : color;
@@ -15,7 +16,7 @@ export function grayRate(color: string | Color) {
 
 export function grayLevelCode(color: string | Color) {
     const gray = grayRate(color);
-    console.log(gray);
+    devLog("info", "🎨[颜色工具] 灰度计算", { gray, color: color.toString() });
     if (gray < 96) {
         return "dark";
     } else if (gray > 160) {

@@ -2,6 +2,7 @@
  * 音质相关的所有工具代码
  */
 import { ILanguageData } from "@/types/core/i18n";
+import { devLog } from "@/utils/log";
 
 export const qualityKeys: IMusic.IQualityKey[] = [
     "128k",
@@ -71,7 +72,7 @@ export function getSmartQuality(
     
     // 从偏好音质开始，向下搜索可用音质
     const preferredIndex = TRY_QUALITYS_LIST.indexOf(preferredQuality);
-    if (preferredIndex === -1) return "320k"; // 如果偏好音质不在列表中，返回320k
+    if (preferredIndex === -1) return "master"; // 如果偏好音质不在列表中，返回master
     
     // 从偏好音质开始向下搜索
     for (let i = preferredIndex; i < TRY_QUALITYS_LIST.length; i++) {
@@ -168,7 +169,7 @@ export function convertApiQualityToQualities(apiQuality?: {
     // 从API返回的质量文本中提取标准键
     const qualityKey = qualityTextToKeyMap[apiQuality.result];
     if (!qualityKey) {
-        console.warn("未知的音质类型:", apiQuality.result);
+        devLog("warn", "🎵[音质处理] 未知的音质类型", { qualityResult: apiQuality.result });
         return undefined;
     }
 

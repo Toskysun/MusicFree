@@ -2,7 +2,10 @@ import { fileAsyncTransport, logger } from "react-native-logs";
 import RNFS, { readDir, readFile } from "react-native-fs";
 import pathConst from "@/constants/pathConst";
 import Config from "../core/appConfig.ts";
-import { addLog } from "@/lib/react-native-vdebug/src/log";
+import { addLog, traceLog } from "@/lib/react-native-vdebug/src/log";
+
+// 初始化日志堆栈，防止 addLog 调用时出现 null 错误
+traceLog();
 
 const config = {
     transport: fileAsyncTransport,
@@ -60,7 +63,7 @@ export async function clearLog() {
 export async function getErrorLogContent() {
     try {
         const files = await readDir(pathConst.logPath);
-        console.log(files);
+        devLog("info", "📁[日志工具] 读取日志文件列表", { filesCount: files.length });
         const today = new Date();
         // 两天的错误日志
         const yesterday = new Date();

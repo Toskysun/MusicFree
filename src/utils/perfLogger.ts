@@ -1,3 +1,5 @@
+import { devLog } from "@/utils/log";
+
 export interface IPerfLogger {
     mark: (label?: string) => void;
 }
@@ -7,7 +9,8 @@ export function perfLogger(): IPerfLogger {
 
     return {
         mark(label?: string) {
-            console.log(`[${label || "log"}] ${Date.now() - s}ms`);
+            const elapsedTime = Date.now() - s;
+            devLog("info", "⏱️[性能监控] 性能标记", { label: label || "log", elapsedTime: `${elapsedTime}ms` });
         },
     };
 }

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { ImageRequireSource } from "react-native";
 import FastImage, { FastImageProps } from "react-native-fast-image";
+import { devLog } from "@/utils/log";
 
 interface IFastImageProps {
     style: FastImageProps["style"];
@@ -37,7 +38,7 @@ export default function (props: IFastImageProps) {
             source={isError ? placeholderSource : realSource}
             onError={() => {
                 setIsError(true);
-                console.error("Image load error:", realSource);
+                devLog("warn", "🖼️[图片组件] 图片加载失败", { source: realSource });
             }}
             defaultSource={defaultSource}
         />
