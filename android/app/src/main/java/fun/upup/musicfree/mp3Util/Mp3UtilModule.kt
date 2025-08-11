@@ -717,15 +717,9 @@ class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactCo
             request.setTitle(title)
             request.setDescription(description)
             
-            // 解析目标路径
-            val targetFile = File(destinationPath)
-            val fileName = targetFile.name
-            
-            android.util.Log.i("Mp3UtilModule", "解析路径: targetPath=$destinationPath, fileName=$fileName")
-            
-            // 使用系统支持的Downloads路径进行下载
-            request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "MusicFree_$fileName")
-            android.util.Log.i("Mp3UtilModule", "使用Downloads路径下载: MusicFree_$fileName")
+            // 设置下载目标路径
+            val file = File(destinationPath)
+            request.setDestinationUri(Uri.fromFile(file))
             
             // 设置通知显示
             request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
@@ -746,74 +740,17 @@ class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactCo
             
             // 开始下载
             val downloadId = downloadManager.enqueue(request)
-            
-            // 返回自定义数据：downloadId + 目标路径信息
-            val result = WritableNativeMap()
-            result.putString("downloadId", downloadId.toString())
-            result.putString("tempPath", "${Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)}/MusicFree_$fileName")
-            result.putString("finalPath", destinationPath)
-            
             android.util.Log.i("Mp3UtilModule", "✅ 系统下载任务创建成功: downloadId=$downloadId")
-            android.util.Log.i("Mp3UtilModule", "临时路径: ${Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)}/MusicFree_$fileName")
-            android.util.Log.i("Mp3UtilModule", "最终路径: $destinationPath")
-            
-            promise.resolve(result)
+            promise.resolve(downloadId.toString())
             
         } catch (e: Exception) {
             android.util.Log.e("Mp3UtilModule", "❌ 系统下载任务创建失败: ${e.message}", e)
-            promise.reject("DownloadError", e.message)
-        }
-    }
-
-    @ReactMethod
-    fun moveDownloadedFile(tempPath: String, finalPath: String, promise: Promise) {
-        try {
-            android.util.Log.i("Mp3UtilModule", "开始移动文件: $tempPath -> $finalPath")
-            
-            val tempFile = File(tempPath)
-            val finalFile = File(finalPath)
-            
-            if (!tempFile.exists()) {
-                android.util.Log.e("Mp3UtilModule", "临时文件不存在: $tempPath")
-                promise.reject("FileNotFound", "Temporary file not found: $tempPath")
-                return
-            }
-            
-            // 确保目标目录存在
-            finalFile.parentFile?.let { parentDir ->
-                if (!parentDir.exists()) {
-                    parentDir.mkdirs()
-                    android.util.Log.i("Mp3UtilModule", "创建目标目录: ${parentDir.absolutePath}")
-                }
-            }
-            
-            // 移动文件
-            val success = if (tempFile.renameTo(finalFile)) {
-                android.util.Log.i("Mp3UtilModule", "✅ 文件移动成功 (rename)")
-                true
+            // 提供友好的错误提示
+            if (e.message?.contains("Unsupported path") == true) {
+                promise.reject("UnsupportedPath", "Android系统不支持该下载路径，请在设置中更改为系统支持的路径（如Music目录）")
             } else {
-                // 如果重命名失败，尝试复制+删除
-                android.util.Log.w("Mp3UtilModule", "rename失败，尝试复制+删除")
-                try {
-                    tempFile.copyTo(finalFile, overwrite = true)
-                    tempFile.delete()
-                    android.util.Log.i("Mp3UtilModule", "✅ 文件移动成功 (copy+delete)")
-                    true
-                } catch (e: Exception) {
-                    android.util.Log.e("Mp3UtilModule", "复制文件失败: ${e.message}")
-                    false
-                }
+                promise.reject("DownloadError", e.message)
             }
-            
-            if (success) {
-                promise.resolve(finalFile.absolutePath)
-            } else {
-                promise.reject("MoveError", "Failed to move file from $tempPath to $finalPath")
-            }
-            
-        } catch (e: Exception) {
-            android.util.Log.e("Mp3UtilModule", "移动文件异常: ${e.message}", e)
-            promise.reject("MoveError", e.message)
         }
     }
 }

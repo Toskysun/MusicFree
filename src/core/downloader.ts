@@ -362,20 +362,77 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
                     this.configService.getConfig("basic.downloadQualityOrder") ?? "desc",
                 );
                 let data: IPlugin.IMediaSourceResult | null = null;
+                const requestedQuality = nextTask.quality ?? 
+                    this.configService.getConfig("basic.defaultDownloadQuality") ?? 
+                    "master";
+                let actualQuality: IMusic.IQualityKey | null = null;
+                
+                devLog('info', '📥[下载器] 开始音质获取', {
+                    requestedQuality,
+                    qualityOrder,
+                    title: musicItem.title,
+                    platform: musicItem.platform
+                });
+                
                 for (let quality of qualityOrder) {
                     try {
+                        devLog('info', '📥[下载器] 尝试获取音质', {
+                            currentQuality: quality,
+                            title: musicItem.title,
+                            platform: musicItem.platform
+                        });
+                        
                         data = await plugin.methods.getMediaSource(
                             musicItem,
                             quality,
                             1,
                             true,
                         );
+                        
                         if (!data?.url) {
-                            continue;
+                            devLog('warn', '⚠️[下载器] 音质获取失败 - 无URL', {
+                                quality,
+                                title: musicItem.title,
+                                platform: musicItem.platform
+                            });
+                            continue; // 尝试下一个音质
                         }
-                        break;
-                    } catch { }
+                        
+                        // 获取成功
+                        actualQuality = quality;
+                        break; // 成功获取，跳出循环
+                        
+                    } catch (error: any) {
+                        devLog('warn', '⚠️[下载器] 音质获取异常', {
+                            quality,
+                            error: error?.message || String(error),
+                            title: musicItem.title,
+                            platform: musicItem.platform
+                        });
+                        // 继续尝试下一个音质
+                    }
                 }
+                
+                // 检查是否发生了音质降级
+                if (actualQuality && actualQuality !== requestedQuality) {
+                    devLog('warn', '🔄[下载器] 音质降级', {
+                        requestedQuality,
+                        actualQuality,
+                        title: musicItem.title,
+                        platform: musicItem.platform,
+                        message: `用户请求${requestedQuality}音质，但插件只能提供${actualQuality}音质`
+                    });
+                    
+                    // 更新任务的实际音质
+                    nextTask.quality = actualQuality;
+                } else if (actualQuality) {
+                    devLog('info', '✅[下载器] 音质获取成功', {
+                        quality: actualQuality,
+                        title: musicItem.title,
+                        platform: musicItem.platform
+                    });
+                }
+                
                 url = data?.url ?? url;
                 headers = data?.headers;
             }
@@ -491,13 +548,13 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
 
         // 使用系统下载管理器进行下载
         try {
-            devLog('info', '📥[下载器] 开始使用系统下载管理器下载 (两阶段流程)', {
+            devLog('info', '📥[下载器] 开始使用系统下载管理器下载', {
                 title: musicItem.title,
                 artist: musicItem.artist,
                 targetPath: targetDownloadPath
             });
             
-            const downloadInfo = await Mp3Util.downloadWithSystemManager(
+            const downloadId = await Mp3Util.downloadWithSystemManager(
                 url,
                 targetDownloadPath.replace('file://', ''),
                 `${musicItem.title} - ${musicItem.artist}`,
@@ -506,311 +563,170 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
             );
             
             devLog('info', '✅[下载器] 系统下载任务创建成功', {
-                downloadId: downloadInfo.downloadId,
-                tempPath: downloadInfo.tempPath,
-                finalPath: downloadInfo.finalPath,
+                downloadId,
                 title: musicItem.title
             });
             
-            // 保存下载信息
+            // 保存downloadId以便取消下载
             this.updateDownloadTask(musicItem, {
                 status: DownloadStatus.Downloading,
-                jobId: parseInt(downloadInfo.downloadId, 10),
+                jobId: parseInt(downloadId, 10),
             });
 
             // 基于插件提供的文件大小进行准确的下载完成检测
             const checkDownloadStatus = async () => {
-                return new Promise<{tempPath: string, finalPath: string}>((resolve, reject) => {
+                return new Promise<boolean>((resolve, reject) => {
                     let lastFileSize = 0;
                     let sameSizeCount = 0;
-                    let checkCount = 0;
-                    let isResolved = false; // 防止多次resolve
                     
                     // 设置最小文件大小和完成阈值
                     const minFileSize = expectedFileSize > 0 ? expectedFileSize * 0.1 : 50 * 1024; // 至少10%或50KB
                     const completeThreshold = expectedFileSize > 0 ? expectedFileSize * 0.98 : 100 * 1024; // 98%完成或100KB
                     
-                    devLog('info', '📊[下载器] 开始文件大小监控 (临时路径)', {
-                        tempPath: downloadInfo.tempPath,
+                    devLog('info', '📊[下载器] 开始文件大小监控', {
                         expectedSize: expectedFileSize,
                         minSize: minFileSize,
                         completeThreshold: completeThreshold,
                         hasExpectedSize: expectedFileSize > 0
                     });
                     
-                    const safeResolve = (result: {tempPath: string, finalPath: string}) => {
-                        if (!isResolved) {
-                            isResolved = true;
-                            resolve(result);
-                        }
-                    };
-                    
-                    const checkFile = async () => {
-                        if (isResolved) return; // 已经完成，不再检查
-                        
+                    const checkInterval = setInterval(async () => {
                         try {
-                            checkCount++;
-                            const tempFilePath = downloadInfo.tempPath;
-                            
-                            devLog('info', '📊[下载器] 执行第' + checkCount + '次检查', {
-                                tempPath: tempFilePath,
-                                checkCount
-                            });
-                            
-                            // 强制超时机制：检查次数超过90次（3分钟）直接完成
-                            if (checkCount > 90) {
-                                devLog('warn', '⏰[下载器] 监控超时，强制完成下载', {
-                                    checkCount,
-                                    tempPath: tempFilePath,
-                                    expectedSize: expectedFileSize
-                                });
-                                safeResolve({
-                                    tempPath: downloadInfo.tempPath,
-                                    finalPath: downloadInfo.finalPath
-                                });
-                                return;
-                            }
-                            
-                            // 使用react-native-fs检查文件
-                            const { exists } = require('react-native-fs');
-                            let fileExists = false;
-                            try {
-                                fileExists = await exists(tempFilePath);
-                            } catch (existsError) {
-                                devLog('warn', '⚠️[下载器] exists检查失败，等待重试', {
-                                    error: existsError?.message || 'exists error',
-                                    checkCount,
-                                    tempPath: tempFilePath
-                                });
-                                // 如果exists失败，2秒后重试
-                                if (!isResolved) {
-                                    setTimeout(checkFile, 2000);
-                                }
-                                return;
-                            }
+                            const filePath = targetDownloadPath.replace('file://', '');
+                            const fileExists = await exists(filePath);
                             
                             if (!fileExists) {
                                 // 文件还未创建，继续等待
-                                devLog('info', '📊[下载器] 临时文件不存在，继续等待', {
-                                    checkCount,
-                                    tempPath: tempFilePath
-                                });
-                                if (!isResolved) {
-                                    setTimeout(checkFile, 2000);
-                                }
                                 return;
                             }
                             
-                            // 获取文件大小
-                            let currentSize = 0;
+                            // 使用stat获取准确的文件大小
+                            const { stat } = require('react-native-fs');
                             try {
-                                const { stat } = require('react-native-fs');
-                                const fileStats = await stat(tempFilePath);
-                                currentSize = fileStats.size;
-                            } catch (statError) {
-                                devLog('warn', '⚠️[下载器] stat获取文件大小失败', {
-                                    error: statError?.message || 'stat error',
-                                    checkCount,
-                                    tempPath: tempFilePath
+                                const fileStats = await stat(filePath);
+                                const currentSize = fileStats.size;
+                                
+                                devLog('info', '📊[下载器] 检查下载进度', {
+                                    currentSize,
+                                    expectedSize: expectedFileSize,
+                                    progress: expectedFileSize > 0 ? (currentSize / expectedFileSize * 100).toFixed(1) + '%' : 'N/A',
+                                    lastSize: lastFileSize,
+                                    sameSizeCount
                                 });
-                                // stat失败时，使用备选方案：假设文件至少有一定大小
-                                if (checkCount > 30) {  // 1分钟后如果还是stat失败，就认为下载可能已完成
-                                    devLog('warn', '⏰[下载器] stat持续失败，使用降级策略强制完成', {
-                                        checkCount,
-                                        tempPath: tempFilePath
-                                    });
-                                    safeResolve({
-                                        tempPath: downloadInfo.tempPath,
-                                        finalPath: downloadInfo.finalPath
-                                    });
-                                    return;
-                                } else {
-                                    // 继续重试
-                                    if (!isResolved) {
-                                        setTimeout(checkFile, 2000);
+                                
+                                // 更新下载进度
+                                this.updateDownloadTask(musicItem, {
+                                    downloadedSize: currentSize,
+                                    fileSize: expectedFileSize || currentSize
+                                });
+                                
+                                // 检查文件大小变化
+                                if (currentSize === lastFileSize) {
+                                    sameSizeCount++;
+                                    
+                                    // 如果有准确的预期大小，当达到98%且文件大小稳定时认为完成
+                                    if (expectedFileSize > 0 && currentSize >= completeThreshold && sameSizeCount >= 3) {
+                                        clearInterval(checkInterval);
+                                        devLog('info', '✅[下载器] 达到预期大小且文件稳定，下载完成', {
+                                            finalSize: currentSize,
+                                            expectedSize: expectedFileSize,
+                                            completionRate: (currentSize / expectedFileSize * 100).toFixed(1) + '%'
+                                        });
+                                        resolve(true);
+                                        return;
                                     }
-                                    return;
-                                }
-                            }
-                            
-                            devLog('info', '📊[下载器] 检查下载进度 (临时文件)', {
-                                tempPath: tempFilePath,
-                                currentSize,
-                                expectedSize: expectedFileSize,
-                                progress: expectedFileSize > 0 ? (currentSize / expectedFileSize * 100).toFixed(1) + '%' : 'N/A',
-                                lastSize: lastFileSize,
-                                sameSizeCount,
-                                checkCount
-                            });
-                            
-                            // 更新下载进度
-                            this.updateDownloadTask(musicItem, {
-                                downloadedSize: currentSize,
-                                fileSize: expectedFileSize || currentSize
-                            });
-                            
-                            // 检查文件大小变化
-                            if (currentSize === lastFileSize) {
-                                sameSizeCount++;
-                                
-                                // 如果有准确的预期大小，当达到98%且文件大小稳定时认为完成
-                                if (expectedFileSize > 0 && currentSize >= completeThreshold && sameSizeCount >= 3) {
-                                    devLog('info', '✅[下载器] 达到预期大小且文件稳定，下载完成', {
-                                        finalSize: currentSize,
-                                        expectedSize: expectedFileSize,
-                                        completionRate: (currentSize / expectedFileSize * 100).toFixed(1) + '%',
-                                        checkCount
-                                    });
-                                    safeResolve({
-                                        tempPath: downloadInfo.tempPath,
-                                        finalPath: downloadInfo.finalPath
-                                    });
-                                    return;
+                                    
+                                    // 如果没有预期大小，文件大小连续6次检查没有变化且超过最小大小，认为完成
+                                    if (expectedFileSize === 0 && sameSizeCount >= 6 && currentSize >= minFileSize) {
+                                        clearInterval(checkInterval);
+                                        devLog('info', '✅[下载器] 无预期大小，文件大小稳定且达到最小要求，下载完成', {
+                                            finalSize: currentSize,
+                                            stableChecks: sameSizeCount
+                                        });
+                                        resolve(true);
+                                        return;
+                                    }
+                                } else {
+                                    // 文件还在增长
+                                    lastFileSize = currentSize;
+                                    sameSizeCount = 0;
+                                    
+                                    // 如果文件大小已经超过预期大小的105%，可能是估算错误，直接完成
+                                    if (expectedFileSize > 0 && currentSize > expectedFileSize * 1.05) {
+                                        clearInterval(checkInterval);
+                                        devLog('info', '✅[下载器] 文件大小超过预期，直接完成', {
+                                            currentSize,
+                                            expectedSize: expectedFileSize,
+                                            overageRate: (currentSize / expectedFileSize * 100).toFixed(1) + '%'
+                                        });
+                                        resolve(true);
+                                        return;
+                                    }
                                 }
                                 
-                                // 如果没有预期大小，文件大小连续6次检查没有变化且超过最小大小，认为完成
-                                if (expectedFileSize === 0 && sameSizeCount >= 6 && currentSize >= minFileSize) {
-                                    devLog('info', '✅[下载器] 无预期大小，文件大小稳定且达到最小要求，下载完成', {
-                                        finalSize: currentSize,
-                                        stableChecks: sameSizeCount,
-                                        checkCount
-                                    });
-                                    safeResolve({
-                                        tempPath: downloadInfo.tempPath,
-                                        finalPath: downloadInfo.finalPath
-                                    });
-                                    return;
-                                }
-                            } else {
-                                // 文件还在增长
-                                lastFileSize = currentSize;
-                                sameSizeCount = 0;
-                                
-                                // 如果文件大小已经超过预期大小的105%，可能是估算错误，直接完成
-                                if (expectedFileSize > 0 && currentSize > expectedFileSize * 1.05) {
-                                    devLog('info', '✅[下载器] 文件大小超过预期，直接完成', {
-                                        currentSize,
-                                        expectedSize: expectedFileSize,
-                                        overageRate: (currentSize / expectedFileSize * 100).toFixed(1) + '%',
-                                        checkCount
-                                    });
-                                    safeResolve({
-                                        tempPath: downloadInfo.tempPath,
-                                        finalPath: downloadInfo.finalPath
-                                    });
-                                    return;
-                                }
+                            } catch (statError) {
+                                // 文件可能正在写入或不可访问
+                                devLog('warn', '⚠️[下载器] 获取文件状态失败，可能正在写入', statError.message);
                             }
-                            
-                            // 继续下次检查
-                            if (!isResolved) {
-                                setTimeout(checkFile, 2000);
-                            }
-                            
                         } catch (error) {
-                            devLog('error', '❌[下载器] 文件监控异常', {
-                                error: error?.message || String(error),
-                                checkCount,
-                                tempPath: downloadInfo.tempPath
-                            });
-                            
-                            // 如果监控异常持续超过1分钟，强制完成
-                            if (checkCount > 30) {
-                                devLog('warn', '⏰[下载器] 监控异常过多，强制完成下载', {
-                                    checkCount,
-                                    error: error?.message || String(error)
-                                });
-                                safeResolve({
-                                    tempPath: downloadInfo.tempPath,
-                                    finalPath: downloadInfo.finalPath
-                                });
-                            } else {
-                                // 继续重试
-                                if (!isResolved) {
-                                    setTimeout(checkFile, 2000);
-                                }
-                            }
+                            clearInterval(checkInterval);
+                            reject(error);
                         }
-                    };
+                    }, 2000); // 每2秒检查一次
                     
-                    // 开始第一次检查
-                    checkFile();
-                    
-                    // 全局超时保护：5分钟强制完成
+                    // 30分钟超时
                     setTimeout(() => {
-                        if (!isResolved) {
-                            devLog('warn', '⏰[下载器] 全局超时，强制完成下载', {
-                                timeout: '5 minutes',
-                                tempPath: downloadInfo.tempPath,
-                                checkCount
-                            });
-                            safeResolve({
-                                tempPath: downloadInfo.tempPath,
-                                finalPath: downloadInfo.finalPath
-                            });
-                        }
-                    }, 5 * 60 * 1000);
+                        clearInterval(checkInterval);
+                        reject(new Error('Download timeout - 30 minutes exceeded'));
+                    }, 30 * 60 * 1000);
                 });
             };
             
-            const {tempPath, finalPath} = await checkDownloadStatus();
-            devLog('info', '🎉[下载器] 系统下载完成，开始移动文件', {
-                tempPath,
-                finalPath,
+            await checkDownloadStatus();
+            devLog('info', '🎉[下载器] 系统下载完成', {
+                path: targetDownloadPath,
                 title: musicItem.title
             });
 
-            // 移动文件到最终路径
-            try {
-                const movedPath = await Mp3Util.moveDownloadedFile(tempPath, finalPath);
-                devLog('info', '✅[下载器] 文件移动成功', {
-                    movedPath,
-                    title: musicItem.title
+            // 异步写入音乐元数据（标签、歌词、封面）- 不阻塞下载完成
+            this.writeMetadataToFile(musicItem, targetDownloadPath).catch(error => {
+                errorLog('元数据写入失败，但不影响下载完成', {
+                    musicItem: musicItem.title,
+                    error: error.message
                 });
-                
-                // 使用最终路径作为下载路径
-                const finalDownloadPath = `file://${movedPath}`;
+            });
 
-                // 异步写入音乐元数据（标签、歌词、封面）- 不阻塞下载完成
-                this.writeMetadataToFile(musicItem, finalDownloadPath).catch(error => {
-                    errorLog('元数据写入失败，但不影响下载完成', {
-                        musicItem: musicItem.title,
-                        error: error.message
-                    });
-                });
+            LocalMusicSheet.addMusic({
+                ...musicItem,
+                [internalSerializeKey]: {
+                    localPath: targetDownloadPath,
+                },
+            });
 
-                LocalMusicSheet.addMusic({
-                    ...musicItem,
-                    [internalSerializeKey]: {
-                        localPath: finalDownloadPath,
-                    },
-                });
+            patchMediaExtra(musicItem, {
+                downloaded: true,
+                localPath: targetDownloadPath,
+            });
 
-                patchMediaExtra(musicItem, {
-                    downloaded: true,
-                    localPath: finalDownloadPath,
-                });
-
-                this.markTaskAsCompleted(musicItem, finalDownloadPath);
-                
-            } catch (moveError) {
-                devLog('error', '❌[下载器] 文件移动失败', {
-                    error: moveError?.message || String(moveError),
-                    tempPath,
-                    finalPath,
-                    title: musicItem.title
-                });
-                // 如果移动失败，可以考虑使用临时路径或者标记为错误
-                this.markTaskAsError(musicItem, DownloadFailReason.Unknown, moveError);
-                return;
-            }
+            this.markTaskAsCompleted(musicItem, targetDownloadPath);
             
         } catch (e: any) {
             devLog('error', '❌[下载器] 系统下载失败', {
                 error: e?.message || String(e),
                 title: musicItem.title
             });
-            this.markTaskAsError(musicItem, DownloadFailReason.Unknown, e);
+            
+            // 检查是否是路径不支持错误，提供友好的用户提示
+            if (e?.code === 'UnsupportedPath') {
+                // 显示用户友好的提示
+                devLog('warn', '🚨[下载器] 路径不支持提示', {
+                    currentPath: this.configService.getConfig("basic.downloadPath") ?? pathConst.downloadMusicPath,
+                    suggestion: '请在设置中更改为系统支持的路径（如Music目录）'
+                });
+                this.markTaskAsError(musicItem, DownloadFailReason.NoWritePermission, e);
+            } else {
+                this.markTaskAsError(musicItem, DownloadFailReason.Unknown, e);
+            }
         }
 
         // 继续处理下一个任务

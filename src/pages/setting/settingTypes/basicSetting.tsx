@@ -24,6 +24,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { SectionList, StyleSheet, TouchableOpacity, View } from "react-native";
 import { readdir } from "react-native-fs";
 import { FlatList, ScrollView } from "react-native-gesture-handler";
+import Mp3Util from "@/native/mp3Util";
 import {
     getPresetTemplates,
     validateTemplate,
@@ -370,24 +371,72 @@ export default function BasicSetting() {
                         </ThemeText>
                     ),
                     onPress() {
-                        navigate<"file-selector">(ROUTE_PATH.FILE_SELECTOR, {
-                            fileType: "folder",
-                            multi: false,
-                            actionText: t("basicSettings.fileSelector.selectFolder"),
-                            async onAction(selectedFiles) {
+                        const handlePathSelection = async (selectedFiles: any[]) => {
+                            try {
+                                const targetDir = selectedFiles[0];
+                                // 先检查基本权限
+                                await readdir(targetDir.path);
+                                
+                                // 检查Android系统是否支持该路径进行下载
                                 try {
-                                    const targetDir = selectedFiles[0];
-                                    await readdir(targetDir.path);
+                                    const testPath = `${targetDir.path}/musicfree_path_test.tmp`;
+                                    await Mp3Util.downloadWithSystemManager(
+                                        "data:text/plain;base64,dGVzdA==", // "test" in base64
+                                        testPath,
+                                        "路径测试",
+                                        "测试Android系统是否支持该路径",
+                                        {}
+                                    );
+                                    
+                                    // 如果到这里说明路径支持，设置路径
                                     Config.setConfig(
                                         "basic.downloadPath",
                                         targetDir.path,
                                     );
                                     return true;
-                                } catch {
-                                    Toast.warn(t("toast.folderNotExistOrNoPermission"));
-                                    return false;
+                                } catch (pathError: any) {
+                                    // 检查是否是路径不支持错误
+                                    if (pathError?.code === 'UnsupportedPath' || 
+                                        pathError?.message?.includes('Unsupported path')) {
+                                        // 显示用户友好的对话框提示
+                                        showDialog("SimpleDialog", {
+                                            title: "路径不支持",
+                                            content: "Android系统不支持该下载路径，请选择系统支持的路径（如Music目录或Downloads目录）",
+                                            cancelText: "知道了",
+                                            okText: "重新选择",
+                                            onOk() {
+                                                // 重新触发文件选择器
+                                                setTimeout(() => {
+                                                    navigate<"file-selector">(ROUTE_PATH.FILE_SELECTOR, {
+                                                        fileType: "folder",
+                                                        multi: false,
+                                                        actionText: t("basicSettings.fileSelector.selectFolder"),
+                                                        onAction: handlePathSelection,
+                                                    });
+                                                }, 100);
+                                            }
+                                        });
+                                        return false;
+                                    } else {
+                                        // 其他错误，可能是网络问题等，仍然允许设置路径
+                                        Config.setConfig(
+                                            "basic.downloadPath",
+                                            targetDir.path,
+                                        );
+                                        return true;
+                                    }
                                 }
-                            },
+                            } catch {
+                                Toast.warn(t("toast.folderNotExistOrNoPermission"));
+                                return false;
+                            }
+                        };
+                        
+                        navigate<"file-selector">(ROUTE_PATH.FILE_SELECTOR, {
+                            fileType: "folder",
+                            multi: false,
+                            actionText: t("basicSettings.fileSelector.selectFolder"),
+                            onAction: handlePathSelection,
                         });
                     },
                 },

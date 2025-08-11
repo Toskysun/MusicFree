@@ -109,7 +109,7 @@ class Mp3UtilManager implements IMp3Util {
   }
 
   /**
-   * 使用系统下载管理器下载文件 (新的两阶段流程)
+   * 使用系统下载管理器下载文件
    */
   async downloadWithSystemManager(
     url: string,
@@ -117,46 +117,26 @@ class Mp3UtilManager implements IMp3Util {
     title: string,
     description: string,
     headers?: Record<string, string>
-  ): Promise<{downloadId: string, tempPath: string, finalPath: string}> {
-    devLog('info', '📥[Mp3Util] 调用系统下载管理器 (两阶段流程)', {
+  ): Promise<string> {
+    devLog('info', '📥[Mp3Util] 调用系统下载管理器', {
       url,
       destinationPath,
       title,
-      description,
       headers
     });
-    
+
     try {
-      const result = await this.nativeModule.downloadWithSystemManager(
+      const downloadId = await this.nativeModule.downloadWithSystemManager(
         url,
         destinationPath,
         title,
         description,
         headers || null
       );
-      devLog('info', '✅[Mp3Util] 系统下载任务创建成功', result);
-      return result;
+      devLog('info', '✅[Mp3Util] 系统下载任务创建成功', { downloadId });
+      return downloadId;
     } catch (error) {
       devLog('error', '❌[Mp3Util] 系统下载任务创建失败', error);
-      throw error;
-    }
-  }
-
-  /**
-   * 将下载完成的文件从临时路径移动到最终路径
-   */
-  async moveDownloadedFile(tempPath: string, finalPath: string): Promise<string> {
-    devLog('info', '🔄[Mp3Util] 移动下载文件', {
-      tempPath,
-      finalPath
-    });
-    
-    try {
-      const result = await this.nativeModule.moveDownloadedFile(tempPath, finalPath);
-      devLog('info', '✅[Mp3Util] 文件移动成功', { result });
-      return result;
-    } catch (error) {
-      devLog('error', '❌[Mp3Util] 文件移动失败', error);
       throw error;
     }
   }

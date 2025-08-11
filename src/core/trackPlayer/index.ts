@@ -13,6 +13,9 @@ import {
     getLocalPath,
     isSameMediaItem,
 } from "@/utils/mediaUtils";
+import Toast from "@/utils/toast";
+import { getQualityText } from "@/utils/qualities";
+import i18n from "@/core/i18n";
 import Network from "@/utils/network";
 import PersistStatus from "@/utils/persistStatus";
 import { getQualityOrder, getSmartQuality } from "@/utils/qualities";
@@ -511,6 +514,8 @@ class TrackPlayer extends EventEmitter<{
                     this.setQuality(selectedQuality);
                 } else {
                     // 智能选择失败，回退到遍历所有音质
+                    let fallbackQuality: IMusic.IQualityKey | null = null;
+                    
                     for (let quality of qualityOrder) {
                         if (this.isCurrentMusic(musicItem)) {
                             source = (await plugin?.methods?.getMediaSource(
@@ -520,6 +525,7 @@ class TrackPlayer extends EventEmitter<{
                             // 5.4.1 获取到真实源
                             if (source) {
                                 this.setQuality(quality);
+                                fallbackQuality = quality;
                                 break;
                             }
                         } else {
@@ -527,6 +533,9 @@ class TrackPlayer extends EventEmitter<{
                             return;
                         }
                     }
+                    
+                    // 显示音质不支持提示，包含降级结果
+                    this.showQualityNotSupportedToast(selectedQuality, musicItem, fallbackQuality);
                 }
             }
 
@@ -932,6 +941,31 @@ class TrackPlayer extends EventEmitter<{
                 $: internalFakeSoundKey,
             } as Track;
         }
+    }
+
+    private showQualityNotSupportedToast(
+        requestedQuality: IMusic.IQualityKey,
+        musicItem: IMusic.IMusicItem,
+        fallbackQuality?: IMusic.IQualityKey | null,
+    ) {
+        // 获取用户自定义的音质翻译设置
+        const customQualityTranslations = this.configService.getConfig("basic.qualityTranslations");
+        const languageData = i18n.getLanguage().languageData;
+        const qualityTextI18n = getQualityText(languageData, customQualityTranslations);
+        
+        const requestedDisplayName = qualityTextI18n[requestedQuality];
+        const platformPrefix = musicItem.platform ? `[${musicItem.platform}] ` : "";
+        
+        let message: string;
+        if (fallbackQuality) {
+            const fallbackDisplayName = qualityTextI18n[fallbackQuality];
+            message = `${platformPrefix}歌曲不支持${requestedDisplayName}，已降级至${fallbackDisplayName}`;
+        } else {
+            message = `${platformPrefix}歌曲不支持${requestedDisplayName}，无法播放该音质`;
+        }
+        
+        // 显示Toast提示
+        Toast.warn(message);
     }
 
 
