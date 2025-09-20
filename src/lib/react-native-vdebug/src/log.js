@@ -367,3 +367,7 @@ export const traceLog = () => {
 export const addLog = (level, ...args) => {
     logStack.addLog(level, args);
 };
+
+export const getLogStack = () => {
+    return logStack;
+};

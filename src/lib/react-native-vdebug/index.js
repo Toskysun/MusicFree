@@ -15,10 +15,14 @@ import {
     TextInput,
     TouchableOpacity,
     View,
+    Alert,
 } from 'react-native';
+import Clipboard from '@react-native-clipboard/clipboard';
+import RNFS from 'react-native-fs';
+import pathConst from '../../constants/pathConst';
 import event from './src/event';
 // import Network, { traceNetwork } from './src/network';
-import Log, {traceLog} from './src/log';
+import Log, {traceLog, getLogStack} from './src/log';
 import HocComp from './src/hoc';
 import Storage from './src/storage';
 import {replaceReg} from './src/tool';
@@ -166,6 +170,71 @@ class VDebug extends PureComponent {
 
     reloadDev() {
         NativeModules?.DevMenu?.reload();
+    }
+
+    // 复制日志到剪贴板
+    copyLogs() {
+        try {
+            const logStack = getLogStack();
+            if (!logStack) {
+                Alert.alert('提示', '没有可复制的日志', [{text: '确认'}]);
+                return;
+            }
+
+            const logs = logStack.getLogs();
+            if (logs.length === 0) {
+                Alert.alert('提示', '没有可复制的日志', [{text: '确认'}]);
+                return;
+            }
+
+            // 格式化日志为文本
+            const logText = logs.map(log => {
+                return `[${log.time}] [${log.method.toUpperCase()}] ${log.data}`;
+            }).join('\n');
+
+            Clipboard.setString(logText);
+            Alert.alert('提示', '日志已复制到剪贴板', [{text: '确认'}]);
+        } catch (error) {
+            Alert.alert('错误', '复制日志失败: ' + error.message, [{text: '确认'}]);
+        }
+    }
+
+    // 导出日志为文件
+    async exportLogs() {
+        try {
+            const logStack = getLogStack();
+            if (!logStack) {
+                Alert.alert('提示', '没有可导出的日志', [{text: '确认'}]);
+                return;
+            }
+
+            const logs = logStack.getLogs();
+            if (logs.length === 0) {
+                Alert.alert('提示', '没有可导出的日志', [{text: '确认'}]);
+                return;
+            }
+
+            // 格式化日志为文本
+            const logText = logs.map(log => {
+                return `[${log.time}] [${log.method.toUpperCase()}] ${log.data}`;
+            }).join('\n');
+
+            // 生成文件名
+            const now = new Date();
+            const timestamp = now.getFullYear() +
+                              String(now.getMonth() + 1).padStart(2, '0') +
+                              String(now.getDate()).padStart(2, '0') + '_' +
+                              String(now.getHours()).padStart(2, '0') +
+                              String(now.getMinutes()).padStart(2, '0') +
+                              String(now.getSeconds()).padStart(2, '0');
+            const fileName = `debug_logs_${timestamp}.txt`;
+            const filePath = RNFS.DownloadDirectoryPath + '/' + fileName;
+
+            await RNFS.writeFile(filePath, logText, 'utf8');
+            Alert.alert('成功', `日志已导出到下载目录：${fileName}`, [{text: '确认'}]);
+        } catch (error) {
+            Alert.alert('错误', '导出日志失败: ' + error.message, [{text: '确认'}]);
+        }
     }
 
     evalInContext(js, context) {
@@ -363,6 +432,16 @@ class VDebug extends PureComponent {
                     onPress={this.clearLogs.bind(this)}
                     style={styles.panelBottomBtn}>
                     <Text style={styles.panelBottomBtnText}>Clear</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    onPress={this.copyLogs.bind(this)}
+                    style={styles.panelBottomBtn}>
+                    <Text style={styles.panelBottomBtnText}>Copy</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    onPress={this.exportLogs.bind(this)}
+                    style={styles.panelBottomBtn}>
+                    <Text style={styles.panelBottomBtnText}>Export</Text>
                 </TouchableOpacity>
                 {__DEV__ && Platform.OS == 'ios' && (
                     <TouchableOpacity
