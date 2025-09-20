@@ -17,6 +17,14 @@ import android.os.Environment
 import java.net.HttpURLConnection
 import java.net.URL
 import java.io.InputStream
+import java.util.concurrent.ConcurrentHashMap
+import java.util.UUID
+import fi.iki.elonen.NanoHTTPD
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Headers
+import okhttp3.Response
+import java.io.BufferedInputStream
 
 class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
 
@@ -751,6 +759,663 @@ class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactCo
             } else {
                 promise.reject("DownloadError", e.message)
             }
+        }
+    }
+
+    // ================== MFLAC (QMCv2) Decrypt Support ==================
+
+    private val ROUNDS = 16
+    private val DELTA: Long = 0x9e3779b9L
+    private val SALT_LEN = 2
+    private val ZERO_LEN = 7
+    private val FIXED_PADDING_LEN = 1 + SALT_LEN + ZERO_LEN
+    private val EKEY_V2_PREFIX = "UVFNdXNpYyBFbmNWMixLZXk6" // base64("QQMusic EncV2,Key:")
+    private val EKEY_V2_KEY1 = byteArrayOf(
+        0x33, 0x38, 0x36, 0x5a, 0x4a, 0x59, 0x21, 0x40,
+        0x23, 0x2a, 0x24, 0x25, 0x5e, 0x26, 0x29, 0x28
+    ).map { it.toByte() }.toByteArray()
+    private val EKEY_V2_KEY2 = byteArrayOf(
+        0x2a, 0x2a, 0x23, 0x21, 0x28, 0x23, 0x24, 0x25,
+        0x26, 0x5e, 0x61, 0x31, 0x63, 0x5a, 0x2c, 0x54
+    ).map { it.toByte() }.toByteArray()
+
+    private fun toUInt32(v: Long): Long = v and 0xffffffffL
+    private fun readU32BE(b: ByteArray, off: Int): Long {
+        return ((b[off].toLong() and 0xff) shl 24) or
+                ((b[off + 1].toLong() and 0xff) shl 16) or
+                ((b[off + 2].toLong() and 0xff) shl 8) or
+                (b[off + 3].toLong() and 0xff)
+    }
+    private fun writeU32BE(b: ByteArray, off: Int, v: Long) {
+        b[off] = ((v ushr 24) and 0xff).toByte()
+        b[off + 1] = ((v ushr 16) and 0xff).toByte()
+        b[off + 2] = ((v ushr 8) and 0xff).toByte()
+        b[off + 3] = (v and 0xff).toByte()
+    }
+
+    private fun parseKey(key: ByteArray): LongArray {
+        require(key.size == 16) { "Key must be 16 bytes" }
+        return longArrayOf(
+            readU32BE(key, 0),
+            readU32BE(key, 4),
+            readU32BE(key, 8),
+            readU32BE(key, 12)
+        )
+    }
+
+    private fun ecbSingleRound(value: Long, sum: Long, key1: Long, key2: Long): Long {
+        val left = toUInt32(((value shl 4) + key1))
+        val right = toUInt32(((value ushr 5) + key2))
+        val mid = toUInt32(sum + value)
+        return toUInt32(left xor mid xor right)
+    }
+
+    private fun decryptBlock(blockHi: Long, blockLo: Long, keyWords: LongArray): Pair<Long, Long> {
+        var y = toUInt32(blockHi)
+        var z = toUInt32(blockLo)
+        var sum = toUInt32(DELTA * ROUNDS)
+        var round = 0
+        while (round < ROUNDS) {
+            val tmp1 = ecbSingleRound(y, sum, keyWords[2], keyWords[3])
+            z = toUInt32(z - tmp1)
+            val tmp0 = ecbSingleRound(z, sum, keyWords[0], keyWords[1])
+            y = toUInt32(y - tmp0)
+            sum = toUInt32(sum - DELTA)
+            round++
+        }
+        return Pair(y, z)
+    }
+
+    private fun xor64(aHi: Long, aLo: Long, bHi: Long, bLo: Long): Pair<Long, Long> {
+        return Pair(toUInt32(aHi xor bHi), toUInt32(aLo xor bLo))
+    }
+
+    private fun tcTeaDecrypt(cipher: ByteArray, key: ByteArray): ByteArray {
+        val keyWords = parseKey(key)
+        require(cipher.size % 8 == 0 && cipher.size >= FIXED_PADDING_LEN) { "Invalid cipher length" }
+        val plain = ByteArray(cipher.size)
+        var iv1Hi = 0L
+        var iv1Lo = 0L
+        var iv2Hi = 0L
+        var iv2Lo = 0L
+        var off = 0
+        while (off < cipher.size) {
+            val cHi = readU32BE(cipher, off)
+            val cLo = readU32BE(cipher, off + 4)
+            val xHi = toUInt32(cHi xor iv2Hi)
+            val xLo = toUInt32(cLo xor iv2Lo)
+            val d = decryptBlock(xHi, xLo, keyWords)
+            val p = xor64(d.first, d.second, iv1Hi, iv1Lo)
+            writeU32BE(plain, off, p.first)
+            writeU32BE(plain, off + 4, p.second)
+            iv1Hi = cHi
+            iv1Lo = cLo
+            iv2Hi = d.first
+            iv2Lo = d.second
+            off += 8
+        }
+        val padSize = (plain[0].toInt() and 0x7)
+        val start = 1 + padSize + SALT_LEN
+        val end = cipher.size - ZERO_LEN
+        // verify zero tail
+        for (i in end until plain.size) {
+            if (plain[i].toInt() != 0) throw RuntimeException("Invalid padding")
+        }
+        return plain.copyOfRange(start, end)
+    }
+
+    private fun makeSimpleKey(len: Int = 8): ByteArray {
+        val result = ByteArray(len)
+        var i = 0
+        while (i < len) {
+            val value = 106.0 + i * 0.1
+            val tan = kotlin.math.tan(value)
+            val scaled = kotlin.math.abs(tan) * 100.0
+            result[i] = (scaled.toInt() and 0xff).toByte()
+            i++
+        }
+        return result
+    }
+
+    private fun decryptEKeyV1(base64: String): ByteArray {
+        val decoded = android.util.Base64.decode(base64, android.util.Base64.DEFAULT)
+        require(decoded.size >= 12) { "EKey too short" }
+        val header = decoded.copyOfRange(0, 8)
+        val cipher = decoded.copyOfRange(8, decoded.size)
+        val simpleKey = makeSimpleKey()
+        val teaKey = ByteArray(16)
+        for (i in 0 until 8) {
+            teaKey[i * 2] = simpleKey[i]
+            teaKey[i * 2 + 1] = header[i]
+        }
+        val recovered = tcTeaDecrypt(cipher, teaKey)
+        return header + recovered
+    }
+
+    private fun decryptEKeyV2(base64: String): ByteArray {
+        var payload = base64
+        if (payload.startsWith(EKEY_V2_PREFIX)) payload = payload.substring(EKEY_V2_PREFIX.length)
+        var data = android.util.Base64.decode(payload, android.util.Base64.DEFAULT)
+        data = tcTeaDecrypt(data, EKEY_V2_KEY1)
+        data = tcTeaDecrypt(data, EKEY_V2_KEY2)
+        // trim trailing zeros
+        var end = data.size
+        while (end > 0 && data[end - 1].toInt() == 0) end--
+        val trimmed = String(data.copyOfRange(0, end))
+        return decryptEKeyV1(trimmed)
+    }
+
+    private fun decryptEKey(base64: String): ByteArray {
+        return if (base64.startsWith(EKEY_V2_PREFIX)) decryptEKeyV2(base64) else decryptEKeyV1(base64)
+    }
+
+    private object QmcHelper {
+        fun calculateQMCHash(key: ByteArray): Double {
+            var hash = 1L // u32 logic
+            for (b in key) {
+                val v = (b.toInt() and 0xff)
+                if (v == 0) continue
+                val next = (hash * v) and 0xffffffffL
+                if (next == 0L || next <= hash) break
+                hash = next
+            }
+            return (hash and 0xffffffffL).toDouble()
+        }
+
+        fun getSegmentKey(id: Long, seed: Int, hash: Double): Long {
+            if (seed == 0) return 0L
+            val denominator = ((id + 1L) * seed.toLong()).toDouble()
+            val result = (hash / denominator) * 100.0
+            return kotlin.math.floor(result).toLong()
+        }
+
+        fun keyCompress(longKey: ByteArray): ByteArray {
+            val INDEX_OFFSET = 71214
+            val V1_KEY_SIZE = 128
+            require(longKey.isNotEmpty()) { "Key is empty" }
+            val n = longKey.size
+            val result = ByteArray(V1_KEY_SIZE)
+            var i = 0
+            while (i < V1_KEY_SIZE) {
+                val index = (i * i + INDEX_OFFSET) % n
+                val key = longKey[index].toInt() and 0xff
+                val shift = (index + 4) % 8
+                val leftShift = (key shl shift) and 0xff
+                val rightShift = (key ushr shift) and 0xff
+                result[i] = (leftShift or rightShift).toByte()
+                i++
+            }
+            return result
+        }
+
+        fun qmc1Transform(key: ByteArray, value: Int, offset: Int): Int {
+            val V1_OFFSET_BOUNDARY = 0x7FFF
+            val V1_KEY_SIZE = 128
+            var off = offset
+            if (off > V1_OFFSET_BOUNDARY) off %= V1_OFFSET_BOUNDARY
+            return value xor (key[off % V1_KEY_SIZE].toInt() and 0xff)
+        }
+    }
+
+    private class RC4(private val key: ByteArray) {
+        private val n = key.size
+        private val state = ByteArray(n)
+        private var i = 0
+        private var j = 0
+        init {
+            require(n > 0) { "RC4 requires non-empty key" }
+            var idx = 0
+            while (idx < n) { state[idx] = (idx and 0xff).toByte(); idx++ }
+            var jj = 0
+            var ii = 0
+            while (ii < n) {
+                jj = (jj + (state[ii].toInt() and 0xff) + (key[ii % n].toInt() and 0xff)) % n
+                val tmp = state[ii]; state[ii] = state[jj]; state[jj] = tmp
+                ii++
+            }
+            i = 0; j = 0
+        }
+        private fun generate(): Int {
+            i = (i + 1) % n
+            j = (j + (state[i].toInt() and 0xff)) % n
+            val tmp = state[i]; state[i] = state[j]; state[j] = tmp
+            val iVal = state[i].toInt() and 0xff
+            val jVal = state[j].toInt() and 0xff
+            val index = (iVal + jVal) % n
+            return state[index].toInt() and 0xff
+        }
+        fun derive(buf: ByteArray) {
+            var k = 0
+            while (k < buf.size) { buf[k] = (buf[k].toInt() xor generate()).toByte(); k++ }
+        }
+    }
+
+    private class QMC2Decoder(private val rawKey: ByteArray) {
+        private val mode: String
+        private val compressedKey: ByteArray?
+        private val key: ByteArray?
+        private val hash: Double
+        private val keyStream: ByteArray?
+        init {
+            val keyLen = rawKey.size
+            require(keyLen > 0) { "Key is empty" }
+            if (keyLen <= 300) {
+                mode = "MapL"
+                compressedKey = QmcHelper.keyCompress(rawKey)
+                key = null
+                keyStream = null
+                hash = 0.0
+            } else {
+                mode = "RC4"
+                compressedKey = null
+                key = rawKey
+                hash = QmcHelper.calculateQMCHash(rawKey)
+                val RC4_STREAM_CACHE_SIZE = 0x1400 + 512
+                val rc4 = RC4(rawKey)
+                keyStream = ByteArray(RC4_STREAM_CACHE_SIZE)
+                rc4.derive(keyStream)
+            }
+        }
+
+        fun decryptChunk(buf: ByteArray, startOffset: Long) {
+            if (mode == "MapL") {
+                val ck = compressedKey!!
+                var i = 0
+                val base = startOffset.toInt()
+                while (i < buf.size) {
+                    val v = buf[i].toInt() and 0xff
+                    buf[i] = QmcHelper.qmc1Transform(ck, v, base + i).toByte()
+                    i++
+                }
+                return
+            }
+            // RC4 mode
+            val FIRST_SEGMENT_SIZE = 0x80
+            val OTHER_SEGMENT_SIZE = 0x1400
+            val k = key!!
+            val ks = keyStream!!
+            val n = k.size
+            var offset = startOffset.toInt()
+            var position = 0
+            fun processFirst(data: ByteArray, off: Int) {
+                var i = 0
+                while (i < data.size) {
+                    val current = off + i
+                    val seed = k[current % n].toInt() and 0xff
+                    val idx = QmcHelper.getSegmentKey(current.toLong(), seed, hash)
+                    val keyIdx = (idx % n).toInt()
+                    data[i] = (data[i].toInt() xor (k[keyIdx].toInt() and 0xff)).toByte()
+                    i++
+                }
+            }
+            fun processOther(data: ByteArray, off: Int) {
+                val id = kotlin.math.floor(off.toDouble() / OTHER_SEGMENT_SIZE).toInt()
+                val blockOffset = off % OTHER_SEGMENT_SIZE
+                val seed = k[id % n].toInt() and 0xff
+                val skip = (QmcHelper.getSegmentKey(id.toLong(), seed, hash) and 0x1ff).toInt()
+                var i = 0
+                while (i < data.size) {
+                    val streamIdx = skip + blockOffset + i
+                    if (streamIdx < ks.size) {
+                        data[i] = (data[i].toInt() xor (ks[streamIdx].toInt() and 0xff)).toByte()
+                    }
+                    i++
+                }
+            }
+            if (offset < FIRST_SEGMENT_SIZE) {
+                val len = kotlin.math.min(FIRST_SEGMENT_SIZE - offset, buf.size)
+                if (len > 0) {
+                    val seg = buf.copyOfRange(position, position + len)
+                    processFirst(seg, offset)
+                    // copy back
+                    System.arraycopy(seg, 0, buf, position, len)
+                    position += len
+                    offset += len
+                }
+            }
+            if (offset >= FIRST_SEGMENT_SIZE && offset % OTHER_SEGMENT_SIZE != 0) {
+                val excess = offset % OTHER_SEGMENT_SIZE
+                val alignment = kotlin.math.min(OTHER_SEGMENT_SIZE - excess, buf.size - position)
+                if (alignment > 0) {
+                    val seg = buf.copyOfRange(position, position + alignment)
+                    processOther(seg, offset)
+                    System.arraycopy(seg, 0, buf, position, alignment)
+                    position += alignment
+                    offset += alignment
+                }
+            }
+            while (position < buf.size) {
+                val segment = kotlin.math.min(OTHER_SEGMENT_SIZE, buf.size - position)
+                val seg = buf.copyOfRange(position, position + segment)
+                processOther(seg, offset)
+                System.arraycopy(seg, 0, buf, position, segment)
+                position += segment
+                offset += segment
+            }
+        }
+    }
+
+    private fun normalizeEkey(input: String): String {
+        val s = input.trim()
+        return if (s.length > 704) s.takeLast(704) else s
+    }
+
+    @ReactMethod
+    fun decryptMflacToFlac(inputPath: String, outputPath: String, rawEkey: String, promise: Promise) {
+        try {
+            val inFile = File(inputPath)
+            if (!inFile.exists()) {
+                android.util.Log.e("Mp3UtilModule", "[Decrypt] Input not found: $inputPath")
+                promise.reject("InputNotFound", "Input file not found: $inputPath")
+                return
+            }
+            val parent = File(outputPath).parentFile
+            if (parent != null && !parent.exists()) parent.mkdirs()
+
+            val cleaned = normalizeEkey(rawEkey)
+            android.util.Log.i("Mp3UtilModule", "[Decrypt] ekey length raw=${rawEkey.length} cleaned=${cleaned.length}")
+            val key = decryptEKey(cleaned)
+            val decoder = QMC2Decoder(key)
+
+            val bufferSize = 128 * 1024
+            var absoluteOffset = 0L
+            inFile.inputStream().use { ins ->
+                FileOutputStream(outputPath).use { outs ->
+                    val buf = ByteArray(bufferSize)
+                    while (true) {
+                        val read = ins.read(buf)
+                        if (read <= 0) break
+                        val chunk = if (read == buf.size) buf else buf.copyOf(read)
+                        decoder.decryptChunk(chunk, absoluteOffset)
+                        outs.write(chunk)
+                        absoluteOffset += read
+                    }
+                    outs.flush()
+                }
+            }
+            android.util.Log.i("Mp3UtilModule", "[Decrypt] Done -> $outputPath")
+            promise.resolve(true)
+        } catch (e: Exception) {
+            android.util.Log.e("Mp3UtilModule", "[Decrypt] Error: ${e.message}", e)
+            promise.reject("DecryptError", e)
+        }
+    }
+
+    // ================== Local HTTP Proxy for streaming mflac ==================
+    private object MflacProxy {
+        private var started = false
+        private var port = 17173
+        private val sessions = ConcurrentHashMap<String, Session>()
+        private val client: OkHttpClient = OkHttpClient.Builder()
+            .connectTimeout(8, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+            .writeTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+            .retryOnConnectionFailure(true)
+            .build()
+
+        data class Session(
+            val token: String,
+            val src: String,
+            val ekey: ByteArray,
+            val headers: Map<String, String> = emptyMap(),
+            @Volatile var totalLength: Long? = null,
+            @Volatile var supportsRange: Boolean? = null,
+        )
+
+        private class DecryptingInputStream(
+            private val upstream: InputStream,
+            private val decoder: QMC2Decoder,
+            private var absoluteOffset: Long,
+        ) : InputStream() {
+            private val buf = ByteArray(128 * 1024)
+            override fun read(): Int {
+                val one = ByteArray(1)
+                val n = read(one, 0, 1)
+                return if (n == -1) -1 else (one[0].toInt() and 0xff)
+            }
+            override fun read(b: ByteArray, off: Int, len: Int): Int {
+                val toRead = if (len < buf.size) len else buf.size
+                val n = upstream.read(buf, 0, toRead)
+                if (n <= 0) return -1
+                val chunk = if (n == buf.size) buf else buf.copyOf(n)
+                decoder.decryptChunk(chunk, absoluteOffset)
+                System.arraycopy(chunk, 0, b, off, n)
+                absoluteOffset += n
+                return n
+            }
+            override fun close() { upstream.close() }
+        }
+
+        private class Server(private val proxy: MflacProxy) : NanoHTTPD("127.0.0.1", port) {
+            override fun serve(session: IHTTPSession): Response {
+                try {
+                    if (session.method == Method.HEAD) {
+                        val t = parseToken(session.uri)
+                        val s = proxy.sessions[t] ?: return newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "unknown token")
+                        val total = proxy.fetchTotalLength(s) ?: -1L
+                        val resp = newFixedLengthResponse(Response.Status.OK, "audio/flac", "")
+                        resp.addHeader("Accept-Ranges", "bytes")
+                        if (total > 0) resp.addHeader("Content-Length", total.toString())
+                        return resp
+                    }
+
+                    if (session.method != Method.GET) {
+                        return newFixedLengthResponse(Response.Status.METHOD_NOT_ALLOWED, "text/plain", "method not allowed")
+                    }
+                    val token = parseToken(session.uri)
+                    val s = proxy.sessions[token] ?: return newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "unknown token")
+
+                    val rangeHeader = session.headers["range"] ?: session.headers["Range"]
+                    val (start, end) = parseRange(rangeHeader)
+                    val reqBuilderBase = Request.Builder().url(s.src)
+                        .addHeader("Accept-Encoding", "identity")
+                    s.headers.forEach { (k, v) -> reqBuilderBase.addHeader(k, v) }
+
+                    // decide whether to send Range based on known support (if false, don't send Range)
+                    val attemptRange = start != null && s.supportsRange != false
+                    val reqBuilder = if (attemptRange) {
+                        val rangeVal = if (end != null) "bytes=${start}-${end}" else "bytes=${start}-"
+                        reqBuilderBase.addHeader("Range", rangeVal)
+                    } else reqBuilderBase
+
+                    var resp = proxy.executeWithRetry(reqBuilder.build(), 2)
+                    val code = resp.code
+                    val body = resp.body ?: return newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", "no body")
+                    val contentLenHdr = resp.header("Content-Length")
+                    val contentRangeHdr = resp.header("Content-Range")
+                    val total = extractTotalFromContentRange(contentRangeHdr)
+                    if (total != null) s.totalLength = total
+
+                    // update supportsRange flag
+                    s.supportsRange = when {
+                        code == 206 -> true
+                        attemptRange && code == 200 -> false
+                        s.supportsRange == null -> s.supportsRange // keep unknown
+                        else -> s.supportsRange
+                    }
+
+                    val effectiveStart = start ?: 0L
+
+                    // If upstream ignored Range (code 200) but we need offset, synthesize by skipping
+                    val upstreamStream = BufferedInputStream(body.byteStream())
+                    val baseStream = if (attemptRange && code != 206 && effectiveStart > 0L) {
+                        // Create a stream that decrypts and discards until reaching offset
+                        SkippingDecryptInputStream(upstreamStream, QMC2Decoder(s.ekey), effectiveStart)
+                    } else {
+                        DecryptingInputStream(upstreamStream, QMC2Decoder(s.ekey), effectiveStart)
+                    }
+
+                    val length = contentLenHdr?.toLongOrNull() ?: -1L
+                    val status = if ((code == 206) || (attemptRange && effectiveStart > 0L)) Response.Status.PARTIAL_CONTENT else Response.Status.OK
+                    val response = if (length > 0 && code != 200) newFixedLengthResponse(status, "audio/flac", baseStream, length) else newChunkedResponse(status, "audio/flac", baseStream)
+                    response.addHeader("Accept-Ranges", "bytes")
+                    if (start != null && total != null && length > 0) {
+                        val endPos = if (end != null) end else start + length - 1
+                        response.addHeader("Content-Range", "bytes ${start}-${endPos}/${total}")
+                    }
+                    return response
+                } catch (e: Exception) {
+                    return newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", e.message ?: "error")
+                }
+            }
+
+            // decrypts upstream while discarding decrypted bytes until reaching target offset
+            private class SkippingDecryptInputStream(
+                upstream: InputStream,
+                decoder: QMC2Decoder,
+                private val targetOffset: Long,
+            ) : InputStream() {
+                private val inner = DecryptingInputStream(upstream, decoder, 0L)
+                private var skipped = 0L
+                private var primed = false
+                private fun ensureSkip() {
+                    if (primed) return
+                    val buf = ByteArray(64 * 1024)
+                    while (skipped < targetOffset) {
+                        val need = (targetOffset - skipped).coerceAtMost(buf.size.toLong()).toInt()
+                        val n = inner.read(buf, 0, need)
+                        if (n <= 0) break
+                        skipped += n
+                    }
+                    primed = true
+                }
+                override fun read(): Int {
+                    ensureSkip()
+                    return inner.read()
+                }
+                override fun read(b: ByteArray, off: Int, len: Int): Int {
+                    ensureSkip()
+                    return inner.read(b, off, len)
+                }
+                override fun close() { inner.close() }
+            }
+
+            private fun parseToken(uri: String): String {
+                // /m/<token>
+                val parts = uri.trim('/').split('/')
+                if (parts.size >= 2 && parts[0] == "m") return parts[1]
+                throw IllegalArgumentException("invalid path")
+            }
+
+            private fun parseRange(rangeHeader: String?): Pair<Long?, Long?> {
+                if (rangeHeader == null) return Pair(null, null)
+                // bytes=start-end | bytes=start-
+                val m = Regex("bytes=(\\d+)-(\\d*)").find(rangeHeader) ?: return Pair(null, null)
+                val start = m.groupValues[1].toLongOrNull()
+                val end = m.groupValues.getOrNull(2)?.takeIf { it.isNotEmpty() }?.toLongOrNull()
+                return Pair(start, end)
+            }
+
+            private fun extractTotalFromContentRange(h: String?): Long? {
+                if (h == null) return null
+                // bytes start-end/total
+                val idx = h.lastIndexOf('/')
+                if (idx == -1) return null
+                return h.substring(idx + 1).toLongOrNull()
+            }
+        }
+
+        fun ensureStarted(): String {
+            if (!started) {
+                val server = Server(this)
+                server.start(NanoHTTPD.SOCKET_READ_TIMEOUT, false)
+                started = true
+            }
+            return "http://127.0.0.1:${port}"
+        }
+
+        fun register(src: String, ekey: ByteArray, headers: Map<String, String>): String {
+            val token = UUID.randomUUID().toString().replace("-", "")
+            sessions[token] = Session(token, src, ekey, headers)
+            return "/m/${token}"
+        }
+
+        private fun fetchTotalLength(s: Session): Long? {
+            s.totalLength?.let { return it }
+            // Try HEAD first
+            try {
+                val headHeaders = Headers.Builder().apply { s.headers.forEach { (k,v) -> add(k, v) } }.build()
+                val headReq = Request.Builder().url(s.src).headers(headHeaders).head().build()
+                client.newCall(headReq).execute().use { r ->
+                    if (r.isSuccessful) {
+                        val cl = r.header("Content-Length")?.toLongOrNull()
+                        if (cl != null && cl > 0) { s.totalLength = cl; return cl }
+                    }
+                }
+            } catch (_: Exception) {}
+            // Fallback: GET bytes=0-0
+            return try {
+                val getHeaders = Headers.Builder().apply { s.headers.forEach { (k,v) -> add(k, v) } }.build()
+                val req = Request.Builder().url(s.src).addHeader("Range", "bytes=0-0").headers(getHeaders).build()
+                client.newCall(req).execute().use { r ->
+                    val cr = r.header("Content-Range")
+                    if (cr != null) {
+                        val idx = cr.lastIndexOf('/')
+                        if (idx != -1) {
+                            val v = cr.substring(idx + 1).toLongOrNull()
+                            if (v != null) { s.totalLength = v; return v }
+                        }
+                    }
+                    val cl = r.header("Content-Length")?.toLongOrNull()
+                    if (cl != null) { s.totalLength = cl }
+                    cl
+                }
+            } catch (_: Exception) { null }
+        }
+
+        private fun executeWithRetry(req: Request, attempts: Int): Response {
+            var last: Exception? = null
+            var i = 0
+            while (i < attempts) {
+                try {
+                    val r = client.newCall(req).execute()
+                    if (r.isSuccessful || r.code in listOf(200, 206, 416)) return r
+                    // Close and retry on server error
+                    r.close()
+                } catch (e: Exception) { last = e }
+                i++
+            }
+            // final try
+            return client.newCall(req).execute()
+        }
+    }
+
+    @ReactMethod
+    fun startMflacProxy(promise: Promise) {
+        try {
+            val base = MflacProxy.ensureStarted()
+            android.util.Log.i("Mp3UtilModule", "[Proxy] Started at $base")
+            promise.resolve(base)
+        } catch (e: Exception) {
+            android.util.Log.e("Mp3UtilModule", "[Proxy] Start error: ${e.message}", e)
+            promise.reject("ProxyStartError", e)
+        }
+    }
+
+    @ReactMethod
+    fun registerMflacStream(src: String, rawEkey: String, headers: ReadableMap?, promise: Promise) {
+        try {
+            android.util.Log.i("Mp3UtilModule", "[Proxy] Register stream src=$src")
+            val cleaned = normalizeEkey(rawEkey)
+            android.util.Log.i("Mp3UtilModule", "[Proxy] ekey length raw=${rawEkey.length} cleaned=${cleaned.length}")
+            val key = decryptEKey(cleaned)
+            val h = mutableMapOf<String, String>()
+            headers?.let {
+                val iter = it.keySetIterator()
+                while (iter.hasNextKey()) {
+                    val k = iter.nextKey()
+                    val v = it.getString(k)
+                    if (v != null) h[k] = v
+                }
+            }
+            val base = MflacProxy.ensureStarted()
+            val path = MflacProxy.register(src, key, h)
+            val local = base + path
+            android.util.Log.i("Mp3UtilModule", "[Proxy] Registered -> $local")
+            promise.resolve(local)
+        } catch (e: Exception) {
+            android.util.Log.e("Mp3UtilModule", "[Proxy] Register error: ${e.message}", e)
+            promise.reject("RegisterStreamError", e)
         }
     }
 }

@@ -140,6 +140,36 @@ class Mp3UtilManager implements IMp3Util {
       throw error;
     }
   }
+
+  /**
+   * Decrypt an encrypted .mflac file to .flac using native decoder.
+   */
+  async decryptMflacToFlac(inputPath: string, outputPath: string, ekey: string): Promise<boolean> {
+    if (!this.nativeModule?.decryptMflacToFlac) {
+      throw new Error('decryptMflacToFlac not available');
+    }
+    return this.nativeModule.decryptMflacToFlac(inputPath, outputPath, ekey);
+  }
+
+  /**
+   * Start local mflac proxy server (idempotent). Returns base URL.
+   */
+  async startMflacProxy(): Promise<string> {
+    if (!this.nativeModule?.startMflacProxy) {
+      throw new Error('startMflacProxy not available');
+    }
+    return this.nativeModule.startMflacProxy();
+  }
+
+  /**
+   * Register a streaming session and return local URL.
+   */
+  async registerMflacStream(src: string, ekey: string, headers?: Record<string, string> | null): Promise<string> {
+    if (!this.nativeModule?.registerMflacStream) {
+      throw new Error('registerMflacStream not available');
+    }
+    return this.nativeModule.registerMflacStream(src, ekey, headers ?? null);
+  }
 }
 
 // 导出单例实例

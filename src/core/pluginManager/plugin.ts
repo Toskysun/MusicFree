@@ -254,10 +254,11 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
             };
         }
         try {
-            const { url, headers } = (await parserPlugin.instance.getMediaSource(
+            const mediaSourceResult = (await parserPlugin.instance.getMediaSource(
                 musicItem,
                 quality,
             )) ?? { url: musicItem?.qualities?.[quality]?.url };
+            const { url, headers, ekey } = mediaSourceResult as any;
             if (!url) {
                 throw new Error("NOT RETRY");
             }
@@ -266,6 +267,7 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
                 url,
                 headers,
                 userAgent: headers?.["user-agent"],
+                ekey, // 传递 ekey 用于 mflac 解密
             } as IPlugin.IMediaSourceResult;
             const authFormattedResult = formatAuthUrl(result.url!);
             if (authFormattedResult.auth) {
