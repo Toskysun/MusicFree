@@ -350,6 +350,7 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
 
         let url = musicItem.url;
         let headers = musicItem.headers;
+        let mflacEkey: string | undefined;
 
         const plugin = this.pluginManagerService.getByName(musicItem.platform);
 
@@ -432,9 +433,26 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
                         platform: musicItem.platform
                     });
                 }
-                
+
                 url = data?.url ?? url;
                 headers = data?.headers;
+                // plugin may provide ekey for encrypted mflac
+                if (data?.ekey) {
+                    // raw ekey may include leading digits; normalize later
+                    // store for post-download decryption
+                    mflacEkey = data.ekey as string;
+                    devLog('info', '🔑[下载器] 从插件获取到 ekey', {
+                        ekeyLength: mflacEkey.length,
+                        platform: musicItem.platform,
+                        quality: nextTask.quality
+                    });
+                } else {
+                    devLog('warn', '⚠️[下载器] 未从插件获取到 ekey', {
+                        platform: musicItem.platform,
+                        quality: nextTask.quality,
+                        dataKeys: data ? Object.keys(data) : []
+                    });
+                }
             }
             if (!url) {
                 throw new Error(DownloadFailReason.FailToFetchSource);
@@ -532,6 +550,22 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
 
         // 真实下载地址
         const targetDownloadPath = this.getDownloadPath(`${nextTask.filename}.${extension}`);
+        // detect encrypted mflac and route to temp file for post-decrypt
+        const { isMflacUrl, normalizeEkey } = require("@/utils/mflac");
+        const willDownloadEncrypted = !!mflacEkey || isMflacUrl(url);
+
+        devLog('info', '📋[下载器] 下载路径规划', {
+            targetPath: targetDownloadPath,
+            willDecrypt: willDownloadEncrypted,
+            hasMflacEkey: !!mflacEkey,
+            isMflacUrl: isMflacUrl(url),
+            extension,
+            url: url?.substring(0, 100) + '...'
+        });
+
+        const tempEncryptedPath = willDownloadEncrypted
+            ? this.getDownloadPath(`${nextTask.filename}.mflac`)
+            : targetDownloadPath;
 
         // 检测下载位置是否存在
         try {
@@ -556,7 +590,7 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
             
             const downloadId = await Mp3Util.downloadWithSystemManager(
                 url,
-                targetDownloadPath.replace('file://', ''),
+                tempEncryptedPath.replace('file://', ''),
                 `${musicItem.title} - ${musicItem.artist}`,
                 '正在下载音乐文件...',
                 headers
@@ -592,14 +626,15 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
                     
                     const checkInterval = setInterval(async () => {
                         try {
-                            const filePath = targetDownloadPath.replace('file://', '');
+                            // 检查实际下载的文件（可能是临时的.mflac文件）
+                            const filePath = tempEncryptedPath.replace('file://', '');
                             const fileExists = await exists(filePath);
-                            
+
                             if (!fileExists) {
                                 // 文件还未创建，继续等待
                                 return;
                             }
-                            
+
                             // 使用stat获取准确的文件大小
                             const { stat } = require('react-native-fs');
                             try {
@@ -611,7 +646,9 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
                                     expectedSize: expectedFileSize,
                                     progress: expectedFileSize > 0 ? (currentSize / expectedFileSize * 100).toFixed(1) + '%' : 'N/A',
                                     lastSize: lastFileSize,
-                                    sameSizeCount
+                                    sameSizeCount,
+                                    filePath: filePath,
+                                    isEncrypted: willDownloadEncrypted
                                 });
                                 
                                 // 更新下载进度
@@ -683,6 +720,44 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
             };
             
             await checkDownloadStatus();
+            if (willDownloadEncrypted) {
+                try {
+                    const cleaned = normalizeEkey(mflacEkey);
+                    devLog('info', '🔐[下载器] 开始解密 mflac 文件', {
+                        input: tempEncryptedPath,
+                        output: targetDownloadPath,
+                        hasEkey: !!cleaned,
+                        ekeyLength: cleaned?.length
+                    });
+                    await Mp3Util.decryptMflacToFlac(
+                        (require('@/utils/fileUtils').removeFileScheme(tempEncryptedPath)),
+                        (require('@/utils/fileUtils').removeFileScheme(targetDownloadPath)),
+                        cleaned,
+                    );
+                    devLog('info', '✅[下载器] mflac 解密成功', {
+                        output: targetDownloadPath,
+                        title: musicItem.title
+                    });
+                    // 删除临时加密文件
+                    try {
+                        const { unlink } = require('react-native-fs');
+                        await unlink(require('@/utils/fileUtils').removeFileScheme(tempEncryptedPath));
+                        devLog('info', '🗑️[下载器] 已删除临时加密文件', {
+                            path: tempEncryptedPath
+                        });
+                    } catch (deleteError) {
+                        devLog('warn', '⚠️[下载器] 删除临时文件失败', deleteError);
+                    }
+                } catch (e: any) {
+                    devLog('error', '❌[下载器] mflac 解密失败', {
+                        error: e.message,
+                        input: tempEncryptedPath,
+                        output: targetDownloadPath
+                    });
+                    this.markTaskAsError(musicItem, DownloadFailReason.Unknown, e);
+                    return;
+                }
+            }
             devLog('info', '🎉[下载器] 系统下载完成', {
                 path: targetDownloadPath,
                 title: musicItem.title

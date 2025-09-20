@@ -164,8 +164,20 @@ class TrackPlayer extends EventEmitter<{
             this.pluginManagerService.getByMedia(track)
                 ?.methods.getMediaSource(track, quality)
                 .then(async newSource => {
-                    track.url = newSource?.url || track.url;
-                    track.headers = newSource?.headers || track.headers;
+                    try {
+                        const { getLocalStreamUrlIfNeeded } = require("@/service/mflac/proxy");
+                        const localUrl = await getLocalStreamUrlIfNeeded(newSource?.url, (newSource as any)?.ekey, newSource?.headers);
+                        if (localUrl) {
+                            track.url = localUrl;
+                            track.headers = undefined;
+                        } else {
+                            track.url = newSource?.url || track.url;
+                            track.headers = newSource?.headers || track.headers;
+                        }
+                    } catch {
+                        track.url = newSource?.url || track.url;
+                        track.headers = newSource?.headers || track.headers;
+                    }
 
                     if (isSameMediaItem(this.currentMusic, track)) {
                         await this.setTrackSource(track as Track, false);
@@ -511,6 +523,14 @@ class TrackPlayer extends EventEmitter<{
                 )) ?? null;
                 
                 if (source) {
+                    try {
+                        const { getLocalStreamUrlIfNeeded } = require("@/service/mflac/proxy");
+                        const localUrl = await getLocalStreamUrlIfNeeded(source.url, (source as any)?.ekey, source.headers);
+                        if (localUrl) {
+                            source.url = localUrl;
+                            source.headers = undefined;
+                        }
+                    } catch {}
                     this.setQuality(selectedQuality);
                 } else {
                     // 智能选择失败，回退到遍历所有音质
@@ -524,6 +544,14 @@ class TrackPlayer extends EventEmitter<{
                             )) ?? null;
                             // 5.4.1 获取到真实源
                             if (source) {
+                                try {
+                                    const { getLocalStreamUrlIfNeeded } = require("@/service/mflac/proxy");
+                                    const localUrl = await getLocalStreamUrlIfNeeded(source.url, (source as any)?.ekey, source.headers);
+                                    if (localUrl) {
+                                        source.url = localUrl;
+                                        source.headers = undefined;
+                                    }
+                                } catch {}
                                 this.setQuality(quality);
                                 fallbackQuality = quality;
                                 break;
@@ -578,6 +606,24 @@ class TrackPlayer extends EventEmitter<{
                                         )) ?? null;
                                     // 5.4.1 获取到真实源
                                     if (source) {
+                                        try {
+                                            const { getLocalStreamUrlIfNeeded } = require("@/service/mflac/proxy");
+                                            devLog('info', '🎵[trackPlayer] 尝试处理mflac', {
+                                                url: source.url,
+                                                hasEkey: !!source.ekey,
+                                                ekeyLength: source.ekey?.length
+                                            });
+                                            const localUrl = await getLocalStreamUrlIfNeeded(source.url, source.ekey, source.headers);
+                                            if (localUrl) {
+                                                devLog('info', '✅[trackPlayer] mflac代理URL生成成功', { localUrl });
+                                                source.url = localUrl;
+                                                source.headers = undefined;
+                                            } else {
+                                                devLog('warn', '⚠️[trackPlayer] mflac代理URL生成失败');
+                                            }
+                                        } catch (error: any) {
+                                            devLog('error', '❌[trackPlayer] mflac处理异常', error);
+                                        }
                                         this.setQuality(quality);
                                         break;
                                     }
@@ -729,10 +775,20 @@ class TrackPlayer extends EventEmitter<{
                 const playingState = (
                     await ReactNativeTrackPlayer.getPlaybackState()
                 ).state;
-                await this.setTrackSource(
-                    this.mergeTrackSource(musicItem, newSource) as unknown as Track,
-                    !musicIsPaused(playingState),
-                );
+                try {
+                    const { getLocalStreamUrlIfNeeded } = require("@/service/mflac/proxy");
+                    const localUrl = await getLocalStreamUrlIfNeeded(newSource.url, (newSource as any)?.ekey, newSource.headers);
+                    const adapted = localUrl ? { ...newSource, url: localUrl, headers: undefined } : newSource;
+                    await this.setTrackSource(
+                        this.mergeTrackSource(musicItem, adapted) as unknown as Track,
+                        !musicIsPaused(playingState),
+                    );
+                } catch {
+                    await this.setTrackSource(
+                        this.mergeTrackSource(musicItem, newSource) as unknown as Track,
+                        !musicIsPaused(playingState),
+                    );
+                }
 
                 await this.seekTo(progress.position ?? 0);
                 this.setQuality(newQuality);
