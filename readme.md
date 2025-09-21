@@ -58,7 +58,7 @@
 ## 🚀 快速开始
 
 ### 📲 安装应用
-1. 前往 [Releases](./releases) 下载最新版本
+1. 前往 [Releases](https://github.com/Toskysun/MusicFree/releases) 下载最新版本
 2. 安装APK文件到Android设备
 
 ### 🔌 安装插件

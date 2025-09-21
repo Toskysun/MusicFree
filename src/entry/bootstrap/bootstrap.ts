@@ -27,6 +27,7 @@ import RNTrackPlayer, { AppKilledPlaybackBehavior, Capability } from "react-nati
 import i18n from "@/core/i18n";
 import bootstrapAtom from "./bootstrap.atom";
 import { getDefaultStore } from "jotai";
+import announcementService from "@/services/announcementService";
 
 
 // 依赖管理
@@ -136,6 +137,22 @@ async function bootstrapImpl() {
         errorLog("Failed to initialize download notification manager during bootstrap", error);
     }
     logger.mark("下载通知管理器初始化完成");
+
+    // 检查公告
+    devLog('info', '📢[Bootstrap] 开始检查在线公告');
+    try {
+        const announcement = await announcementService.checkAnnouncements();
+        if (announcement) {
+            // 延迟显示公告，等待界面完全加载
+            setTimeout(() => {
+                showDialog("AnnouncementDialog", { announcement });
+            }, 1500);
+        }
+        devLog('info', '✅[Bootstrap] 公告检查完成');
+    } catch (error) {
+        devLog('warn', '⚠️[Bootstrap] 公告检查失败', error);
+    }
+    logger.mark("公告检查完成");
     
     ErrorUtils.setGlobalHandler(error => {
         errorLog("未捕获的错误", error);

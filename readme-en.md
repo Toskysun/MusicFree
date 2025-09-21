@@ -58,8 +58,8 @@
 ## 🚀 Quick Start
 
 ### 📲 Install App
-1. Go to [Releases](./releases) to download the latest version
-2. Install APK file on Android device
+1. Go to [Releases](https://github.com/Toskysun/MusicFree/releases) to download the latest version
+2. Install the APK file on your Android device
 
 ### 🔌 Install Plugins
 

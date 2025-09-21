@@ -344,6 +344,7 @@
     "dialog.checkStorage.content.3": "您可以随时在侧边栏「权限管理」->「文件读写权限」授予或取消授予权限。",
     "dialog.checkStorage.button.grantPermission": "去授予权限",
     "dialog.checkStorage.button.doNotShowAgain": "不再提示",
+    "dialog.dontShowAgain": "不再显示此公告",
     "dialog.downloadDialog.title": "发现新版本({version})",
     "dialog.downloadDialog.skipThisVersion": "跳过此版本",
     "dialog.downloadDialog.downloadUsingBrowser": "从浏览器下载",

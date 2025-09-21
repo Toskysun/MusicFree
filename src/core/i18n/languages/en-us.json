@@ -344,6 +344,7 @@
     "dialog.checkStorage.content.3": "You can grant or revoke this permission anytime in Sidebar「Permission Management」->「File Read/Write Permission」.",
     "dialog.checkStorage.button.grantPermission": "Grant Permission",
     "dialog.checkStorage.button.doNotShowAgain": "Don't show again",
+    "dialog.dontShowAgain": "Don't show this announcement again",
     "dialog.downloadDialog.title": "New version found ({version})",
     "dialog.downloadDialog.skipThisVersion": "Skip this version",
     "dialog.downloadDialog.downloadUsingBrowser": "Download with browser",
