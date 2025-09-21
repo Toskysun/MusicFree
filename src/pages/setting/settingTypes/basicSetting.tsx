@@ -18,6 +18,7 @@ import { clearLog, getErrorLogContent } from "@/utils/log";
 import { qualityKeys, getQualityText } from "@/utils/qualities";
 import rpx from "@/utils/rpx";
 import Toast from "@/utils/toast";
+import announcementService from "@/services/announcementService";
 import Clipboard from "@react-native-clipboard/clipboard";
 import Slider from "@react-native-community/slider";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -724,6 +725,37 @@ export default function BasicSetting() {
                         try {
                             await clearLog();
                             Toast.success(t("toast.logCleared"));
+                        } catch { }
+                    },
+                },
+                {
+                    title: t("basicSettings.developer.checkAnnouncements"),
+                    right: undefined,
+                    async onPress() {
+                        try {
+                            const announcement = await announcementService.checkAnnouncements(true);
+                            if (announcement) {
+                                showDialog("AnnouncementDialog", { announcement });
+                                // @ts-ignore i18n fallback if key missing
+                                Toast.success(t("toast.announcementShown") || "已显示公告");
+                            } else {
+                                // @ts-ignore i18n fallback if key missing
+                                Toast.warn(t("toast.announcementNone") || "暂无可显示公告");
+                            }
+                        } catch {
+                            // @ts-ignore i18n fallback if key missing
+                            Toast.warn(t("toast.announcementNone") || "暂无可显示公告");
+                        }
+                    },
+                },
+                {
+                    title: t("basicSettings.developer.clearAnnouncements"),
+                    right: undefined,
+                    async onPress() {
+                        try {
+                            announcementService.clearHistory();
+                            // @ts-ignore i18n fallback if key missing
+                            Toast.success(t("toast.announcementCleared") || "公告记录已清除");
                         } catch { }
                     },
                 },

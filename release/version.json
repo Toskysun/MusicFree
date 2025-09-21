@@ -1,7 +1,7 @@
 {
   "version": "0.6.25",
   "changeLog": [
-    "New下载通知"
+    "fix: announcements"
   ],
   "download": [
     "https://github.com/Toskysun/MusicFree/releases/download/v0.6.25/app-arm64-v8a-release.apk",
