@@ -133,6 +133,39 @@ export interface IMp3Util {
    * @param coverPath 封面路径（可选）
    */
   setMediaTagWithCover(filePath: string, meta: IMusicMetadata, coverPath?: string): Promise<boolean>;
+
+  /** 使用系统下载管理器下载（Android） */
+  downloadWithSystemManager(
+    url: string,
+    destinationPath: string,
+    title: string,
+    description: string,
+    headers?: Record<string, string> | null
+  ): Promise<string>;
+
+  /** 使用内置HTTP下载器下载，并可显示原生通知（Android） */
+  downloadWithHttp(options: {
+    url: string;
+    destinationPath: string;
+    title?: string;
+    description?: string;
+    headers?: Record<string, string> | null;
+    showNotification?: boolean;
+    coverUrl?: string | null;
+  }): Promise<string>;
+
+  /** 取消内置HTTP下载 */
+  cancelHttpDownload(id: string): Promise<boolean>;
+  /** 取消系统下载 */
+  cancelSystemDownload(id: string): Promise<boolean>;
+
+  /** 解密mflac到flac（Android） */
+  decryptMflacToFlac(inputPath: string, outputPath: string, ekey: string): Promise<boolean>;
+
+  /** 启动本地mflac代理（Android） */
+  startMflacProxy(): Promise<string>;
+  /** 注册mflac流并返回本地URL（Android） */
+  registerMflacStream(src: string, ekey: string, headers?: Record<string, string> | null): Promise<string>;
 }
 
 /**

@@ -69,12 +69,18 @@ interface IDownloadTaskInfo {
     filename: string;
     // 下载id
     jobId?: number;
+    // 内置下载任务id（如 http:123）
+    internalTaskId?: string;
+    // 下载引擎
+    engine?: 'internal' | 'system';
     // 下载音质
     quality?: IMusic.IQualityKey;
     // 文件大小
     fileSize?: number;
     // 已下载大小
     downloadedSize?: number;
+    // 原生通知生成的进度文案（与通知完全一致）
+    progressText?: string;
     // 音乐信息
     musicItem: IMusic.IMusicItem;
     // 如果下载失败，下载失败的原因
@@ -102,6 +108,8 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
     private pluginManagerService!: IPluginManager;
 
     private downloadingCount = 0;
+    private nativeEventBound = false;
+    private internalIdToKey = new Map<string, string>();
     // 移除自定义通知管理器状态
     // private notificationManagerInitialized = false;
 
@@ -155,6 +163,50 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
         
         // 移除自定义通知管理器初始化
         // this.initializeNotificationManager();
+
+        // 绑定原生下载进度事件（只绑定一次）
+        if (!this.nativeEventBound) {
+            try {
+                const { Mp3UtilEmitter } = require('@/native/mp3Util');
+                Mp3UtilEmitter.addListener('Mp3UtilDownloadProgress', (e: any) => {
+                    const key = this.internalIdToKey.get(e?.id);
+                    if (!key) return;
+                    const task = downloadTasks.get(key);
+                    if (!task) return;
+                    this.updateDownloadTask(task.musicItem, {
+                        downloadedSize: typeof e?.downloaded === 'number' ? e.downloaded : undefined,
+                        fileSize: typeof e?.total === 'number' && e.total > 0 ? e.total : task.fileSize,
+                        progressText: typeof e?.progressText === 'string' ? e.progressText : task.progressText,
+                    });
+                });
+                Mp3UtilEmitter.addListener('Mp3UtilDownloadCancelled', (e: any) => {
+                    const key = this.internalIdToKey.get(e?.id);
+                    if (!key) return;
+                    const task = downloadTasks.get(key);
+                    if (!task) return;
+                    this.updateDownloadTask(task.musicItem, { status: DownloadStatus.Error });
+                    this.internalIdToKey.delete(e?.id);
+                });
+                Mp3UtilEmitter.addListener('Mp3UtilDownloadError', (e: any) => {
+                    const key = this.internalIdToKey.get(e?.id);
+                    if (!key) return;
+                    const task = downloadTasks.get(key);
+                    if (!task) return;
+                    this.updateDownloadTask(task.musicItem, { status: DownloadStatus.Error });
+                    this.internalIdToKey.delete(e?.id);
+                });
+                // Completed 事件在下载返回后也会处理，但提前更新不会有坏处
+                Mp3UtilEmitter.addListener('Mp3UtilDownloadCompleted', (e: any) => {
+                    const key = this.internalIdToKey.get(e?.id);
+                    if (key) {
+                        this.internalIdToKey.delete(e?.id);
+                    }
+                });
+                this.nativeEventBound = true;
+            } catch (err) {
+                devLog('warn', '⚠️[下载器] 绑定原生下载事件失败', String(err));
+            }
+        }
     }
     
     // 移除自定义通知管理器初始化方法
@@ -580,32 +632,52 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
             return;
         }
 
-        // 使用系统下载管理器进行下载
+        // 使用系统下载管理器或内置HTTP下载器进行下载
         try {
-            devLog('info', '📥[下载器] 开始使用系统下载管理器下载', {
+            const useInternal = true; // 统一使用内置HTTP下载器与原生通知
+            devLog('info', useInternal ? '📥[下载器] 开始使用内置HTTP下载器' : '📥[下载器] 开始使用系统下载管理器下载', {
                 title: musicItem.title,
                 artist: musicItem.artist,
                 targetPath: targetDownloadPath
             });
             
-            const downloadId = await Mp3Util.downloadWithSystemManager(
-                url,
-                tempEncryptedPath.replace('file://', ''),
-                `${musicItem.title} - ${musicItem.artist}`,
-                '正在下载音乐文件...',
-                headers
-            );
+            const destPath = tempEncryptedPath.replace('file://', '');
+            const downloadId = useInternal
+                ? await Mp3Util.downloadWithHttp({
+                    url,
+                    destinationPath: destPath,
+                    // 标题遵循文件命名设置（不含扩展名）
+                    title: nextTask.filename,
+                    description: '正在下载音乐文件...',
+                    headers,
+                    showNotification: true,
+                    coverUrl: (musicItem as any)?.artwork ?? null,
+                  })
+                : await Mp3Util.downloadWithSystemManager(
+                    url,
+                    destPath,
+                    `${musicItem.title} - ${musicItem.artist}`,
+                    '正在下载音乐文件...',
+                    headers
+                  );
             
-            devLog('info', '✅[下载器] 系统下载任务创建成功', {
+            devLog('info', useInternal ? '✅[下载器] 内置下载任务创建成功' : '✅[下载器] 系统下载任务创建成功', {
                 downloadId,
                 title: musicItem.title
             });
             
             // 保存downloadId以便取消下载
-            this.updateDownloadTask(musicItem, {
+            const numericId = Number.parseInt(String(downloadId), 10);
+            const updated = this.updateDownloadTask(musicItem, {
                 status: DownloadStatus.Downloading,
-                jobId: parseInt(downloadId, 10),
+                jobId: Number.isFinite(numericId) ? numericId : undefined,
+                internalTaskId: !Number.isFinite(numericId) ? String(downloadId) : undefined,
+                engine: useInternal ? 'internal' : 'system',
             });
+            // 记录 internal id -> key 映射
+            if (updated.internalTaskId) {
+                this.internalIdToKey.set(updated.internalTaskId, getMediaUniqueKey(musicItem));
+            }
 
             // 基于插件提供的文件大小进行准确的下载完成检测
             const checkDownloadStatus = async () => {
@@ -719,7 +791,11 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
                 });
             };
             
-            await checkDownloadStatus();
+            if (!useInternal) {
+            if (!useInternal) {
+                await checkDownloadStatus();
+            }
+            }
             if (willDownloadEncrypted) {
                 try {
                     const cleaned = normalizeEkey(mflacEkey);
@@ -879,11 +955,11 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
             task.status === DownloadStatus.Downloading) {
             
             // 如果正在下载，先停止下载
-            if (task.status === DownloadStatus.Downloading && task.jobId) {
-                try {
-                    stopDownload(task.jobId);
-                } catch (error) {
-                    errorLog("Failed to stop download", error);
+            if (task.status === DownloadStatus.Downloading) {
+                if (task.engine === 'system' && task.jobId) {
+                    try { stopDownload(task.jobId); } catch (error) { errorLog("Failed to stop system download", error); }
+                } else if (task.engine === 'internal' && task.internalTaskId) {
+                    Mp3Util.cancelHttpDownload(task.internalTaskId).catch((error: any) => errorLog("Failed to cancel internal download", error));
                 }
             }
             
@@ -894,6 +970,8 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
             
             // 删除任务
             downloadTasks.delete(key);
+            // 清理映射
+            if (task.internalTaskId) this.internalIdToKey.delete(task.internalTaskId);
             const downloadQueue = getDefaultStore().get(downloadQueueAtom);
             const newDownloadQueue = downloadQueue.filter(item => !isSameMediaItem(item, musicItem));
             getDefaultStore().set(downloadQueueAtom, newDownloadQueue);

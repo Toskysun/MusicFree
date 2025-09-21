@@ -4,6 +4,7 @@ import type { IMp3Util } from '@/types/metadata';
 
 // 获取原生Mp3Util模块
 const { Mp3Util: NativeMp3Util } = NativeModules;
+export const Mp3UtilEmitter = new NativeEventEmitter(NativeMp3Util);
 
 // 监听原生日志输出并转发到devLog系统
 if (NativeMp3Util && __DEV__) {
@@ -142,6 +143,45 @@ class Mp3UtilManager implements IMp3Util {
   }
 
   /**
+   * 使用内置HTTP下载器下载文件，并显示原生通知（可选）
+   */
+  async downloadWithHttp(options: {
+    url: string;
+    destinationPath: string;
+    title: string;
+    description: string;
+    headers?: Record<string, string> | null;
+    showNotification?: boolean;
+    coverUrl?: string | null;
+  }): Promise<string> {
+    devLog('info', '📥[Mp3Util] 调用内置HTTP下载器', {
+      url: options?.url,
+      destinationPath: options?.destinationPath,
+      title: options?.title,
+      showNotification: options?.showNotification,
+    });
+    if (!this.nativeModule?.downloadWithHttp) {
+      throw new Error('downloadWithHttp not available');
+    }
+    try {
+      const id = await this.nativeModule.downloadWithHttp({
+        url: options.url,
+        destinationPath: options.destinationPath,
+        title: options.title,
+        description: options.description,
+        headers: options.headers ?? null,
+        showNotification: options.showNotification ?? true,
+        coverUrl: options.coverUrl ?? null,
+      });
+      devLog('info', '✅[Mp3Util] 内置HTTP下载任务完成', { id });
+      return id;
+    } catch (error) {
+      devLog('error', '❌[Mp3Util] 内置HTTP下载任务失败', error);
+      throw error;
+    }
+  }
+
+  /**
    * Decrypt an encrypted .mflac file to .flac using native decoder.
    */
   async decryptMflacToFlac(inputPath: string, outputPath: string, ekey: string): Promise<boolean> {
@@ -149,6 +189,16 @@ class Mp3UtilManager implements IMp3Util {
       throw new Error('decryptMflacToFlac not available');
     }
     return this.nativeModule.decryptMflacToFlac(inputPath, outputPath, ekey);
+  }
+
+  async cancelHttpDownload(id: string): Promise<boolean> {
+    if (!this.nativeModule?.cancelHttpDownload) return false;
+    return this.nativeModule.cancelHttpDownload(id);
+  }
+
+  async cancelSystemDownload(id: string): Promise<boolean> {
+    if (!this.nativeModule?.cancelSystemDownload) return false;
+    return this.nativeModule.cancelSystemDownload(id);
   }
 
   /**

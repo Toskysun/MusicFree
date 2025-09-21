@@ -75,6 +75,7 @@
     "localMusic.scanLocalMusic": "Scan Local Music",
     "localMusic.beginScan": "Start Scan",
     "localMusic.downloadList": "Download List",
+    "localMusic.viewAllDownloads": "View All Downloads",
     "lyric.lyricLinkedFrom": "Lyrics linked from「{platform} - {title}」",
     "lyric.unlinkLyric": "Unlink Lyrics",
     "lyric.noLyric": "No lyrics available",

@@ -1,10 +1,10 @@
 {
-  "version": "0.6.24",
+  "version": "0.6.25",
   "changeLog": [
-    "feat: add mflac support"
+    "New下载通知"
   ],
   "download": [
-    "https://github.com/Toskysun/MusicFree/releases/download/v0.6.24/app-arm64-v8a-release.apk",
-    "https://github.com/Toskysun/MusicFree/releases/download/v0.6.24/app-universal-release.apk"
+    "https://github.com/Toskysun/MusicFree/releases/download/v0.6.25/app-arm64-v8a-release.apk",
+    "https://github.com/Toskysun/MusicFree/releases/download/v0.6.25/app-universal-release.apk"
   ]
 }

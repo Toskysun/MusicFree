@@ -96,6 +96,7 @@ export interface ILanguageData {
     "localMusic.scanLocalMusic": string; // 扫描本地音乐
     "localMusic.beginScan": string; // 开始扫描
     "localMusic.downloadList": string; // 下载列表
+    "localMusic.viewAllDownloads": string; // 查看全部下载
 
     // 歌词相关
     "lyric.lyricLinkedFrom": string; // 歌词来自

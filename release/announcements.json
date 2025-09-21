@@ -3,10 +3,10 @@
     {
       "id": "2025-09-21",
       "title": "🎉 在线公告功能已上线",
-      "content": "# 新功能发布！\n\nMusicFree 现已支持在线公告功能，让您及时了解最新动态！\n\n## 近期更新\n\n### v0.6.24 版本更新内容\n\n- 新增 MFLAC 格式支持\n- 新增调试日志导出功能\n- 优化下载体验\n- 修复已知问题\n\n",
+      "content": "# 新功能发布！\n\nMusicFree 现已支持在线公告功能，让您及时了解最新动态！\n\n## 近期更新\n\n### v0.6.25 版本更新内容\n\n- 新增 MFLAC 格式支持\n- 新增调试日志导出功能\n- 全新下载通知样式\n- 修复已知问题\n\n",
       "priority": 1,
       "minVersion": "0.6.1",
-      "maxVersion": "0.6.24",
+      "maxVersion": "0.6.30",
       "expireTime": "2025-09-30T23:59:59Z",
       "showOnce": false,
       "type": "info",

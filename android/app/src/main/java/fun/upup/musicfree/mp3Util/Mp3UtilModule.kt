@@ -5,6 +5,7 @@ import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import com.facebook.react.bridge.*
+import com.facebook.react.bridge.ReadableType
 import org.jaudiotagger.audio.AudioFileIO
 import org.jaudiotagger.tag.FieldKey
 import java.io.File
@@ -25,8 +26,31 @@ import okhttp3.Request
 import okhttp3.Headers
 import okhttp3.Response
 import java.io.BufferedInputStream
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.os.Build
+import java.util.concurrent.TimeUnit
+import java.io.BufferedOutputStream
+import android.app.PendingIntent
+import android.content.Intent
+import android.content.BroadcastReceiver
+import androidx.core.content.FileProvider
+import android.webkit.MimeTypeMap
+import com.facebook.react.modules.core.DeviceEventManagerModule
 
 class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
+
+    companion object {
+        const val ACTION_CANCEL = "fun.upup.musicfree.action.CANCEL_DOWNLOAD"
+        const val EXTRA_ID = "id"
+        private val httpCalls = ConcurrentHashMap<String, okhttp3.Call>()
+
+        fun registerCall(id: String, call: okhttp3.Call) { httpCalls[id] = call }
+        fun removeCall(id: String) { httpCalls.remove(id) }
+        fun cancelCall(id: String) { httpCalls[id]?.cancel() }
+    }
 
     override fun getName() = "Mp3Util"
 
@@ -729,8 +753,8 @@ class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactCo
             val file = File(destinationPath)
             request.setDestinationUri(Uri.fromFile(file))
             
-            // 设置通知显示
-            request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+            // 隐藏系统下载通知，统一由应用自定义通知显示
+            request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_HIDDEN)
             request.setAllowedOverMetered(true)
             request.setAllowedOverRoaming(true)
             
@@ -758,6 +782,412 @@ class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactCo
                 promise.reject("UnsupportedPath", "Android系统不支持该下载路径，请在设置中更改为系统支持的路径（如Music目录）")
             } else {
                 promise.reject("DownloadError", e.message)
+            }
+        }
+    }
+
+    // ================== Internal HTTP downloader with Notification ==================
+
+    private val DOWNLOAD_CHANNEL_ID = "musicfree_downloads"
+
+    /**
+     * 格式化文件大小显示
+     */
+    private fun formatFileSize(bytes: Long): String {
+        return when {
+            bytes <= 0 -> "0B"
+            bytes < 1024 -> "${bytes}B"
+            bytes < 1024 * 1024 -> String.format("%.1fKB", bytes / 1024.0)
+            bytes < 1024 * 1024 * 1024 -> String.format("%.1fMB", bytes / (1024.0 * 1024))
+            else -> String.format("%.1fGB", bytes / (1024.0 * 1024 * 1024))
+        }
+    }
+
+    private fun ensureDownloadChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val mgr = reactApplicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            if (mgr.getNotificationChannel(DOWNLOAD_CHANNEL_ID) == null) {
+                val channel = NotificationChannel(
+                    DOWNLOAD_CHANNEL_ID,
+                    "音乐下载",
+                    NotificationManager.IMPORTANCE_LOW
+                ).apply {
+                    description = "显示音乐下载进度"
+                    setShowBadge(false)
+                    enableVibration(false)
+                    setSound(null, null)
+                }
+                mgr.createNotificationChannel(channel)
+            }
+        }
+    }
+
+    /**
+     * 构建下载进度通知
+     */
+    private fun buildProgressNotification(
+        title: String,
+        progress: Int,
+        indeterminate: Boolean,
+        downloaded: Long = 0,
+        total: Long = 0
+    ): NotificationCompat.Builder {
+        // 构建详细的进度文本
+        val progressText = when {
+            total > 0 && !indeterminate -> {
+                "${formatFileSize(downloaded)} / ${formatFileSize(total)}"
+            }
+            downloaded > 0 -> {
+                "已下载 ${formatFileSize(downloaded)}"
+            }
+            else -> {
+                "正在准备下载..."
+            }
+        }
+
+        return NotificationCompat.Builder(reactApplicationContext, DOWNLOAD_CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setContentTitle(title)
+            .setContentText(progressText)
+            .setOnlyAlertOnce(true)
+            .setOngoing(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setProgress(100, progress, indeterminate)
+            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
+            .setSilent(true)
+            .setStyle(NotificationCompat.BigPictureStyle())  // 使用BigPictureStyle以更好地显示封面
+    }
+
+    private fun emitEvent(name: String, data: WritableMap) {
+        try {
+            reactApplicationContext
+                .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+                .emit(name, data)
+        } catch (_: Exception) {}
+    }
+
+    @ReactMethod
+    fun downloadWithHttp(options: ReadableMap, promise: Promise) {
+        Thread {
+            // Variables used across try/catch
+            var titleStr: String = "MusicFree"
+            var showNotificationFlag: Boolean = true
+            try {
+                ensureDownloadChannel()
+                val notifId = (System.currentTimeMillis() % Int.MAX_VALUE).toInt()
+                val notifier = NotificationManagerCompat.from(reactApplicationContext)
+
+                val client = OkHttpClient.Builder()
+                    .followRedirects(true)
+                    .followSslRedirects(true)
+                    .connectTimeout(15, TimeUnit.SECONDS)
+                    .readTimeout(60, TimeUnit.SECONDS)
+                    .build()
+
+                // Parse options early and keep variables visible to catch/finally
+                // url: allow string or nested map { url|uri|href }
+                val url: String = when (options.getType("url")) {
+                    ReadableType.String -> options.getString("url")!!
+                    ReadableType.Map -> {
+                        val m = options.getMap("url")
+                        m?.getString("url") ?: m?.getString("uri") ?: m?.getString("href")
+                        ?: throw IllegalArgumentException("url required")
+                    }
+                    else -> throw IllegalArgumentException("url required")
+                }
+                // destinationPath: allow string or nested { path }
+                val destinationPath: String = when (options.getType("destinationPath")) {
+                    ReadableType.String -> options.getString("destinationPath")!!
+                    ReadableType.Map -> options.getMap("destinationPath")?.getString("path")
+                        ?: throw IllegalArgumentException("destinationPath required")
+                    else -> throw IllegalArgumentException("destinationPath required")
+                }
+                val titleStr = options.getString("title") ?: "MusicFree"
+                val description = options.getString("description") ?: "正在下载音乐文件..."
+                showNotificationFlag = if (options.hasKey("showNotification")) options.getBoolean("showNotification") else true
+                val coverUrl = if (options.hasKey("coverUrl")) options.getString("coverUrl") else null
+                val headers = if (options.hasKey("headers")) options.getMap("headers") else null
+
+                val hBuilder = Headers.Builder()
+                headers?.let { map ->
+                    val it = map.keySetIterator()
+                    while (it.hasNextKey()) {
+                        val k = it.nextKey()
+                        val v = map.getString(k)
+                        if (v != null) hBuilder.add(k, v)
+                    }
+                }
+                val req = Request.Builder().url(url).headers(hBuilder.build()).get().build()
+                val call = client.newCall(req)
+                var httpId: String = "http:$notifId"
+                registerCall(httpId, call)
+                val resp = call.execute()
+                if (!resp.isSuccessful) throw IOException("HTTP ${'$'}{resp.code}")
+
+                val body = resp.body ?: throw IOException("Empty body")
+                val total = body.contentLength() // -1 if unknown
+
+                // Prepare file
+                val outFile = File(destinationPath)
+                val parent = outFile.parentFile
+                if (parent != null && !parent.exists()) parent.mkdirs()
+                if (outFile.exists()) outFile.delete()
+
+                var lastNotify = 0L
+                var lastEmit = 0L
+                var downloaded = 0L
+                val buffer = ByteArray(64 * 1024)
+                // 取消意图
+                val cancelIntent = Intent(reactApplicationContext, DownloadActionReceiver::class.java).apply {
+                    action = ACTION_CANCEL
+                    putExtra(EXTRA_ID, httpId)
+                }
+                val cancelPending = PendingIntent.getBroadcast(
+                    reactApplicationContext,
+                    notifId,
+                    cancelIntent,
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE else PendingIntent.FLAG_UPDATE_CURRENT
+                )
+
+                // 大图标封面 - 提前加载确保通知一开始就显示
+                var largeIcon: Bitmap? = null
+                if (!coverUrl.isNullOrEmpty()) {
+                    try {
+                        val bytes = downloadImageBytes(coverUrl)
+                        if (bytes != null) {
+                            // 解码并缩放图片到合适大小（避免过大）
+                            val options = BitmapFactory.Options()
+                            options.inSampleSize = 1 // 可根据需要调整采样率
+                            largeIcon = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+
+                            // 如果图片太大，进行缩放
+                            if (largeIcon != null) {
+                                val maxSize = 256 // 最大尺寸（像素）
+                                val width = largeIcon.width
+                                val height = largeIcon.height
+
+                                if (width > maxSize || height > maxSize) {
+                                    val scale = Math.min(maxSize.toFloat() / width, maxSize.toFloat() / height)
+                                    val newWidth = (width * scale).toInt()
+                                    val newHeight = (height * scale).toInt()
+                                    largeIcon = Bitmap.createScaledBitmap(largeIcon, newWidth, newHeight, true)
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.w("Mp3UtilModule", "Failed to load cover for notification: ${e.message}")
+                    }
+                }
+
+                // 初始通知（带封面）
+                if (showNotificationFlag) {
+                    val initialBuilder = buildProgressNotification(
+                        titleStr,
+                        0,
+                        true,
+                        0,
+                        0
+                    ).setLargeIcon(largeIcon)
+                    try {
+                        notifier.notify(notifId, initialBuilder.build())
+                    } catch (_: Exception) {}
+                }
+                body.byteStream().use { input ->
+                    BufferedInputStream(input).use { bin ->
+                        FileOutputStream(outFile).use { fos ->
+                            BufferedOutputStream(fos).use { bout ->
+                                while (true) {
+                                    val read = bin.read(buffer)
+                                    if (read == -1) break
+                                    bout.write(buffer, 0, read)
+                                    downloaded += read
+
+                                    val now = System.currentTimeMillis()
+                                    if (showNotificationFlag && now - lastNotify > 500) {
+                                        lastNotify = now
+                                        val percent = if (total > 0) ((downloaded * 100 / total).toInt()) else 0
+                                        val builder = buildProgressNotification(
+                                            titleStr,
+                                            percent,
+                                            total <= 0,
+                                            downloaded,
+                                            total
+                                        )
+                                            .setLargeIcon(largeIcon)
+                                            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "取消", cancelPending)
+                                        try { notifier.notify(notifId, builder.build()) } catch (_: Exception) {}
+
+                                        // 与通知同步地发送JS事件，确保进度显示一致
+                                        lastEmit = now
+                                        val progressText = when {
+                                            total > 0 -> "${formatFileSize(downloaded)} / ${formatFileSize(total)}"
+                                            downloaded > 0 -> "已下载 ${formatFileSize(downloaded)}"
+                                            else -> "正在准备下载..."
+                                        }
+                                        val map = Arguments.createMap().apply {
+                                            putString("id", httpId)
+                                            putDouble("downloaded", downloaded.toDouble())
+                                            putDouble("total", if (total > 0) total.toDouble() else -1.0)
+                                            putString("destinationPath", outFile.absolutePath)
+                                            putString("title", titleStr)
+                                            putString("progressText", progressText)
+                                            putInt("percent", percent)
+                                        }
+                                        emitEvent("Mp3UtilDownloadProgress", map)
+                                    }
+                                    // 当不显示通知时，仍然以较高频率向JS发送事件
+                                    if (!showNotificationFlag && now - lastEmit > 300) {
+                                        lastEmit = now
+                                        val progressText = when {
+                                            total > 0 -> "${formatFileSize(downloaded)} / ${formatFileSize(total)}"
+                                            downloaded > 0 -> "已下载 ${formatFileSize(downloaded)}"
+                                            else -> "正在准备下载..."
+                                        }
+                                        val map = Arguments.createMap().apply {
+                                            putString("id", httpId)
+                                            putDouble("downloaded", downloaded.toDouble())
+                                            putDouble("total", if (total > 0) total.toDouble() else -1.0)
+                                            putString("destinationPath", outFile.absolutePath)
+                                            putString("title", titleStr)
+                                            putString("progressText", progressText)
+                                        }
+                                        emitEvent("Mp3UtilDownloadProgress", map)
+                                    }
+                                }
+                                bout.flush()
+                            }
+                        }
+                    }
+                }
+
+                if (showNotificationFlag) {
+                    try {
+                        // 打开文件意图
+                        val openIntent = Intent(Intent.ACTION_VIEW).apply {
+                            val uri = try {
+                                FileProvider.getUriForFile(
+                                    reactApplicationContext,
+                                    reactApplicationContext.packageName + ".fileprovider",
+                                    outFile
+                                )
+                            } catch (e: Exception) {
+                                Uri.fromFile(outFile)
+                            }
+                            val mime = try {
+                                val ext = outFile.extension.lowercase()
+                                MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "audio/*"
+                            } catch (e: Exception) { "audio/*" }
+                            setDataAndType(uri, mime)
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        val openPending = PendingIntent.getActivity(
+                            reactApplicationContext,
+                            notifId,
+                            openIntent,
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE else PendingIntent.FLAG_UPDATE_CURRENT
+                        )
+
+                        // 下载完成通知 - 保持封面显示
+                        val finalSize = formatFileSize(downloaded)
+                        val done = NotificationCompat.Builder(reactApplicationContext, DOWNLOAD_CHANNEL_ID)
+                            .setSmallIcon(android.R.drawable.stat_sys_download_done)
+                            .setContentTitle("下载完成")
+                            .setContentText(titleStr)
+                            .setSubText(finalSize)
+                            .setLargeIcon(largeIcon)  // 显示封面
+                            .setOngoing(false)
+                            .setAutoCancel(true)
+                            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                            .setContentIntent(openPending)
+                            .setCategory(NotificationCompat.CATEGORY_STATUS)
+                            .setStyle(NotificationCompat.BigPictureStyle()
+                                .bigPicture(largeIcon)  // 大图样式显示封面
+                                .bigLargeIcon(null as Bitmap?))  // 隐藏右侧小图标，让大图更突出
+                            .addAction(android.R.drawable.ic_menu_view, "打开文件", openPending)
+                            .build()
+                        notifier.notify(notifId, done)
+                    } catch (_: Exception) {}
+                }
+
+                // Resolve with a pseudo id so caller can log
+                promise.resolve(httpId)
+                try {
+                    val map = Arguments.createMap().apply {
+                        putString("id", httpId)
+                        putString("destinationPath", outFile.absolutePath)
+                        putString("title", titleStr)
+                    }
+                    emitEvent("Mp3UtilDownloadCompleted", map)
+                } catch (_: Exception) {}
+            } catch (e: Exception) {
+                try {
+                    if (showNotificationFlag) {
+                        val notifier = NotificationManagerCompat.from(reactApplicationContext)
+                        val fail = NotificationCompat.Builder(reactApplicationContext, DOWNLOAD_CHANNEL_ID)
+                            .setSmallIcon(android.R.drawable.stat_notify_error)
+                            .setContentTitle("下载失败")
+                            .setContentText(titleStr)
+                            .setOngoing(false)
+                            .setPriority(NotificationCompat.PRIORITY_LOW)
+                            .setStyle(NotificationCompat.BigTextStyle().bigText(titleStr))
+                            .build()
+                        notifier.notify((System.currentTimeMillis() % Int.MAX_VALUE).toInt(), fail)
+                    }
+                } catch (_: Exception) {}
+                promise.reject("HttpDownloadError", e.message)
+                try {
+                    val map = Arguments.createMap().apply {
+                        putString("id", "http:${'$'}notifId")
+                        putString("error", e.message)
+                        putBoolean("canceled", (e.message ?: "").contains("Canceled", ignoreCase = true))
+                    }
+                    val evt = if ((e.message ?: "").contains("Canceled", ignoreCase = true)) "Mp3UtilDownloadCancelled" else "Mp3UtilDownloadError"
+                    emitEvent(evt, map)
+                } catch (_: Exception) {}
+            } finally {
+                try { removeCall("http:${'$'}notifId") } catch (_: Exception) {}
+            }
+        }.start()
+    }
+
+    @ReactMethod
+    fun cancelHttpDownload(id: String, promise: Promise) {
+        try {
+            cancelCall(id)
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("CancelError", e.message)
+        }
+    }
+
+    @ReactMethod
+    fun cancelSystemDownload(id: String, promise: Promise) {
+        try {
+            val dm = reactApplicationContext.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+            val longId = id.toLongOrNull()
+            if (longId != null) {
+                dm.remove(longId)
+                promise.resolve(true)
+            } else {
+                promise.reject("InvalidId", "Not a numeric id")
+            }
+        } catch (e: Exception) {
+            promise.reject("CancelError", e.message)
+        }
+    }
+
+    class DownloadActionReceiver : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action == ACTION_CANCEL) {
+                val id = intent.getStringExtra(EXTRA_ID)
+                if (id != null) {
+                    try { cancelCall(id) } catch (_: Exception) {}
+                    try {
+                        val mgr = NotificationManagerCompat.from(context)
+                        val nid = id.substringAfter("http:").toIntOrNull()
+                        if (nid != null) mgr.cancel(nid)
+                    } catch (_: Exception) {}
+                }
             }
         }
     }

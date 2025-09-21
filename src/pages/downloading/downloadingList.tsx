@@ -2,7 +2,6 @@ import React from "react";
 import { StyleSheet, View, TouchableOpacity } from "react-native";
 import rpx from "@/utils/rpx";
 import ListItem from "@/components/base/listItem";
-import { sizeFormatter } from "@/utils/fileUtils";
 import { DownloadFailReason, DownloadStatus, useDownloadQueue, useDownloadTask } from "@/core/downloader";
 import { FlashList } from "@shopify/flash-list";
 import { useI18N } from "@/core/i18n";
@@ -22,6 +21,16 @@ function DownloadingListItem(props: DownloadingListItemProps) {
 
     const status = taskInfo?.status ?? DownloadStatus.Error;
 
+    // 与原生通知一致的文件大小格式化
+    const formatFileSizeNative = (bytes?: number) => {
+        const v = typeof bytes === "number" ? bytes : 0;
+        if (v <= 0) return "0B";
+        if (v < 1024) return `${v}B`;
+        if (v < 1024 * 1024) return `${(v / 1024).toFixed(1)}KB`;
+        if (v < 1024 * 1024 * 1024) return `${(v / (1024 * 1024)).toFixed(1)}MB`;
+        return `${(v / (1024 * 1024 * 1024)).toFixed(1)}GB`;
+    };
+
     let description = "";
 
     if (status === DownloadStatus.Error) {
@@ -36,18 +45,25 @@ function DownloadingListItem(props: DownloadingListItemProps) {
         }
     } else if (status === DownloadStatus.Completed) {
         description = t("downloading.downloadStatus.completed");
-    } else if (status === DownloadStatus.Downloading) {
-        const progress = taskInfo?.downloadedSize ? sizeFormatter(taskInfo.downloadedSize) : "-";
-        const totalSize = taskInfo?.fileSize ? sizeFormatter(taskInfo.fileSize) : "-";
-
-        description = t("downloading.downloadStatus.downloadProgress", {
-            progress,
-            totalSize,
-        });
-    } else if (status === DownloadStatus.Pending) {
-        description = t("downloading.downloadStatus.pending");
-    } else if (status === DownloadStatus.Preparing) {
-        description = t("downloading.downloadStatus.preparing");
+    } else if (
+        status === DownloadStatus.Downloading ||
+        status === DownloadStatus.Pending ||
+        status === DownloadStatus.Preparing
+    ) {
+        // 优先使用原生上报的文案，确保与通知完全一致
+        if (taskInfo?.progressText) {
+            description = taskInfo.progressText;
+        } else {
+            const downloaded = taskInfo?.downloadedSize ?? 0;
+            const total = taskInfo?.fileSize ?? 0;
+            if (total > 0 && downloaded >= 0) {
+                description = `${formatFileSizeNative(downloaded)} / ${formatFileSizeNative(total)}`;
+            } else if (downloaded > 0) {
+                description = `已下载 ${formatFileSizeNative(downloaded)}`;
+            } else {
+                description = "正在准备下载...";
+            }
+        }
     }
 
     // 只有错误或正在下载的任务才能删除
@@ -81,6 +97,11 @@ function DownloadingListItem(props: DownloadingListItemProps) {
         )}
     </ListItem>;
 
+}
+
+interface DownloadingListProps {
+    inline?: boolean;
+    maxHeight?: number;
 }
 
 export default function DownloadingList() {

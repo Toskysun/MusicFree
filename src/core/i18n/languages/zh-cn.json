@@ -75,6 +75,7 @@
     "localMusic.scanLocalMusic": "扫描本地音乐",
     "localMusic.beginScan": "开始扫描",
     "localMusic.downloadList": "下载列表",
+    "localMusic.viewAllDownloads": "查看全部下载",
     "lyric.lyricLinkedFrom": "歌词关联自「{platform} - {title}」",
     "lyric.unlinkLyric": "解除关联",
     "lyric.noLyric": "暂无歌词",

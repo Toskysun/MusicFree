@@ -74,13 +74,7 @@ export default function MainPage() {
                             });
                         },
                     },
-                    {
-                        icon: "arrow-down-tray",
-                        title: t("localMusic.downloadList"),
-                        async onPress() {
-                            navigate(ROUTE_PATH.DOWNLOADING);
-                        },
-                    },
+                    // 隐藏“下载列表”入口
                 ]}>
                 {t("home.localMusic")}
             </AppBar>

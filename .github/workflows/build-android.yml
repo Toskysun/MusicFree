@@ -354,10 +354,11 @@ jobs:
           2. 🚩请使用改版ikun插件
              - 在线导入地址：`https://musicfree.3kddyys.workers.dev/api/subscription.json?key=你的卡密.json`
              - 导入失败请使用代理，导入不完全请多次重试，你亦可以自行在浏览器访问上述地址以获取单个插件地址
-          3. 下载通知与多种文件名功能
+          3. 原生下载通知与多种文件名功能
           4. 根据喜好定制音质标签
           5. 软件启动时打开播放详情页
           6. 下载时写入音乐标签
+          7. 酷我mflac格式流式播放与下载支持
           
           ### ⚡ 构建信息
           - 构建时间: ${{ steps.build-info.outputs.build-time }}
