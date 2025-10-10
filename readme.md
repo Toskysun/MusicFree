@@ -65,9 +65,8 @@
 
 #### ikun音源插件（推荐）
 ```
-https://musicfree.3kddyys.workers.dev/api/subscription.json?key=你的卡密.json
+https://musicfree-plugins.netlify.app/
 ```
-> 💡 提示：导入失败请使用代理，导入不完全请多次重试
 
 #### 插件安装步骤
 1. 打开应用 → 侧边栏 → 设置 → 插件设置
