@@ -7,7 +7,7 @@
   [English](./readme-en.md) | 简体中文
 
   [![License](https://img.shields.io/badge/license-AGPL%203.0-blue)](LICENSE)
-  [![Version](https://img.shields.io/badge/version-0.6.23-green)]()
+  [![Version](https://img.shields.io/github/v/release/Toskysun/MusicFree?color=green)](https://github.com/Toskysun/MusicFree/releases)
   [![Platform](https://img.shields.io/badge/platform-Android-orange)]()
 
 </div>
@@ -65,7 +65,7 @@
 
 #### ikun音源插件（推荐）
 ```
-https://musicfree-plugins.netlify.app/
+https://musicfree-plugins.netlify.app
 ```
 
 #### 插件安装步骤

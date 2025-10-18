@@ -105,26 +105,16 @@ jobs:
           const fs = require('fs');
           const version = '$VERSION';
           const tagVersion = '${{ github.ref_name }}';
-          const { execSync } = require('child_process');
 
-          // 从tag消息获取更新日志
-          let changeLog = [];
+          // 读取现有的 version.json，保留 changeLog
+          let existingChangeLog = [];
           try {
-            const tagMessage = execSync('git tag -l --format=\"%(contents)\" ' + tagVersion, { encoding: 'utf8' }).trim();
-            if (tagMessage) {
-              changeLog = tagMessage.split('\n').filter(line => line.trim()).slice(0, 10);
-            }
+            const existingData = JSON.parse(fs.readFileSync('release/version.json', 'utf8'));
+            existingChangeLog = existingData.changeLog || [];
+            console.log('📖 Preserving existing changeLog:', existingChangeLog);
           } catch (e) {
-            console.log('⚠️ Could not extract tag message, using default changelog');
-          }
-
-          // 默认更新日志
-          if (changeLog.length === 0) {
-            changeLog = [
-              '版本 ' + version + ' 更新',
-              '修复Bug和性能优化',
-              '详细更新内容请查看GitHub Release页面'
-            ];
+            console.log('⚠️ Could not read existing version.json, will use empty changeLog');
+            existingChangeLog = [];
           }
 
           // 生成下载链接
@@ -133,9 +123,10 @@ jobs:
             'https://github.com/${{ github.repository }}/releases/download/' + tagVersion + '/app-universal-release.apk'
           ];
 
+          // 只更新 version 和 download，保留现有的 changeLog
           const versionInfo = {
             version: version,
-            changeLog: changeLog,
+            changeLog: existingChangeLog,
             download: downloadUrls
           };
 
@@ -350,8 +341,7 @@ jobs:
           
           1. 全面支持ikun音源8种音质
           2. 🚩请使用改版ikun插件
-             - 在线导入地址：`https://musicfree.3kddyys.workers.dev/api/subscription.json?key=你的卡密.json`
-             - 导入失败请使用代理，导入不完全请多次重试，你亦可以自行在浏览器访问上述地址以获取单个插件地址
+             - 在线导入地址：`https://musicfree-plugins.netlify.app`
           3. 原生下载通知与多种文件名功能
           4. 根据喜好定制音质标签
           5. 软件启动时打开播放详情页

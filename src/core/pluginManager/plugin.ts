@@ -121,6 +121,8 @@ function formatAuthUrl(url: string) {
 }
 
 export enum PluginState {
+    // 初始化
+    Initializing,
     // 加载中
     Loading,
     // 已加载
@@ -136,11 +138,23 @@ export enum PluginErrorReason {
     CannotParse,
 }
 
+
+export interface ILazyProps {
+    name: string;
+    hash: string;
+    path: string;
+    supportedMethods?: string[];
+    loadFuncCode?: () => Promise<string>;
+    instance?: IPlugin.IPluginDefine;
+}
+
 class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
     private plugin: Plugin;
+    private ensurePluginIsMounted: () => Promise<void>;
 
-    constructor(plugin: Plugin) {
+    constructor(plugin: Plugin, ensurePluginIsMounted: () => Promise<void>) {
         this.plugin = plugin;
+        this.ensurePluginIsMounted = ensurePluginIsMounted;
     }
 
 
@@ -150,6 +164,7 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
         page: number,
         type: T,
     ): Promise<IPlugin.ISearchResult<T>> {
+        await this.ensurePluginIsMounted();
         if (!this.plugin.instance.search) {
             return {
                 isEnd: true,
@@ -185,6 +200,7 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
         retryCount = 1,
         notUpdateCache = false,
     ): Promise<IPlugin.IMediaSourceResult | null> {
+        await this.ensurePluginIsMounted();
         // 1. 本地搜索 其实直接读mediameta就好了
         const localPathInMediaExtra = getMediaExtraProperty(musicItem, "localPath");
         const localPath = getLocalPath(musicItem);
@@ -315,6 +331,7 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
     async getMusicInfo(
         musicItem: ICommon.IMediaBase,
     ): Promise<Partial<IMusic.IMusicItem> | null> {
+        await this.ensurePluginIsMounted();
         if (!this.plugin.instance.getMusicInfo) {
             return null;
         }
@@ -348,6 +365,7 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
     async getLyric(
         originalMusicItem: IMusic.IMusicItemBase,
     ): Promise<ILyric.ILyricSource | null> {
+        await this.ensurePluginIsMounted();
         // 1.额外存储的meta信息（关联歌词）
         const associatedLrc = getMediaExtraProperty(originalMusicItem, "associatedLrc");
         let musicItem: IMusic.IMusicItem;
@@ -548,6 +566,7 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
         albumItem: IAlbum.IAlbumItemBase,
         page: number = 1,
     ): Promise<IPlugin.IAlbumInfoResult | null> {
+        await this.ensurePluginIsMounted();
         if (!this.plugin.instance.getAlbumInfo) {
             return {
                 albumItem,
@@ -602,6 +621,7 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
         sheetItem: IMusic.IMusicSheetItem,
         page: number = 1,
     ): Promise<IPlugin.ISheetInfoResult | null> {
+        await this.ensurePluginIsMounted();
         if (!this.plugin.instance.getMusicSheetInfo) {
             return {
                 sheetItem,
@@ -652,6 +672,7 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
         page: number,
         type: T,
     ): Promise<IPlugin.ISearchResult<T>> {
+        await this.ensurePluginIsMounted();
         if (!this.plugin.instance.getArtistWorks) {
             return {
                 isEnd: true,
@@ -691,6 +712,7 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
 
     /** 导入歌单 */
     async importMusicSheet(urlLike: string): Promise<IMusic.IMusicItem[]> {
+        await this.ensurePluginIsMounted();
         try {
             const result =
                 (await this.plugin.instance?.importMusicSheet?.(urlLike)) ?? [];
@@ -712,6 +734,7 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
 
     /** 导入单曲 */
     async importMusicItem(urlLike: string): Promise<IMusic.IMusicItem | null> {
+        await this.ensurePluginIsMounted();
         try {
             const result = await this.plugin.instance?.importMusicItem?.(
                 urlLike,
@@ -735,6 +758,7 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
 
     /** 获取榜单 */
     async getTopLists(): Promise<IMusic.IMusicSheetGroupItem[]> {
+        await this.ensurePluginIsMounted();
         try {
             const result = await this.plugin.instance?.getTopLists?.();
             if (!result) {
@@ -752,6 +776,7 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
         topListItem: IMusic.IMusicSheetItemBase,
         page: number,
     ): Promise<IPlugin.ITopListInfoResult> {
+        await this.ensurePluginIsMounted();
         const result = await this.plugin.instance?.getTopListDetail?.(
             topListItem,
             page,
@@ -778,6 +803,7 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
 
     /** 获取推荐歌单的tag */
     async getRecommendSheetTags(): Promise<IPlugin.IGetRecommendSheetTagsResult> {
+        await this.ensurePluginIsMounted();
         try {
             const result =
                 await this.plugin.instance?.getRecommendSheetTags?.();
@@ -798,6 +824,7 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
         tagItem: ICommon.IUnique,
         page?: number,
     ): Promise<ICommon.PaginationResponse<IMusic.IMusicSheetItemBase>> {
+        await this.ensurePluginIsMounted();
         try {
             const result =
                 await this.plugin.instance?.getRecommendSheetsByTag?.(
@@ -829,6 +856,7 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
         musicItem: IMusic.IMusicItem,
         page?: number
     ): Promise<ICommon.PaginationResponse<IMedia.IComment>> {
+        await this.ensurePluginIsMounted();
         const result = await this.plugin.instance?.getMusicComments?.(
             musicItem,
             page ?? 1
@@ -850,20 +878,23 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
 //#region 插件类
 export class Plugin {
     /** 插件名 */
-    public name: string;
+    public name: string = "";
     /** 插件的hash，作为唯一id */
-    public hash: string;
+    public hash: string = "";
     /** 插件状态：激活、关闭、错误 */
-    public state: PluginState = PluginState.Loading;
+    public state: PluginState = PluginState.Initializing;
     /** 插件出错时的原因 */
     public errorReason?: PluginErrorReason;
     /** 插件的实例 */
-    public instance: IPlugin.IPluginDefine;
+    public instance: IPlugin.IPluginDefine = { platform: "" };
     /** 插件路径 */
-    public path: string;
-    /** 插件方法 */
-    public methods: IPlugin.IPluginInstanceMethods;
+    public path: string = "";
+    /** 插件方法，内部进行标准化和校验 */
+    public methods!: IPlugin.IPluginInstanceMethods;
 
+    public supportedMethods: Set<keyof IPlugin.IPluginInstanceMethods> = new Set();
+
+    private lazyProps: ILazyProps | null = null;
 
     static pluginManager: IPluginManager;
 
@@ -874,9 +905,48 @@ export class Plugin {
     }
 
     constructor(
-        funcCode: string | (() => IPlugin.IPluginDefine),
+        funcCode: string | (() => IPlugin.IPluginDefine) | null,
         pluginPath: string,
+        lazyProps: ILazyProps | null = null
     ) {
+        this.lazyProps = lazyProps;
+        if (!lazyProps) {
+            // 如果没有懒加载，直接挂载并初始化
+            this.mountPlugin(funcCode!, pluginPath);
+            this.methods = new PluginMethodsWrapper(this, async () => {});
+        } else {
+            // 使用懒加载参数初始化
+            this.name = lazyProps.name;
+            this.hash = lazyProps.hash;
+            this.path = lazyProps.path;
+            this.instance = lazyProps.instance ?? {
+                platform: lazyProps.name,
+            };
+            this.supportedMethods = new Set((lazyProps.supportedMethods ?? []) as any);
+            // 初始化方法，但实际调用时会先挂载插件
+            this.methods = new PluginMethodsWrapper(this, this.ensureMounted.bind(this));
+        }
+    }
+
+    async ensureMounted() {
+        if ((this.state === PluginState.Initializing) && this.lazyProps) {
+            this.state = PluginState.Loading;
+            // 懒加载
+            const loadFuncCode = this.lazyProps.loadFuncCode ?? (() => "");
+            try {
+                const funcCode = await loadFuncCode();
+                this.mountPlugin(funcCode, this.lazyProps.path);
+            } catch {
+                this.state = PluginState.Error;
+                this.errorReason = this.errorReason ?? PluginErrorReason.CannotParse;
+            }
+        }
+    }
+
+    private mountPlugin(
+        funcCode: string | (() => IPlugin.IPluginDefine),
+        pluginPath: string) {
+        this.state = PluginState.Loading;
         let _instance: IPlugin.IPluginDefine;
 
         const _module: any = { exports: {} };
@@ -961,6 +1031,9 @@ export class Plugin {
         this.instance = _instance;
         this.path = pluginPath;
         this.name = _instance.platform;
+        this.supportedMethods = new Set(Object.keys(_instance).filter(
+            key => typeof (_instance[key]) === "function",
+        ) as any);
 
         // 检测name & 计算hash
         if (
@@ -982,8 +1055,6 @@ export class Plugin {
         if (this.state !== PluginState.Error) {
             this.state = PluginState.Mounted;
         }
-        this.methods = new PluginMethodsWrapper(this);
-
     }
 
     private checkValid(_instance: IPlugin.IPluginDefine) {

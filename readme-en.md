@@ -7,7 +7,7 @@
   [中文](./readme.md) | English
 
   [![License](https://img.shields.io/badge/license-AGPL%203.0-blue)](LICENSE)
-  [![Version](https://img.shields.io/badge/version-0.6.23-green)]()
+  [![Version](https://img.shields.io/github/v/release/Toskysun/MusicFree?color=green)](https://github.com/Toskysun/MusicFree/releases)
   [![Platform](https://img.shields.io/badge/platform-Android-orange)]()
 
 </div>
@@ -65,7 +65,7 @@
 
 #### ikun Music Source Plugin (Recommended)
 ```
-https://musicfree.3kddyys.workers.dev/api/subscription.json?key=your_key.json
+https://musicfree-plugins.netlify.app
 ```
 > 💡 Tip: Use a proxy if import fails, retry multiple times if import is incomplete
 

@@ -255,6 +255,7 @@
     "basicSettings.plugin": "Plugin",
     "basicSettings.autoUpdatePlugin": "Auto update plugins on app start",
     "basicSettings.notCheckPluginVersion": "Don't check version when installing plugins",
+    "basicSettings.lazyLoadPlugin": "Enable plugin lazy loading",
     "basicSettings.playback": "Playback",
     "basicSettings.notInterrupt": "Allow simultaneous playback with other apps",
     "basicSettings.openPlayDetailOnLaunch": "Open music detail on app launch",
