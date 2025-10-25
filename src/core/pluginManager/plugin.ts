@@ -26,6 +26,8 @@ import { default as DeviceInfo, default as deviceInfoModule } from "react-native
 import RNFS, { exists, readFile, stat, writeFile } from "react-native-fs";
 import { URL } from "react-native-url-polyfill";
 import * as webdav from "webdav";
+import * as pako from "pako";
+import { Buffer } from "buffer";
 import { devLog, errorLog, trace } from "../../utils/log";
 import Network from "../../utils/network";
 import MediaCache from "../mediaCache";
@@ -64,6 +66,8 @@ const packages: Record<string, any> = {
     he,
     "@react-native-cookies/cookies": deprecatedCookieManager,
     webdav,
+    pako,
+    buffer: { Buffer },
 };
 
 const _require = (packageName: string) => {
