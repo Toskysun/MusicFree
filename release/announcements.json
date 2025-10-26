@@ -23,6 +23,18 @@
       "showOnce": false,
       "type": "info",
       "createTime": "2025-10-10T00:00:00+08:00"
+    },
+    {
+      "id": "3",
+      "title": "🎯更新通知",
+      "content": "# 请更新插件，旧插件已不再可用！\n\n## 近期插件有极大更新、包括不限于歌词、封面、评论\n\n## 插件导入链接：https://musicfree-plugins.netlify.app\n\n",
+      "priority": 1,
+      "minVersion": "0.6.2",
+      "maxVersion": "0.6.99",
+      "expireTime": "2026-10-30T23:59:59+08:00",
+      "showOnce": false,
+      "type": "info",
+      "createTime": "2025-10-26T00:00:00+08:00"
     }
   ],
   "timestamp": "2025-09-01T00:00:00+08:00"
