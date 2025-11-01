@@ -41,11 +41,19 @@ const fontSizeMap = {
 export default function Lyric(props: IProps) {
     const { onTurnPageClick } = props;
 
-    const { loading, meta, lyrics, hasTranslation } =
+    const { loading, meta, lyrics, hasTranslation, hasRomanization } =
         useLyricState();
     const currentLrcItem = useCurrentLyricItem();
     const showTranslation = PersistStatus.useValue(
         "lyric.showTranslation",
+        false,
+    );
+    const showRomanization = PersistStatus.useValue(
+        "lyric.showRomanization",
+        false,
+    );
+    const swapRomanizationAndTranslation = PersistStatus.useValue(
+        "lyric.swapRomanizationAndTranslation",
         false,
     );
     const fontSizeKey = PersistStatus.useValue("lyric.detailFontSize", 1);
@@ -298,8 +306,26 @@ export default function Lyric(props: IProps) {
                             extraData={currentLrcItem}
                             renderItem={({ item, index }) => {
                                 let text = item.lrc;
-                                if (showTranslation && hasTranslation) {
-                                    text += `\n${item?.translation ?? ""}`;
+
+                                // 构建扩展歌词数组，根据用户配置
+                                const extendedLines: string[] = [];
+
+                                if (showRomanization && hasRomanization && item.romanization) {
+                                    extendedLines.push(item.romanization);
+                                }
+
+                                if (showTranslation && hasTranslation && item.translation) {
+                                    extendedLines.push(item.translation);
+                                }
+
+                                // 根据配置决定是否交换罗马音和翻译的顺序
+                                if (swapRomanizationAndTranslation && extendedLines.length === 2) {
+                                    extendedLines.reverse();
+                                }
+
+                                // 将扩展行添加到主歌词文本
+                                if (extendedLines.length > 0) {
+                                    text += '\n' + extendedLines.join('\n');
                                 }
 
                                 return (

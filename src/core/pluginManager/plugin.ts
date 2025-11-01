@@ -386,6 +386,7 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
         /** 原始歌词文本 */
         let rawLrc: string | null = musicItem.rawLrc || null;
         let translation: string | null = null;
+        let romanization: string | null = null;
 
         // 2. 本地手动设置的歌词
         const platformHash = CryptoJs.MD5(musicItem.platform).toString(
@@ -422,9 +423,30 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
                     )) || null;
             }
 
+            if (
+                await RNFS.exists(
+                    pathConst.localLrcPath +
+                    platformHash +
+                    "/" +
+                    idHash +
+                    ".roma.lrc",
+                )
+            ) {
+                romanization =
+                    (await RNFS.readFile(
+                        pathConst.localLrcPath +
+                        platformHash +
+                        "/" +
+                        idHash +
+                        ".roma.lrc",
+                        "utf8",
+                    )) || null;
+            }
+
             return {
                 rawLrc,
-                translation: translation || undefined, // TODO: 这里写的不好
+                translation: translation || undefined,
+                romanization: romanization || undefined,
             };
         }
 
@@ -438,10 +460,11 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
                 musicItemCache.$localLyric || null;
 
             // 优先用缓存的结果
-            if (cacheLyric.rawLrc || cacheLyric.translation) {
+            if (cacheLyric.rawLrc || cacheLyric.translation || cacheLyric.romanization) {
                 return {
                     rawLrc: cacheLyric.rawLrc,
                     translation: cacheLyric.translation,
+                    romanization: cacheLyric.romanization,
                 };
             }
 
@@ -464,11 +487,23 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
                 } else if (localLyric.translation) {
                     needRefetch = true;
                 }
+                if (
+                    localLyric.romanization &&
+                    (await exists(localLyric.romanization))
+                ) {
+                    romanization = await readFile(
+                        localLyric.romanization,
+                        "utf8",
+                    );
+                } else if (localLyric.romanization) {
+                    needRefetch = true;
+                }
 
-                if (!needRefetch && (rawLrc || translation)) {
+                if (!needRefetch && (rawLrc || translation || romanization)) {
                     return {
                         rawLrc: rawLrc || undefined,
                         translation: translation || undefined,
+                        romanization: romanization || undefined,
                     };
                 }
             }
@@ -493,6 +528,7 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
         if (lrcSource) {
             rawLrc = lrcSource?.rawLrc || rawLrc;
             translation = lrcSource?.translation || null;
+            romanization = lrcSource?.romanization || null;
 
             const deprecatedLrcUrl = lrcSource?.lrc || musicItem.lrc;
 
@@ -501,9 +537,11 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
             }${nanoid()}.lrc`;
             let filenameTrans: string | undefined = `${pathConst.lrcCachePath
             }${nanoid()}.lrc`;
+            let filenameRoma: string | undefined = `${pathConst.lrcCachePath
+            }${nanoid()}.lrc`;
 
             // 旧版本兼容
-            if (!(rawLrc || translation)) {
+            if (!(rawLrc || translation || romanization)) {
                 if (deprecatedLrcUrl) {
                     rawLrc = (
                         await axios
@@ -525,8 +563,13 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
             } else {
                 filenameTrans = undefined;
             }
+            if (romanization) {
+                await writeFile(filenameRoma, romanization, "utf8");
+            } else {
+                filenameRoma = undefined;
+            }
 
-            if (rawLrc || translation) {
+            if (rawLrc || translation || romanization) {
                 MediaCache.setMediaCache(
                     produce(musicItemCache || musicItem, draft => {
                         musicItemCache?.$localLyric?.rawLrc;
@@ -536,12 +579,18 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
                             "$localLyric.translation",
                             filenameTrans,
                         );
+                        objectPath.set(
+                            draft,
+                            "$localLyric.romanization",
+                            filenameRoma,
+                        );
                         return draft;
                     }),
                 );
                 return {
                     rawLrc: rawLrc || undefined,
                     translation: translation || undefined,
+                    romanization: romanization || undefined,
                 };
             }
         }

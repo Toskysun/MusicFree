@@ -7,6 +7,7 @@ interface IOptions {
     musicItem?: IMusic.IMusicItem;
     lyricSource?: ILyric.ILyricSource;
     translation?: string;
+    romanization?: string;
     extra?: Record<string, any>;
 }
 
@@ -17,6 +18,8 @@ export interface IParsedLrcItem {
     lrc: string;
     /** 翻译 */
     translation?: string;
+    /** 罗马音 */
+    romanization?: string;
     /** 位置 */
     index: number;
 }
@@ -32,6 +35,7 @@ export default class LyricParser {
     private lastSearchIndex = 0;
 
     public hasTranslation = false;
+    public hasRomanization = false;
     public lyricSource?: ILyric.ILyricSource;
 
     get musicItem() {
@@ -45,6 +49,7 @@ export default class LyricParser {
         this.lyricSource = options?.lyricSource;
 
         let translation = options?.translation;
+        let romanization = options?.romanization;
         if (!raw && translation) {
             raw = translation;
             translation = undefined;
@@ -77,6 +82,32 @@ export default class LyricParser {
                     lrcItem.translation = transLrcItems[p2].lrc;
                 } else {
                     lrcItem.translation = "";
+                }
+
+                ++p1;
+            }
+        }
+
+        if (romanization) {
+            this.hasRomanization = true;
+            const romaLrcItems = this.parseLyricImpl(romanization).lrcItems;
+
+            // 2 pointer
+            let p1 = 0;
+            let p2 = 0;
+
+            while (p1 < this.lrcItems.length) {
+                const lrcItem = this.lrcItems[p1];
+                while (
+                    romaLrcItems[p2].time < lrcItem.time &&
+                    p2 < romaLrcItems.length - 1
+                ) {
+                    ++p2;
+                }
+                if (romaLrcItems[p2].time === lrcItem.time) {
+                    lrcItem.romanization = romaLrcItems[p2].lrc;
+                } else {
+                    lrcItem.romanization = "";
                 }
 
                 ++p1;
@@ -131,7 +162,7 @@ export default class LyricParser {
 
     toString(options?: {
         withTimestamp?: boolean;
-        type?: "raw" | "translation";
+        type?: "raw" | "translation" | "romanization";
     }) {
         const { type = "raw", withTimestamp = true } = options || {};
 
@@ -140,13 +171,23 @@ export default class LyricParser {
                 .map(
                     item =>
                         `${this.timeToLrctime(item.time)} ${
-                            type === "raw" ? item.lrc : item.translation
+                            type === "raw"
+                                ? item.lrc
+                                : type === "translation"
+                                ? item.translation
+                                : item.romanization
                         }`,
                 )
                 .join("\r\n");
         } else {
             return this.lrcItems
-                .map(item => (type === "raw" ? item.lrc : item.translation))
+                .map(item =>
+                    type === "raw"
+                        ? item.lrc
+                        : type === "translation"
+                        ? item.translation
+                        : item.romanization
+                )
                 .join("\r\n");
         }
     }

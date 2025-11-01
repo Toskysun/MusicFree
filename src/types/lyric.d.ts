@@ -11,6 +11,8 @@ declare namespace ILyric {
         rawLrc?: string;
         /** 纯文本格式的翻译 */
         translation?: string;
+        /** 纯文本格式的罗马音 */
+        romanization?: string;
     }
 
     export interface IParsedLrcItem {

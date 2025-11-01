@@ -3,6 +3,7 @@ import { StyleSheet, View } from "react-native";
 import rpx from "@/utils/rpx";
 import { iconSizeConst } from "@/constants/uiConst";
 import TranslationIcon from "@/assets/icons/translation.svg";
+import LanguageIcon from "@/assets/icons/language.svg";
 import { useAppConfig } from "@/core/appConfig";
 import useColors from "@/hooks/useColors";
 import Toast from "@/utils/toast";
@@ -23,9 +24,13 @@ export default function LyricOperations(props: ILyricOperationsProps) {
 
     const detailFontSize = useAppConfig("lyric.detailFontSize");
 
-    const { hasTranslation } = useLyricState();
+    const { hasTranslation, hasRomanization } = useLyricState();
     const showTranslation = PersistStatus.useValue(
         "lyric.showTranslation",
+        false,
+    );
+    const showRomanization = PersistStatus.useValue(
+        "lyric.showRomanization",
         false,
     );
     const colors = useColors();
@@ -98,7 +103,6 @@ export default function LyricOperations(props: ILyricOperationsProps) {
                 color={
                     showTranslation && hasTranslation ? colors.primary : "white"
                 }
-                // style={}
                 onPress={() => {
                     if (!hasTranslation) {
                         Toast.warn("当前歌曲无翻译");
@@ -112,6 +116,23 @@ export default function LyricOperations(props: ILyricOperationsProps) {
                     scrollToCurrentLrcItem();
                 }}
             />
+            {hasRomanization ? (
+                <LanguageIcon
+                    width={iconSizeConst.normal}
+                    height={iconSizeConst.normal}
+                    opacity={showRomanization ? 1 : 0.5}
+                    color={
+                        showRomanization ? colors.primary : "white"
+                    }
+                    onPress={() => {
+                        PersistStatus.set(
+                            "lyric.showRomanization",
+                            !showRomanization,
+                        );
+                        scrollToCurrentLrcItem();
+                    }}
+                />
+            ) : null}
             <Icon
                 name="ellipsis-vertical"
                 size={iconSizeConst.normal}

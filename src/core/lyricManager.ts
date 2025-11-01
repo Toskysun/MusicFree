@@ -17,12 +17,14 @@ import { unlink, writeFile } from "react-native-fs";
 import RNTrackPlayer, { Event } from "react-native-track-player";
 import { TrackPlayerEvents } from "@/core.defination/trackPlayer";
 import { IPluginManager } from "@/types/core/pluginManager";
+import { autoDecryptLyric } from "@/utils/qqMusicDecrypter";
 
 
 interface ILyricState {
     loading: boolean;
     lyrics: IParsedLrcItem[];
     hasTranslation: boolean;
+    hasRomanization: boolean;
     meta?: Record<string, string>;
 }
 
@@ -30,6 +32,7 @@ const defaultLyricState = {
     loading: true,
     lyrics: [],
     hasTranslation: false,
+    hasRomanization: false,
 };
 
 const lyricStateAtom = atom<ILyricState>(defaultLyricState);
@@ -158,7 +161,7 @@ class LyricManager implements IInjectable {
         }
     }
 
-    async uploadLocalLyric(musicItem: IMusic.IMusicItem, lyricContent: string, type: "raw" | "translation" = "raw") {
+    async uploadLocalLyric(musicItem: IMusic.IMusicItem, lyricContent: string, type: "raw" | "translation" | "romanization" = "raw") {
         if (!musicItem) {
             return;
         }
@@ -176,7 +179,7 @@ class LyricManager implements IInjectable {
             platformHash +
             "/" +
             idHash +
-            (type === "raw" ? "" : ".tran") +
+            (type === "raw" ? "" : type === "translation" ? ".tran" : ".roma") +
             ".lrc", lyricContent, "utf8");
 
         if (this.trackPlayer.isCurrentMusic(musicItem)) {
@@ -201,6 +204,7 @@ class LyricManager implements IInjectable {
 
         await unlink(basePath + ".lrc").catch(() => { });
         await unlink(basePath + ".tran.lrc").catch(() => { });
+        await unlink(basePath + ".roma.lrc").catch(() => { });
 
         if (this.trackPlayer.isCurrentMusic(musicItem)) {
             this.refreshLyric(false, false);
@@ -229,6 +233,7 @@ class LyricManager implements IInjectable {
             loading: true,
             lyrics: [],
             hasTranslation: false,
+            hasRomanization: false,
         });
         getDefaultStore().set(currentLyricItemAtom, null);
     }
@@ -238,6 +243,7 @@ class LyricManager implements IInjectable {
             loading: false,
             lyrics: [],
             hasTranslation: false,
+            hasRomanization: false,
         });
         getDefaultStore().set(currentLyricItemAtom, null);
         if (this.appConfig.getConfig("lyric.showStatusBarLyric")) {
@@ -292,19 +298,26 @@ class LyricManager implements IInjectable {
                 return;
             }
 
-            this.lyricParser = new LyricParser(lrcSource.rawLrc!, {
+            // Auto-decrypt QRC lyrics if encrypted
+            const rawLrc = lrcSource.rawLrc ? await autoDecryptLyric(lrcSource.rawLrc) : lrcSource.rawLrc;
+            const translation = lrcSource.translation ? await autoDecryptLyric(lrcSource.translation) : lrcSource.translation;
+            const romanization = lrcSource.romanization ? await autoDecryptLyric(lrcSource.romanization) : lrcSource.romanization;
+
+            this.lyricParser = new LyricParser(rawLrc!, {
                 extra: {
                     offset: (getMediaExtraProperty(currentMusicItem, "lyricOffset") || 0) * -1,
                 },
                 musicItem: currentMusicItem,
                 lyricSource: lrcSource,
-                translation: lrcSource.translation,
+                translation,
+                romanization,
             });
 
             getDefaultStore().set(lyricStateAtom, {
                 loading: false,
                 lyrics: this.lyricParser.getLyricItems(),
                 hasTranslation: !!lrcSource.translation,
+                hasRomanization: !!lrcSource.romanization,
                 meta: this.lyricParser.getMeta(),
             });
 

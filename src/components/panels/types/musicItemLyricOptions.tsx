@@ -24,6 +24,7 @@ import { FlatList } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import PanelBase from "../base/panelBase";
 import { useI18N } from "@/core/i18n";
+import PersistStatus from "@/utils/persistStatus";
 
 interface IMusicItemLyricOptionsProps {
     /** 歌曲信息 */
@@ -178,6 +179,42 @@ export default function MusicItemLyricOptions(
                         reason: e?.message,
                     }));
                 }
+            },
+        },
+        {
+            icon: "arrow-up-tray",
+            title: "上传罗马音歌词",
+            async onPress() {
+                try {
+                    const result = await getDocumentAsync({
+                        copyToCacheDirectory: true,
+                    });
+                    if (result.canceled) {
+                        return;
+                    }
+                    const pickedDoc = result.assets[0].uri;
+                    const lyricContent = await readAsStringAsync(pickedDoc, {
+                        encoding: "utf8",
+                    });
+                    await lyricManager.uploadLocalLyric(musicItem, lyricContent, "romanization");
+                    Toast.success(t("toast.settingSuccess"));
+                    hidePanel();
+                } catch (e: any) {
+                    devLog("warn", "🎤[歌词选项] 上传罗马音歌词失败", e);
+                    Toast.warn(t("panel.musicItemLyricOptions.settingFail", {
+                        reason: e?.message,
+                    }));
+                }
+            },
+        },
+        {
+            icon: "arrows-left-right",
+            title: "切换罗马音与翻译顺序",
+            onPress: () => {
+                const currentSwap = PersistStatus.get("lyric.swapRomanizationAndTranslation");
+                PersistStatus.set("lyric.swapRomanizationAndTranslation", !currentSwap);
+                Toast.success(!currentSwap ? "罗马音在前，翻译在后" : "翻译在前，罗马音在后");
+                hidePanel();
             },
         },
         {

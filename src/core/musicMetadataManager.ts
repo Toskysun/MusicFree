@@ -53,19 +53,47 @@ class MusicMetadataManager {
 
   /**
    * 获取音乐封面URL
+   *
+   * 策略：
+   * 1. 优先使用 musicItem.artwork（搜索时已包含）
+   * 2. 如果为空，尝试通过插件的 getMusicInfo 重新获取完整信息
+   * 3. 如果仍然为空，返回 undefined
    */
   private async getCoverUrl(musicItem: IMusic.IMusicItem): Promise<string | undefined> {
     try {
-      // 如果音乐项目已经有封面URL，直接返回
-      if (musicItem.artwork) {
+      // 策略1：如果音乐项目已经有封面URL，直接返回
+      if (musicItem.artwork && musicItem.artwork.trim()) {
+        devLog('info', '🖼️[元数据管理器] 使用现有封面URL', { url: musicItem.artwork });
         return musicItem.artwork;
       }
 
-      // ❌ 注意：插件的getMediaSource不是用来获取封面的
-      // getMediaSource是获取播放链接，不会更新封面信息
-      // 封面信息通常在搜索音乐时就已经包含在musicItem中了
-      
-      return musicItem.artwork || undefined;
+      // 策略2：尝试通过插件重新获取音乐信息（可能包含封面）
+      if (!this.pluginManager) {
+        devLog('warn', '⚠️[元数据管理器] pluginManager未注入，无法获取封面');
+        return undefined;
+      }
+
+      const plugin = this.pluginManager.getByMedia(musicItem);
+      if (!plugin?.methods?.getMusicInfo) {
+        devLog('warn', '⚠️[元数据管理器] 插件不支持getMusicInfo，无法获取封面', {
+          platform: musicItem.platform
+        });
+        return undefined;
+      }
+
+      devLog('info', '🔍[元数据管理器] 通过插件重新获取音乐信息以获取封面', {
+        title: musicItem.title,
+        platform: musicItem.platform
+      });
+
+      const fullMusicInfo = await plugin.methods.getMusicInfo(musicItem);
+      if (fullMusicInfo?.artwork && fullMusicInfo.artwork.trim()) {
+        devLog('info', '✅[元数据管理器] 成功获取封面URL', { url: fullMusicInfo.artwork });
+        return fullMusicInfo.artwork;
+      }
+
+      devLog('warn', '⚠️[元数据管理器] 插件返回的音乐信息中无封面');
+      return undefined;
     } catch (error) {
       errorLog('获取音乐封面失败', error);
       return undefined;
@@ -73,46 +101,91 @@ class MusicMetadataManager {
   }
 
   /**
-   * 获取歌词内容
+   * 获取歌词内容（增强型LRC格式，包含翻译和罗马音）
+   *
+   * 设计说明：
+   * - 生成增强型LRC格式，适用于支持多行歌词的本地播放器
+   * - 格式示例：
+   *   [00:12.34]原始歌词
+   *   [00:12.34]译：翻译内容
+   *   [00:12.34]音：罗马音内容
    */
   private async getLyricContent(musicItem: IMusic.IMusicItem): Promise<string | undefined> {
     try {
-      // 方法1: 检查当前歌词管理器中是否有歌词（如果当前正在播放这首歌）
-      if (lyricManager.lyricState && !lyricManager.lyricState.loading) {
-        const lyrics = lyricManager.lyricState.lyrics;
-        if (lyrics && lyrics.length > 0) {
-          // 将解析后的歌词重新组合成LRC格式
-          return lyrics.map(item => `[${this.formatTime(item.time)}]${item.lrc}`).join('\n');
-        }
+      // Fix: 直接通过插件获取对应歌曲的歌词，不从lyricManager获取
+      // 原因：lyricManager中的歌词是当前播放歌曲的，可能与要下载的歌曲不一致
+      if (!this.pluginManager) {
+        return undefined;
       }
 
-      // 方法2: 通过插件直接获取歌词
-      if (this.pluginManager) {
-        const plugin = this.pluginManager.getByMedia(musicItem);
-        if (plugin?.methods?.getLyric) {
-          try {
-            const lyricSource = await plugin.methods.getLyric(musicItem);
-            if (lyricSource) {
-              // 🎯 关键修复：处理插件返回的不同格式
-              // 优先使用 rawLrc (标准LRC格式)
-              if (lyricSource.rawLrc) {
-                return lyricSource.rawLrc;
-              }
-              // 备选使用 lrc 字段 (可能是URL或内容)
-              if (lyricSource.lrc) {
-                // 如果是URL，需要额外下载（暂时跳过URL下载）
-                if (!lyricSource.lrc.startsWith('http')) {
-                  return lyricSource.lrc;
-                }
-              }
-            }
-          } catch (error) {
-            errorLog('通过插件获取歌词失败', error);
+      const plugin = this.pluginManager.getByMedia(musicItem);
+      if (!plugin?.methods?.getLyric) {
+        return undefined;
+      }
+
+      try {
+        const lyricSource = await plugin.methods.getLyric(musicItem);
+        if (!lyricSource) {
+          return undefined;
+        }
+
+        devLog('info', '🎵[元数据管理器] 插件返回的歌词数据', {
+          有rawLrc: !!lyricSource.rawLrc,
+          有translation: !!lyricSource.translation,
+          有romanization: !!lyricSource.romanization,
+          有lrc: !!lyricSource.lrc,
+          rawLrc长度: lyricSource.rawLrc?.length,
+          translation长度: lyricSource.translation?.length,
+          romanization长度: lyricSource.romanization?.length,
+          歌曲: musicItem.title
+        });
+
+        // Fix: 加密歌词自动解密（QQ音乐QRC格式）
+        const { autoDecryptLyric } = require('@/utils/qqMusicDecrypter');
+        const rawLrc = lyricSource.rawLrc ? await autoDecryptLyric(lyricSource.rawLrc) : lyricSource.rawLrc;
+        const translation = lyricSource.translation ? await autoDecryptLyric(lyricSource.translation) : lyricSource.translation;
+        const romanization = lyricSource.romanization ? await autoDecryptLyric(lyricSource.romanization) : lyricSource.romanization;
+
+        devLog('info', '🔓[元数据管理器] 解密后的歌词数据', {
+          rawLrc长度: rawLrc?.length,
+          translation长度: translation?.length,
+          romanization长度: romanization?.length,
+          romanization前200字符: romanization?.substring(0, 200)
+        });
+
+        // 如果没有原始歌词，尝试使用旧的lrc字段
+        if (!rawLrc) {
+          if (lyricSource.lrc && !lyricSource.lrc.startsWith('http')) {
+            return await autoDecryptLyric(lyricSource.lrc);
           }
+          return undefined;
         }
-      }
 
-      return undefined;
+        // 如果没有翻译和罗马音，直接返回原始歌词
+        if (!translation && !romanization) {
+          devLog('info', '🎵[元数据管理器] 返回原始歌词（无翻译/罗马音）', {
+            歌词长度: rawLrc.length,
+            歌曲: musicItem.title
+          });
+          return rawLrc;
+        }
+
+        // Fix: 合并翻译和罗马音为增强型LRC格式
+        const mergedLrc = this.mergeEnhancedLyric(rawLrc, translation, romanization);
+
+        devLog('info', '🎵[元数据管理器] 增强型歌词合并完成', {
+          原始长度: rawLrc.length,
+          有翻译: !!translation,
+          有罗马音: !!romanization,
+          合并后长度: mergedLrc.length,
+          歌曲: musicItem.title
+        });
+
+        return mergedLrc;
+      } catch (error) {
+        errorLog('通过插件获取歌词失败', error);
+        return undefined;
+      }
     } catch (error) {
       errorLog('获取歌词失败', error);
       return undefined;
@@ -120,14 +193,117 @@ class MusicMetadataManager {
   }
 
   /**
-   * 将时间（秒）格式化为LRC时间格式 [mm:ss.xx]
+   * 合并原始歌词、翻译和罗马音为增强型LRC格式（LRCv2标准）
+   *
+   * 格式说明（可切换显示的多语言格式）：
+   * [00:12.34]原始歌词
+   * [00:12.34]Translation text
+   * [00:12.34]Romanization text
    */
-  private formatTime(timeInSeconds: number): string {
-    const minutes = Math.floor(timeInSeconds / 60);
-    const seconds = Math.floor(timeInSeconds % 60);
-    const centiseconds = Math.floor((timeInSeconds % 1) * 100);
-    
-    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${centiseconds.toString().padStart(2, '0')}`;
+  private mergeEnhancedLyric(
+    rawLrc: string,
+    translation?: string,
+    romanization?: string
+  ): string {
+    const rawLines = this.parseLrcLines(rawLrc);
+    const translationLines = translation ? this.parseLrcLines(translation) : [];
+    const romanizationLines = romanization ? this.parseLrcLines(romanization) : [];
+
+    devLog('info', '🔍[元数据管理器] 歌词解析结果', {
+      原始歌词行数: rawLines.length,
+      翻译行数: translationLines.length,
+      罗马音行数: romanizationLines.length,
+      原始前3行: rawLines.slice(0, 3),
+      翻译前3行: translationLines.slice(0, 3),
+      罗马音前3行: romanizationLines.slice(0, 3)
+    });
+
+    // 构建翻译和罗马音的时间戳索引（标准化时间戳作为key）
+    const translationMap = new Map<string, string>();
+    const romanizationMap = new Map<string, string>();
+
+    for (const line of translationLines) {
+      const normalizedTime = this.normalizeTimestamp(line.time);
+      translationMap.set(normalizedTime, line.content);
+    }
+
+    for (const line of romanizationLines) {
+      const normalizedTime = this.normalizeTimestamp(line.time);
+      romanizationMap.set(normalizedTime, line.content);
+    }
+
+    const result: string[] = [];
+    let translationCount = 0;
+    let romanizationCount = 0;
+
+    // 遍历原始歌词，使用LRCv2格式：相同时间戳，多行不同语言
+    for (const line of rawLines) {
+      // 添加原始歌词
+      result.push(`${line.time}${line.content}`);
+
+      const normalizedTime = this.normalizeTimestamp(line.time);
+
+      // 添加翻译（如果存在且不为空）- 使用相同时间戳
+      const trans = translationMap.get(normalizedTime);
+      if (trans && trans.trim()) {
+        result.push(`${line.time}${trans}`);
+        translationCount++;
+      }
+
+      // 添加罗马音（如果存在且不为空）- 使用相同时间戳
+      const roma = romanizationMap.get(normalizedTime);
+      if (roma && roma.trim()) {
+        result.push(`${line.time}${roma}`);
+        romanizationCount++;
+      }
+    }
+
+    devLog('info', '✅[元数据管理器] 歌词合并统计', {
+      写入翻译行数: translationCount,
+      写入罗马音行数: romanizationCount,
+      总行数: result.length
+    });
+
+    return result.join('\n');
+  }
+
+  /**
+   * 标准化LRC时间戳，忽略小数位数差异
+   * [00:12.34] 和 [00:12.340] 应该被视为相同
+   */
+  private normalizeTimestamp(timestamp: string): string {
+    // 提取 [mm:ss.xxx] 格式中的数字部分
+    const match = timestamp.match(/\[(\d+):(\d+)\.(\d+)\]/);
+    if (!match) {
+      return timestamp;
+    }
+
+    const minutes = match[1];
+    const seconds = match[2];
+    const milliseconds = match[3].padEnd(3, '0').substring(0, 3); // 统一为3位小数
+
+    return `[${minutes}:${seconds}.${milliseconds}]`;
+  }
+
+  /**
+   * 解析LRC格式歌词，提取时间戳和内容
+   */
+  private parseLrcLines(lrc: string): Array<{time: string, content: string}> {
+    const lines: Array<{time: string, content: string}> = [];
+    const lrcLines = lrc.split('\n');
+
+    for (const line of lrcLines) {
+      // 匹配时间戳格式 [mm:ss.xx] 或 [mm:ss.xxx]
+      const match = line.match(/^(\[\d+:\d+\.\d+\])(.*)/);
+      if (match) {
+        lines.push({
+          time: match[1],
+          content: match[2]  // 不使用 trim()，保留原始内容
+        });
+      }
+    }
+
+    return lines;
   }
 
   /**

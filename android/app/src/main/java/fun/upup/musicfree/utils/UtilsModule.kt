@@ -1,4 +1,4 @@
-package `fun`.upup.musicfree.utils; // replace your-apps-package-name with your app’s package name
+package `fun`.upup.musicfree.utils; // replace your-apps-package-name with your app's package name
 import android.Manifest
 import android.content.Context
 import android.content.Intent
@@ -17,7 +17,10 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.WritableMap
+import com.facebook.react.bridge.ReadableArray
 import kotlin.system.exitProcess
+import javax.crypto.Cipher
+import javax.crypto.spec.SecretKeySpec
 
 class UtilsModule(context: ReactApplicationContext) : ReactContextBaseJavaModule(context) {
 
@@ -121,6 +124,77 @@ class UtilsModule(context: ReactApplicationContext) : ReactContextBaseJavaModule
                 putDouble("width", usableWidthDp.toDouble())
                 putDouble("height", usableHeightDp.toDouble())
             }
+        }
+    }
+
+    /**
+     * DES decrypt data in ECB mode
+     * @param data - Data to decrypt as byte array (ReadableArray of integers 0-255)
+     * @param key - DES key string (first 8 bytes used)
+     * @param promise - Promise that resolves with decrypted data as ReadableArray
+     */
+    @ReactMethod
+    fun desDecrypt(data: ReadableArray, key: String, promise: Promise) {
+        try {
+            // Convert ReadableArray to ByteArray
+            val dataBytes = ByteArray(data.size()) { i ->
+                data.getInt(i).toByte()
+            }
+
+            // Use first 8 bytes of key for DES
+            val keyBytes = key.toByteArray(Charsets.UTF_8).copyOf(8)
+            val keySpec = SecretKeySpec(keyBytes, "DES")
+
+            // Create DES cipher in ECB mode with no padding
+            val cipher = Cipher.getInstance("DES/ECB/NoPadding")
+            cipher.init(Cipher.DECRYPT_MODE, keySpec)
+
+            // Decrypt data
+            val decryptedBytes = cipher.doFinal(dataBytes)
+
+            // Convert result to WritableArray
+            val result = Arguments.createArray()
+            for (byte in decryptedBytes) {
+                result.pushInt(byte.toInt() and 0xFF)
+            }
+
+            promise.resolve(result)
+        } catch (e: Exception) {
+            promise.reject("DES_DECRYPT_ERROR", "DES decryption failed: ${e.message}", e)
+        }
+    }
+
+    /**
+     * DES encrypt zero buffer to generate XOR key block
+     * @param key - DES key string (first 8 bytes used)
+     * @param promise - Promise that resolves with encrypted 8-byte block as ReadableArray
+     */
+    @ReactMethod
+    fun desEncryptZeroBlock(key: String, promise: Promise) {
+        try {
+            // Create 8-byte zero buffer
+            val zeroBuffer = ByteArray(8) { 0 }
+
+            // Use first 8 bytes of key for DES
+            val keyBytes = key.toByteArray(Charsets.UTF_8).copyOf(8)
+            val keySpec = SecretKeySpec(keyBytes, "DES")
+
+            // Create DES cipher in ECB mode with no padding
+            val cipher = Cipher.getInstance("DES/ECB/NoPadding")
+            cipher.init(Cipher.ENCRYPT_MODE, keySpec)
+
+            // Encrypt zero buffer
+            val encryptedBytes = cipher.doFinal(zeroBuffer)
+
+            // Convert result to WritableArray
+            val result = Arguments.createArray()
+            for (byte in encryptedBytes) {
+                result.pushInt(byte.toInt() and 0xFF)
+            }
+
+            promise.resolve(result)
+        } catch (e: Exception) {
+            promise.reject("DES_ENCRYPT_ERROR", "DES encryption failed: ${e.message}", e)
         }
     }
 }
