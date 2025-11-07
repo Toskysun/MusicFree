@@ -35,6 +35,18 @@
       "showOnce": false,
       "type": "info",
       "createTime": "2025-10-26T00:00:00+08:00"
+    },
+    {
+      "id": "4",
+      "title": "通知",
+      "content": "# 音源提供方被下发律师函，服务暂停！网易QQ酷我酷狗咪咕无法使用。\n\n## PS: 也许你可以进群看看？\n\n",
+      "priority": 1,
+      "minVersion": "0.6.2",
+      "maxVersion": "0.6.99",
+      "expireTime": "2026-10-30T23:59:59+08:00",
+      "showOnce": false,
+      "type": "info",
+      "createTime": "2025-11-07T00:00:00+08:00"
     }
   ],
   "timestamp": "2025-09-01T00:00:00+08:00"
