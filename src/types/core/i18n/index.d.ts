@@ -340,6 +340,7 @@ export interface ILanguageData {
     "basicSettings.lyric": string; // 歌词
     "basicSettings.lyric.autoSearchLyric": string; // 歌词缺失时自动搜索歌词
     "basicSettings.lyric.showStatusBarLyric": string; // 开启桌面歌词
+    "basicSettings.lyric.hideDesktopLyricWhenPaused": string; // 暂停时隐藏桌面歌词
     "basicSettings.lyric.align": string; // 对齐方式
     "basicSettings.lyric.align.left": string; // 左对齐
     "basicSettings.lyric.align.center": string; // 居中对齐

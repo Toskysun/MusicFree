@@ -284,6 +284,7 @@
     "basicSettings.lyric": "歌词",
     "basicSettings.lyric.autoSearchLyric": "歌词缺失时自动搜索歌词",
     "basicSettings.lyric.showStatusBarLyric": "开启桌面歌词",
+    "basicSettings.lyric.hideDesktopLyricWhenPaused": "播放暂停时隐藏桌面歌词",
     "basicSettings.lyric.align": "对齐方式",
     "basicSettings.lyric.align.left": "左对齐",
     "basicSettings.lyric.align.center": "居中对齐",

@@ -14,7 +14,7 @@ import { checkAndCreateDir } from "@/utils/fileUtils";
 import PersistStatus from "@/utils/persistStatus";
 import CryptoJs from "crypto-js";
 import { unlink, writeFile } from "react-native-fs";
-import RNTrackPlayer, { Event } from "react-native-track-player";
+import RNTrackPlayer, { Event, State } from "react-native-track-player";
 import { TrackPlayerEvents } from "@/core.defination/trackPlayer";
 import { IPluginManager } from "@/types/core/pluginManager";
 import { autoDecryptLyric } from "@/utils/qqMusicDecrypter";
@@ -112,13 +112,51 @@ class LyricManager implements IInjectable {
                 const showTranslation = PersistStatus.get("lyric.showTranslation");
 
                 if (this.appConfig.getConfig("lyric.showStatusBarLyric")) {
-                    LyricUtil.setStatusBarLyricText(
-                        (newLyricItem?.lrc ?? "") +
-                        (showTranslation
-                            ? `\n${newLyricItem?.translation ?? ""}`
-                            : ""),
-                    );
+                    this.updateDesktopLyricDisplay(newLyricItem, showTranslation);
                 }
+            }
+        });
+
+        // Listen to playback state changes for desktop lyric visibility control
+        RNTrackPlayer.addEventListener(Event.PlaybackState, async (state) => {
+            const hideWhenPaused = this.appConfig.getConfig("lyric.hideDesktopLyricWhenPaused");
+            const showStatusBarLyric = this.appConfig.getConfig("lyric.showStatusBarLyric");
+
+            if (!showStatusBarLyric || hideWhenPaused === false) {
+                return;
+            }
+
+            const isPaused = state.state === State.Paused;
+            const currentMusic = this.trackPlayer.currentMusic;
+
+            if (isPaused) {
+                // Hide desktop lyric when paused
+                LyricUtil.hideStatusBarLyric();
+                devLog('info', '[LyricManager] Desktop lyric hidden due to pause');
+            } else if (state.state === State.Playing) {
+                // Show desktop lyric when playing
+                const statusBarLyricConfig = {
+                    topPercent: this.appConfig.getConfig("lyric.topPercent"),
+                    leftPercent: this.appConfig.getConfig("lyric.leftPercent"),
+                    align: this.appConfig.getConfig("lyric.align"),
+                    color: this.appConfig.getConfig("lyric.color"),
+                    backgroundColor: this.appConfig.getConfig("lyric.backgroundColor"),
+                    widthPercent: this.appConfig.getConfig("lyric.widthPercent"),
+                    fontSize: this.appConfig.getConfig("lyric.fontSize"),
+                };
+                LyricUtil.showStatusBarLyric(
+                    currentMusic ? `${currentMusic.title} - ${currentMusic.artist}` : "MusicFree",
+                    statusBarLyricConfig ?? {}
+                );
+
+                // Update to current lyric if available
+                const currentLyricItem = this.currentLyricItem;
+                const showTranslation = PersistStatus.get("lyric.showTranslation");
+                if (currentLyricItem) {
+                    this.updateDesktopLyricDisplay(currentLyricItem, showTranslation);
+                }
+
+                devLog('info', '[LyricManager] Desktop lyric shown after play');
             }
         });
 
@@ -143,6 +181,15 @@ class LyricManager implements IInjectable {
         this.refreshLyric(true).catch(err => {
             devLog('warn', 'Initial lyric load failed', err);
         });
+    }
+
+    private updateDesktopLyricDisplay(lyricItem: IParsedLrcItem | null, showTranslation: boolean | null) {
+        LyricUtil.setStatusBarLyricText(
+            (lyricItem?.lrc ?? "") +
+            (showTranslation
+                ? `\n${lyricItem?.translation ?? ""}`
+                : ""),
+        );
     }
 
     associateLyric(musicItem: IMusic.IMusicItem, linkToMusicItem: ICommon.IMediaBase) {

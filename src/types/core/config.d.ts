@@ -54,6 +54,7 @@ export interface IAppConfigProperties {
     "lyric.fontSize": number;
     "lyric.detailFontSize": number;
     "lyric.autoSearchLyric": boolean;
+    "lyric.hideDesktopLyricWhenPaused": boolean;
 
     // Theme
     "theme.background": string;

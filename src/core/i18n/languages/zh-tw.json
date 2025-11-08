@@ -280,6 +280,7 @@
     "basicSettings.lyric": "歌詞",
     "basicSettings.lyric.autoSearchLyric": "歌詞缺失時自動搜尋歌詞",
     "basicSettings.lyric.showStatusBarLyric": "開啟桌面歌詞",
+    "basicSettings.lyric.hideDesktopLyricWhenPaused": "播放暫停時隱藏桌面歌詞",
     "basicSettings.lyric.align": "對齊方式",
     "basicSettings.lyric.align.left": "左對齊",
     "basicSettings.lyric.align.center": "居中對齊",

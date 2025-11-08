@@ -881,6 +881,7 @@ function LyricSetting() {
     const widthPercent = useAppConfig("lyric.widthPercent");
     const fontSize = useAppConfig("lyric.fontSize");
     const enableAutoSearchLyric = useAppConfig("lyric.autoSearchLyric");
+    const hideDesktopLyricWhenPaused = useAppConfig("lyric.hideDesktopLyricWhenPaused");
 
 
 
@@ -892,6 +893,12 @@ function LyricSetting() {
         t("basicSettings.lyric.autoSearchLyric"),
         "lyric.autoSearchLyric",
         enableAutoSearchLyric ?? false,
+    );
+
+    const hideWhenPaused = createSwitch(
+        t("basicSettings.lyric.hideDesktopLyricWhenPaused"),
+        "lyric.hideDesktopLyricWhenPaused",
+        hideDesktopLyricWhenPaused ?? true,
     );
 
     const openStatusBarLyric = createSwitch(
@@ -968,6 +975,13 @@ function LyricSetting() {
                 onPress={openStatusBarLyric.onPress}>
                 <ListItem.Content title={openStatusBarLyric.title} />
                 {openStatusBarLyric.right}
+            </ListItem>
+            <ListItem
+                withHorizontalPadding
+                heightType="small"
+                onPress={hideWhenPaused.onPress}>
+                <ListItem.Content title={hideWhenPaused.title} />
+                {hideWhenPaused.right}
             </ListItem>
             <View style={lyricStyles.sliderContainer}>
                 <ThemeText>{t("basicSettings.lyric.leftRightDistance")}</ThemeText>
