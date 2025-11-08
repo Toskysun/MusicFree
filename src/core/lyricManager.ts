@@ -355,12 +355,16 @@ class LyricManager implements IInjectable {
                 return;
             }
 
-            // Auto-decrypt QRC lyrics if encrypted - moved to separate async operation
+            // CRITICAL FIX: Defer CPU-intensive decryption to prevent blocking playback
+            // QRC decryption involves Triple-DES + Zlib which can take 100-500ms+ synchronously
             devLog('info', 'Processing lyric data', {
                 hasRawLrc: !!lrcSource.rawLrc,
                 hasTranslation: !!lrcSource.translation,
                 hasRomanization: !!lrcSource.romanization
             });
+
+            // Defer decryption to next event loop cycle to allow playback to start
+            await new Promise(resolve => setTimeout(resolve, 0));
 
             const decryptStartTime = Date.now();
 
