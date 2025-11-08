@@ -141,6 +141,13 @@ class UtilsModule(context: ReactApplicationContext) : ReactContextBaseJavaModule
                 data.getInt(i).toByte()
             }
 
+            // 验证数据长度必须是8的倍数
+            if (dataBytes.size % 8 != 0) {
+                promise.reject("DES_DECRYPT_ERROR",
+                    "Data length must be multiple of 8, got ${dataBytes.size}", null)
+                return
+            }
+
             // Use first 8 bytes of key for DES
             val keyBytes = key.toByteArray(Charsets.UTF_8).copyOf(8)
             val keySpec = SecretKeySpec(keyBytes, "DES")
@@ -152,6 +159,13 @@ class UtilsModule(context: ReactApplicationContext) : ReactContextBaseJavaModule
             // Decrypt data
             val decryptedBytes = cipher.doFinal(dataBytes)
 
+            // 验证输出长度应该等于输入长度
+            if (decryptedBytes.size != dataBytes.size) {
+                promise.reject("DES_DECRYPT_ERROR",
+                    "Output size mismatch: input=${dataBytes.size}, output=${decryptedBytes.size}", null)
+                return
+            }
+
             // Convert result to WritableArray
             val result = Arguments.createArray()
             for (byte in decryptedBytes) {
@@ -161,6 +175,57 @@ class UtilsModule(context: ReactApplicationContext) : ReactContextBaseJavaModule
             promise.resolve(result)
         } catch (e: Exception) {
             promise.reject("DES_DECRYPT_ERROR", "DES decryption failed: ${e.message}", e)
+        }
+    }
+
+    /**
+     * DES encrypt data in ECB mode
+     * @param data - Data to encrypt as byte array (ReadableArray of integers 0-255)
+     * @param key - DES key string (first 8 bytes used)
+     * @param promise - Promise that resolves with encrypted data as ReadableArray
+     */
+    @ReactMethod
+    fun desEncrypt(data: ReadableArray, key: String, promise: Promise) {
+        try {
+            // Convert ReadableArray to ByteArray
+            val dataBytes = ByteArray(data.size()) { i ->
+                data.getInt(i).toByte()
+            }
+
+            // 验证数据长度必须是8的倍数
+            if (dataBytes.size % 8 != 0) {
+                promise.reject("DES_ENCRYPT_ERROR",
+                    "Data length must be multiple of 8, got ${dataBytes.size}", null)
+                return
+            }
+
+            // Use first 8 bytes of key for DES
+            val keyBytes = key.toByteArray(Charsets.UTF_8).copyOf(8)
+            val keySpec = SecretKeySpec(keyBytes, "DES")
+
+            // Create DES cipher in ECB mode with no padding
+            val cipher = Cipher.getInstance("DES/ECB/NoPadding")
+            cipher.init(Cipher.ENCRYPT_MODE, keySpec)
+
+            // Encrypt data
+            val encryptedBytes = cipher.doFinal(dataBytes)
+
+            // 验证输出长度应该等于输入长度
+            if (encryptedBytes.size != dataBytes.size) {
+                promise.reject("DES_ENCRYPT_ERROR",
+                    "Output size mismatch: input=${dataBytes.size}, output=${encryptedBytes.size}", null)
+                return
+            }
+
+            // Convert result to WritableArray
+            val result = Arguments.createArray()
+            for (byte in encryptedBytes) {
+                result.pushInt(byte.toInt() and 0xFF)
+            }
+
+            promise.resolve(result)
+        } catch (e: Exception) {
+            promise.reject("DES_ENCRYPT_ERROR", "DES encryption failed: ${e.message}", e)
         }
     }
 

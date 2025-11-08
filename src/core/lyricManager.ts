@@ -18,6 +18,7 @@ import RNTrackPlayer, { Event } from "react-native-track-player";
 import { TrackPlayerEvents } from "@/core.defination/trackPlayer";
 import { IPluginManager } from "@/types/core/pluginManager";
 import { autoDecryptLyric } from "@/utils/qqMusicDecrypter";
+import { devLog } from "@/utils/log";
 
 
 interface ILyricState {
@@ -63,9 +64,12 @@ class LyricManager implements IInjectable {
     }
 
     setup() {
-        // 更新歌词
+        // 更新歌词 - 异步执行，不阻塞播放
         this.trackPlayer.on(TrackPlayerEvents.CurrentMusicChanged, (musicItem) => {
-            this.refreshLyric(true, true);
+            // Immediately fire async lyric loading without blocking playback
+            this.refreshLyric(true, true).catch(err => {
+                devLog('warn', 'Lyric loading failed but playback continues', err);
+            });
 
             if (this.appConfig.getConfig("lyric.showStatusBarLyric")) {
                 if (musicItem) {
@@ -122,7 +126,10 @@ class LyricManager implements IInjectable {
             );
         }
 
-        this.refreshLyric(true);
+        // Initial async lyric load - non-blocking
+        this.refreshLyric(true).catch(err => {
+            devLog('warn', 'Initial lyric load failed', err);
+        });
     }
 
     associateLyric(musicItem: IMusic.IMusicItem, linkToMusicItem: ICommon.IMediaBase) {
@@ -141,7 +148,10 @@ class LyricManager implements IInjectable {
                 associatedLrc: linkToMusicItem,
             });
             if (this.trackPlayer.isCurrentMusic(musicItem)) {
-                this.refreshLyric(false);
+                // Async refresh, non-blocking
+                this.refreshLyric(false).catch(err => {
+                    devLog('warn', 'Lyric refresh after association failed', err);
+                });
             }
             return true;
         }
@@ -157,7 +167,10 @@ class LyricManager implements IInjectable {
         });
 
         if (this.trackPlayer.isCurrentMusic(musicItem)) {
-            this.refreshLyric(false);
+            // Async refresh, non-blocking
+            this.refreshLyric(false).catch(err => {
+                devLog('warn', 'Lyric refresh after unassociation failed', err);
+            });
         }
     }
 
@@ -183,7 +196,10 @@ class LyricManager implements IInjectable {
             ".lrc", lyricContent, "utf8");
 
         if (this.trackPlayer.isCurrentMusic(musicItem)) {
-            this.refreshLyric(false, false);
+            // Async refresh, non-blocking
+            this.refreshLyric(false, false).catch(err => {
+                devLog('warn', 'Lyric refresh after upload failed', err);
+            });
         }
     }
 
@@ -207,7 +223,10 @@ class LyricManager implements IInjectable {
         await unlink(basePath + ".roma.lrc").catch(() => { });
 
         if (this.trackPlayer.isCurrentMusic(musicItem)) {
-            this.refreshLyric(false, false);
+            // Async refresh, non-blocking
+            this.refreshLyric(false, false).catch(err => {
+                devLog('warn', 'Lyric refresh after removal failed', err);
+            });
         }
 
     }
@@ -224,7 +243,10 @@ class LyricManager implements IInjectable {
         });
 
         if (this.trackPlayer.isCurrentMusic(musicItem)) {
-            this.refreshLyric(true, false);
+            // Async refresh, non-blocking
+            this.refreshLyric(true, false).catch(err => {
+                devLog('warn', 'Lyric refresh after offset update failed', err);
+            });
         }
     }
 
@@ -255,6 +277,13 @@ class LyricManager implements IInjectable {
     private async refreshLyric(skipFetchLyricSourceIfSame: boolean = true, ignoreProgress: boolean = false) {
         const currentMusicItem = this.trackPlayer.currentMusic;
 
+        devLog('info', 'Lyric refresh started', {
+            hasMusic: !!currentMusicItem,
+            title: currentMusicItem?.title,
+            skipFetchLyricSourceIfSame,
+            ignoreProgress
+        });
+
         // 如果没有当前音乐项，重置歌词状态
         if (!currentMusicItem) {
             this.setLyricAsNoLyricState();
@@ -266,15 +295,27 @@ class LyricManager implements IInjectable {
 
             if (skipFetchLyricSourceIfSame && this.lyricParser && this.trackPlayer.isCurrentMusic(this.lyricParser.musicItem)) {
                 lrcSource = this.lyricParser.lyricSource ?? null;
+                devLog('info', 'Using cached lyric source', { hasSource: !!lrcSource });
             } else {
                 // 重置歌词状态
                 this.setLyricAsLoadingState();
 
+                devLog('info', 'Fetching lyric from plugin', { platform: currentMusicItem.platform });
+                const fetchStartTime = Date.now();
+
                 lrcSource = (await this.pluginManager.getByMedia(currentMusicItem)?.methods?.getLyric(currentMusicItem)) ?? null;
+
+                const fetchDuration = Date.now() - fetchStartTime;
+                devLog('info', 'Plugin lyric fetch completed', {
+                    duration: fetchDuration,
+                    hasSource: !!lrcSource,
+                    hasRawLrc: !!lrcSource?.rawLrc
+                });
             }
 
             // 切换到其他歌曲了, 直接返回
             if (!this.trackPlayer.isCurrentMusic(currentMusicItem)) {
+                devLog('info', 'Music changed during lyric fetch, aborting');
                 return;
             }
 
@@ -283,25 +324,44 @@ class LyricManager implements IInjectable {
                 // 重置歌词状态
                 this.setLyricAsLoadingState();
 
+                devLog('info', 'Auto-searching similar lyric');
                 lrcSource = await this.searchSimilarLyric(currentMusicItem);
             }
 
             // 切换到其他歌曲了, 直接返回
             if (!this.trackPlayer.isCurrentMusic(currentMusicItem)) {
+                devLog('info', 'Music changed during lyric search, aborting');
                 return;
             }
 
             // 如果源不存在，恢复默认设置
             if (!lrcSource) {
+                devLog('info', 'No lyric source found, setting no-lyric state');
                 this.setLyricAsNoLyricState();
                 this.lyricParser = null;
                 return;
             }
 
-            // Auto-decrypt QRC lyrics if encrypted
-            const rawLrc = lrcSource.rawLrc ? await autoDecryptLyric(lrcSource.rawLrc) : lrcSource.rawLrc;
-            const translation = lrcSource.translation ? await autoDecryptLyric(lrcSource.translation) : lrcSource.translation;
-            const romanization = lrcSource.romanization ? await autoDecryptLyric(lrcSource.romanization) : lrcSource.romanization;
+            // Auto-decrypt QRC lyrics if encrypted - moved to separate async operation
+            devLog('info', 'Processing lyric data', {
+                hasRawLrc: !!lrcSource.rawLrc,
+                hasTranslation: !!lrcSource.translation,
+                hasRomanization: !!lrcSource.romanization
+            });
+
+            const decryptStartTime = Date.now();
+
+            const rawLrc = lrcSource.rawLrc ? autoDecryptLyric(lrcSource.rawLrc) : lrcSource.rawLrc;
+            const translation = lrcSource.translation ? autoDecryptLyric(lrcSource.translation) : lrcSource.translation;
+            const romanization = lrcSource.romanization ? autoDecryptLyric(lrcSource.romanization) : lrcSource.romanization;
+
+            const decryptDuration = Date.now() - decryptStartTime;
+            devLog('info', 'Lyric decryption completed', {
+                duration: decryptDuration,
+                rawLrcLength: rawLrc?.length,
+                translationLength: translation?.length,
+                romanizationLength: romanization?.length
+            });
 
             this.lyricParser = new LyricParser(rawLrc!, {
                 extra: {
@@ -324,6 +384,12 @@ class LyricManager implements IInjectable {
             const currentLyric = ignoreProgress ? (this.lyricParser.getLyricItems()?.[0] ?? null) : this.lyricParser.getPosition((await this.trackPlayer.getProgress()).position);
             getDefaultStore().set(currentLyricItemAtom, currentLyric || null);
 
+            devLog('info', 'Lyric refresh completed successfully', {
+                lyricCount: this.lyricParser.getLyricItems().length,
+                hasTranslation: !!lrcSource.translation,
+                hasRomanization: !!lrcSource.romanization
+            });
+
             if (this.appConfig.getConfig("lyric.showStatusBarLyric")) {
                 if (currentLyric) {
                     LyricUtil.setStatusBarLyricText(
@@ -338,6 +404,7 @@ class LyricManager implements IInjectable {
                 }
             }
         } catch (err) {
+            devLog('error', 'Lyric refresh failed', err);
             if (this.trackPlayer.isCurrentMusic(currentMusicItem)) {
                 this.lyricParser = null;
                 this.setLyricAsNoLyricState();
