@@ -371,25 +371,28 @@ export function normalizePluginQualityInfo(
     musicItem: any,
     pluginQualityMapping?: Record<string, IMusic.IQualityKey>
 ): IMusic.IQuality | undefined {
-    // 如果已经有标准的qualities格式，直接返回
+    // 如果已经有qualities格式，检查是否需要转换原版音质键值
     if (musicItem.qualities && typeof musicItem.qualities === "object") {
-        return musicItem.qualities as IMusic.IQuality;
+        const normalized = normalizePluginQualities(musicItem.qualities);
+        if (normalized && Object.keys(normalized).length > 0) {
+            return normalized;
+        }
     }
-    
-    const qualities: IMusic.IQuality = {};
-    
+
+    const qualities: Partial<IMusic.IQuality> = {};
+
     // 处理网易云音乐风格的音质信息 (低音质l, 中音质m, 高音质h, 超高音质sq)
     if (musicItem.l || musicItem.m || musicItem.h || musicItem.sq) {
         if (musicItem.l?.size) qualities["128k"] = { size: musicItem.l.size };
-        if (musicItem.m?.size) qualities["320k"] = { size: musicItem.m.size };
-        if (musicItem.h?.size) qualities.flac = { size: musicItem.h.size };
-        if (musicItem.sq?.size) qualities.hires = { size: musicItem.sq.size };
+        if (musicItem.m?.size) qualities["192k"] = { size: musicItem.m.size };
+        if (musicItem.h?.size) qualities["320k"] = { size: musicItem.h.size };
+        if (musicItem.sq?.size) qualities.flac = { size: musicItem.sq.size };
     }
-    
+
     // 处理QQ音乐/酷狗风格的音质数组
     if (Array.isArray(musicItem.qualityList)) {
         for (const qualityInfo of musicItem.qualityList) {
-            const standardKey = qualityTextToKeyMap[qualityInfo.type] || 
+            const standardKey = qualityTextToKeyMap[qualityInfo.type] ||
                                pluginQualityMapping?.[qualityInfo.type];
             if (standardKey) {
                 qualities[standardKey] = {
@@ -399,7 +402,7 @@ export function normalizePluginQualityInfo(
             }
         }
     }
-    
+
     // 处理命名键值对格式 (如 {low: {size: 123}, standard: {size: 456}})
     const namedQualityKeys = ["low", "standard", "high", "super"];
     for (const key of namedQualityKeys) {
@@ -413,8 +416,8 @@ export function normalizePluginQualityInfo(
             }
         }
     }
-    
-    return Object.keys(qualities).length > 0 ? qualities : undefined;
+
+    return Object.keys(qualities).length > 0 ? qualities as IMusic.IQuality : undefined;
 }
 
 /**
