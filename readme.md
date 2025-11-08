@@ -79,6 +79,40 @@ https://musicfree-plugins.netlify.app
 - ❓ **常见问题**：[Q&A文档](https://musicfree.catcat.work/qa/common.html)
 - 🔧 **使用指南**：[详细教程](https://musicfree.catcat.work/usage/mobile/install-plugin.html)
 
+## 🔧 插件开发指南
+
+### 音质键值 (IQualityKey)
+
+本版本支持以下 **9 种音质等级**：
+
+| 音质键值 | 说明 | 比特率/格式 |
+|---------|------|-----------|
+| `128k` | 普通音质 | 128 kbps |
+| `192k` | 中等音质 | 192 kbps |
+| `320k` | 高清音质 | 320 kbps |
+| `flac` | 高清无损 | FLAC |
+| `flac24bit` | 高解析度无损 | FLAC 24-bit |
+| `hires` | 高解析度 | Hi-Res |
+| `atmos` | 杜比全景声 | Dolby Atmos |
+| `atmos_plus` | 杜比全景声 2.0 | Dolby Atmos+ |
+| `master` | 母带音质 | Master |
+
+### 原版插件兼容
+
+本版本**完全兼容原版插件**，原版音质键值会自动转换：
+
+| 原版键值 | 转换为本版 | 说明 |
+|---------|-----------|------|
+| `low` | `128k` | 低音质 → 普通音质 |
+| `standard` | `192k` | 标准音质 → 中等音质 |
+| `high` | `320k` | 高音质 → 高清音质 |
+| `super` | `flac` | 超高音质 → 无损音质 |
+
+**开发建议**：
+- ✅ 新开发插件请使用本版音质键值
+- ✅ 原版插件无需修改，自动兼容
+- ✅ 用户界面统一显示本版音质名称
+
 ## 🤝 关于项目
 
 ### 致谢

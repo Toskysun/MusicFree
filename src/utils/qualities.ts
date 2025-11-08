@@ -4,9 +4,12 @@
 import { ILanguageData } from "@/types/core/i18n";
 import { devLog } from "@/utils/log";
 
+type LegacyQualityKey = "low" | "standard" | "high" | "super";
+
 export const qualityKeys: IMusic.IQualityKey[] = [
     "128k",
-    "320k", 
+    "192k",
+    "320k",
     "flac",
     "flac24bit",
     "hires",
@@ -15,14 +18,54 @@ export const qualityKeys: IMusic.IQualityKey[] = [
     "master",
 ];
 
+// 原版音质到新版音质的映射
+const legacyQualityMap: Record<LegacyQualityKey, IMusic.IQualityKey> = {
+    "low": "128k",
+    "standard": "192k",
+    "high": "320k",
+    "super": "flac",
+};
+
+/**
+ * 将原版插件的音质键值转换为新版音质键值
+ */
+export function convertLegacyQuality(legacyQuality: string): IMusic.IQualityKey {
+    if (legacyQuality in legacyQualityMap) {
+        return legacyQualityMap[legacyQuality as LegacyQualityKey];
+    }
+    // 如果不是原版音质键值，假设已经是新版键值
+    return legacyQuality as IMusic.IQualityKey;
+}
+
+/**
+ * 标准化插件返回的音质信息，将原版音质键值转换为新版
+ */
+export function normalizePluginQualities(qualities?: any): IMusic.IQuality | undefined {
+    if (!qualities || typeof qualities !== "object") {
+        return undefined;
+    }
+
+    const normalized: Partial<IMusic.IQuality> = {};
+
+    for (const [key, value] of Object.entries(qualities)) {
+        const newKey = convertLegacyQuality(key);
+        if (value && typeof value === "object") {
+            normalized[newKey] = value as any;
+        }
+    }
+
+    return Object.keys(normalized).length > 0 ? normalized as IMusic.IQuality : undefined;
+}
+
 // 音质尝试顺序
 export const TRY_QUALITYS_LIST: IMusic.IQualityKey[] = [
-    "master", "atmos_plus", "atmos", "hires", "flac24bit", "flac", "320k", "128k",
+    "master", "atmos_plus", "atmos", "hires", "flac24bit", "flac", "320k", "192k", "128k",
 ] as const;
 
 // 保留原有硬编码翻译作为后备
 export const qualityText = {
     "128k": "普通音质 128K",
+    "192k": "中等音质 192K",
     "320k": "高清音质 320K",
     flac: "高清音质 FLAC",
     flac24bit: "无损音质 FLAC Hires",
@@ -38,6 +81,7 @@ export function getQualityText(i18nData: ILanguageData, customTranslations?: Rec
     if (customTranslations) {
         return {
             "128k": customTranslations["128k"] || i18nData["quality.128k"] || qualityText["128k"],
+            "192k": customTranslations["192k"] || i18nData["quality.192k"] || qualityText["192k"],
             "320k": customTranslations["320k"] || i18nData["quality.320k"] || qualityText["320k"],
             flac: customTranslations.flac || i18nData["quality.flac"] || qualityText.flac,
             flac24bit: customTranslations.flac24bit || i18nData["quality.flac24bit"] || qualityText.flac24bit,
@@ -47,10 +91,11 @@ export function getQualityText(i18nData: ILanguageData, customTranslations?: Rec
             master: customTranslations.master || i18nData["quality.master"] || qualityText.master,
         };
     }
-    
+
     // 没有自定义翻译时，使用i18n数据
     return {
         "128k": i18nData["quality.128k"] || qualityText["128k"],
+        "192k": i18nData["quality.192k"] || qualityText["192k"],
         "320k": i18nData["quality.320k"] || qualityText["320k"],
         flac: i18nData["quality.flac"] || qualityText.flac,
         flac24bit: i18nData["quality.flac24bit"] || qualityText.flac24bit,
@@ -128,28 +173,41 @@ export function getQualityOrder(
 
 /** 音质文本到标准键的映射表 */
 const qualityTextToKeyMap: Record<string, IMusic.IQualityKey> = {
+    // 原版插件兼容（低->标准->高->超高 映射到 128k->192k->320k->flac）
+    "low": "128k",
+    "standard": "192k",
+    "high": "320k",
+    "super": "flac",
+    "低音质": "128k",
+    "标准音质": "192k",
+    "高音质": "320k",
+    "超高音质": "flac",
+
     // 网易云音乐音质映射
     "臻品母带": "master",
-    "臻品全景声2.0": "atmos_plus", 
+    "臻品全景声2.0": "atmos_plus",
     "臻品全景声": "atmos",
     "Hires无损24-Bit": "hires",
     "FLAC": "flac",
     "320K": "320k",
+    "192K": "192k",
     "128K": "128k",
-    
+
     // QQ音乐音质映射和标准键直接映射
     "flac24bit": "flac24bit",
     "flac": "flac",
     "320k": "320k",
+    "192k": "192k",
     "128k": "128k",
     "master": "master",
     "atmos": "atmos",
     "atmos_plus": "atmos_plus",
     "hires": "hires",
-    
+
     // 通用音质映射
     "无损": "flac",
     "高品质": "320k",
+    "中等": "192k",
     "标准": "128k",
     "超高品质": "hires",
     "母带": "master",

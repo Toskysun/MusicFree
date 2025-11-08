@@ -529,7 +529,8 @@ export interface ILanguageData {
     
     // 音质翻译
     "quality.128k": string; // 普通音质 128K
-    "quality.320k": string; // 高清音质 320K  
+    "quality.192k": string; // 中等音质 192K
+    "quality.320k": string; // 高清音质 320K
     "quality.flac": string; // 高清音质 FLAC
     "quality.flac24bit": string; // 无损音质 FLAC Hires
     "quality.hires": string; // 无损音质 Hires

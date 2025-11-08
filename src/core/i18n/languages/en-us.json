@@ -445,6 +445,7 @@
     
     // Quality translations
     "quality.128k": "Standard Quality 128K",
+    "quality.192k": "Medium Quality 192K",
     "quality.320k": "High Quality 320K", 
     "quality.flac": "High Quality FLAC",
     "quality.flac24bit": "Lossless Quality FLAC Hires",

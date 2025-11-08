@@ -80,6 +80,40 @@ https://musicfree-plugins.netlify.app
 - ❓ **FAQ**: [Q&A Docs](https://musicfree.catcat.work/qa/common.html)
 - 🔧 **Usage Guide**: [Detailed Tutorial](https://musicfree.catcat.work/usage/mobile/install-plugin.html)
 
+## 🔧 Plugin Development Guide
+
+### Quality Keys (IQualityKey)
+
+This version supports the following **9 quality levels**:
+
+| Quality Key | Description | Bitrate/Format |
+|------------|-------------|----------------|
+| `128k` | Standard Quality | 128 kbps |
+| `192k` | Medium Quality | 192 kbps |
+| `320k` | High Quality | 320 kbps |
+| `flac` | Lossless Quality | FLAC |
+| `flac24bit` | Hi-Res Lossless | FLAC 24-bit |
+| `hires` | Hi-Res Quality | Hi-Res |
+| `atmos` | Dolby Atmos | Dolby Atmos |
+| `atmos_plus` | Dolby Atmos 2.0 | Dolby Atmos+ |
+| `master` | Master Quality | Master |
+
+### Legacy Plugin Compatibility
+
+This version is **fully compatible with legacy plugins**. Legacy quality keys are automatically converted:
+
+| Legacy Key | Converts To | Description |
+|-----------|-------------|-------------|
+| `low` | `128k` | Low → Standard Quality |
+| `standard` | `192k` | Standard → Medium Quality |
+| `high` | `320k` | High → High Quality |
+| `super` | `flac` | Super → Lossless Quality |
+
+**Development Tips**:
+- ✅ New plugins should use the current quality keys
+- ✅ Legacy plugins work without modification
+- ✅ UI displays unified quality names
+
 ## 🤝 About
 
 ### Acknowledgments
