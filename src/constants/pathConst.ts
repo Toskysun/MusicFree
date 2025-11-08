@@ -18,7 +18,7 @@ export default {
     lrcCachePath: `${basePath}/cache/lrc/`,
     downloadCachePath: `${basePath}/cache/download/`,
     downloadPath: `${basePath}/download/`,
-    downloadMusicPath: `/storage/emulated/0/Music/IKUN Music`,
+    downloadMusicPath: `/storage/emulated/0/Music/MusicFree`,
     mmkvPath: `${basePath}/mmkv`,
     mmkvCachePath: `${basePath}/cache/mmkv`,
 };
