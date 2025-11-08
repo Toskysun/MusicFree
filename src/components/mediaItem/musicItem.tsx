@@ -9,6 +9,7 @@ import TitleAndTag from "./titleAndTag";
 import ThemeText from "../base/themeText";
 import TrackPlayer from "@/core/trackPlayer";
 import Icon from "@/components/base/icon.tsx";
+import { ImgAsset } from "@/constants/assetsConst";
 
 interface IMusicItemProps {
     index?: string | number;
@@ -62,6 +63,10 @@ export default function MusicItem(props: IMusicItemProps) {
                     {index}
                 </ListItem.ListItemText>
             ) : null}
+            <ListItem.ListItemImage
+                uri={musicItem.artwork}
+                fallbackImg={ImgAsset.albumDefault}
+            />
             <ListItem.Content
                 title={
                     <TitleAndTag
