@@ -9,6 +9,7 @@ import {
     TouchableWithoutFeedback,
     View,
 } from 'react-native';
+import Clipboard from '@react-native-clipboard/clipboard';
 import event from './event';
 import {debounce} from './tool';
 
@@ -205,8 +206,12 @@ class Log extends Component {
             <TouchableWithoutFeedback
                 onLongPress={() => {
                     try {
+                        const logText = `[${item.time}] [${item.method.toUpperCase()}] ${item.data}`;
+                        Clipboard.setString(logText);
                         Alert.alert('提示', '复制成功', [{text: '确认'}]);
-                    } catch (error) {}
+                    } catch (error) {
+                        Alert.alert('错误', '复制失败: ' + error.message, [{text: '确认'}]);
+                    }
                 }}>
                 <View style={styles.logItem}>
                     <View style={{flexDirection: 'row'}}>
