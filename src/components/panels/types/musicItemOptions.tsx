@@ -6,7 +6,7 @@ import ThemeText from "@/components/base/themeText";
 import { ImgAsset } from "@/constants/assetsConst";
 import Clipboard from "@react-native-clipboard/clipboard";
 
-import { getMediaUniqueKey } from "@/utils/mediaUtils";
+import { getMediaUniqueKey, getPlatformMediaId } from "@/utils/mediaUtils";
 import FastImage from "@/components/base/fastImage";
 import Toast from "@/utils/toast";
 import LocalMusicSheet from "@/core/localMusicSheet";
@@ -62,14 +62,14 @@ export default function MusicItemOptions(props: IMusicItemOptionsProps) {
     const options: IOption[] = [
         {
             icon: "identification",
-            title: `ID: ${getMediaUniqueKey(musicItem)}`,
+            title: `ID: ${musicItem.platform}@${getPlatformMediaId(musicItem)}`,
             onPress: () => {
                 mediaCache.setMediaCache(musicItem);
                 Clipboard.setString(
                     JSON.stringify(
                         {
                             platform: musicItem.platform,
-                            id: musicItem.id,
+                            id: getPlatformMediaId(musicItem),
                         },
                         null,
                         "",

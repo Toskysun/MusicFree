@@ -6,11 +6,28 @@ import { getMediaExtraProperty } from "./mediaExtra";
 
 /**
  * 获取媒体资源的唯一key
- * @param mediaItem 
- * @returns 
+ * @param mediaItem
+ * @returns
  */
 export function getMediaUniqueKey(mediaItem: ICommon.IMediaBase) {
     return `${mediaItem.platform}@${mediaItem.id}`;
+}
+
+/**
+ * 获取平台实际使用的ID标识
+ * @param mediaItem
+ * @returns
+ */
+export function getPlatformMediaId(mediaItem: ICommon.IMediaBase): string {
+    const musicItem = mediaItem as any;
+
+    // QQ音乐优先使用songmid
+    if (mediaItem.platform?.toLowerCase().includes('qq') || mediaItem.platform === 'QQ音乐') {
+        return musicItem.songmid || mediaItem.id;
+    }
+
+    // 其他平台直接返回id
+    return mediaItem.id;
 }
 
 /**
