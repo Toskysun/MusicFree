@@ -64,12 +64,25 @@ class LyricManager implements IInjectable {
     }
 
     setup() {
-        // 更新歌词 - 异步执行，不阻塞播放
+        // 更新歌词 - 延迟异步执行，完全不阻塞播放
         this.trackPlayer.on(TrackPlayerEvents.CurrentMusicChanged, (musicItem) => {
-            // Immediately fire async lyric loading without blocking playback
-            this.refreshLyric(true, true).catch(err => {
-                devLog('warn', 'Lyric loading failed but playback continues', err);
+            devLog('info', '[LyricManager] Music changed event triggered', {
+                title: musicItem?.title,
+                timestamp: Date.now()
             });
+
+            // CRITICAL FIX: Delay lyric loading to ensure playback starts immediately
+            // Use setTimeout to push lyric loading to end of event queue
+            setTimeout(() => {
+                devLog('info', '[LyricManager] Starting delayed lyric load', {
+                    title: musicItem?.title,
+                    timestamp: Date.now()
+                });
+
+                this.refreshLyric(true, true).catch(err => {
+                    devLog('warn', 'Lyric loading failed but playback continues', err);
+                });
+            }, 0);
 
             if (this.appConfig.getConfig("lyric.showStatusBarLyric")) {
                 if (musicItem) {

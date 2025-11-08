@@ -7,7 +7,7 @@ import {
 import { MusicRepeatMode } from "@/constants/repeatModeConst";
 import delay from "@/utils/delay";
 import getUrlExt from "@/utils/getUrlExt";
-import { errorLog, trace } from "@/utils/log";
+import { errorLog, trace, devLog } from "@/utils/log";
 import { createMediaIndexMap } from "@/utils/mediaIndexMap";
 import {
     getLocalPath,
@@ -413,6 +413,13 @@ class TrackPlayer extends EventEmitter<{
         musicItem?: IMusic.IMusicItem | null,
         forcePlay?: boolean,
     ): Promise<void> {
+        const playStartTime = Date.now();
+        devLog('info', '[TrackPlayer] Play method called', {
+            title: musicItem?.title,
+            forcePlay,
+            timestamp: playStartTime
+        });
+
         try {
             // 如果不传参，默认是播放当前音乐
             if (!musicItem) {
@@ -477,12 +484,29 @@ class TrackPlayer extends EventEmitter<{
             }
 
             // 4. 更新列表状态和当前音乐
+            devLog('info', '[TrackPlayer] Setting current music and emitting event', {
+                title: musicItem.title,
+                timestamp: Date.now(),
+                elapsed: Date.now() - playStartTime
+            });
+
             this.setCurrentMusic(musicItem);
+
+            devLog('info', '[TrackPlayer] Current music set, initializing queue', {
+                timestamp: Date.now(),
+                elapsed: Date.now() - playStartTime
+            });
+
             await ReactNativeTrackPlayer.setQueue([{
                 ...musicItem,
                 url: TrackPlayer.proposedAudioUrl,
                 artwork: resolveImportedAssetOrPath(musicItem.artwork?.trim?.()?.length ? musicItem.artwork : ImgAsset.albumDefault) as unknown as any,
             }, this.getFakeNextTrack()]);
+
+            devLog('info', '[TrackPlayer] Queue initialized, fetching media source', {
+                timestamp: Date.now(),
+                elapsed: Date.now() - playStartTime
+            });
 
             // 5. 获取音源
             let track: IMusic.IMusicItem;
@@ -660,32 +684,51 @@ class TrackPlayer extends EventEmitter<{
             // 8. 新增历史记录
             this.musicHistoryService.addMusic(musicItem);
 
+            devLog('info', '[TrackPlayer] Media source obtained, starting playback', {
+                timestamp: Date.now(),
+                elapsed: Date.now() - playStartTime,
+                hasUrl: !!track.url
+            });
+
             trace("获取音源成功", track);
-            // 9. 设置音源
+
+            // 9. 设置音源并立即开始播放 - CRITICAL: 不等待任何其他操作
             await this.setTrackSource(track as Track);
 
-            // 10. 获取补充信息
-            let info: Partial<IMusic.IMusicItem> | null = null;
-            try {
-                info =
-                    (await plugin?.methods?.getMusicInfo?.(musicItem)) ?? null;
-                if (
-                    (typeof info?.url === "string" && info.url.trim() === "") ||
-                    (info?.url && typeof info.url !== "string")
-                ) {
-                    delete info.url;
-                }
-            } catch { }
+            devLog('info', '[TrackPlayer] Playback started successfully', {
+                timestamp: Date.now(),
+                elapsed: Date.now() - playStartTime
+            });
 
-            // 11. 设置补充信息
-            if (info && this.isCurrentMusic(musicItem)) {
-                const mergedTrack = this.mergeTrackSource(track, info);
-                getDefaultStore().set(currentMusicAtom, mergedTrack as IMusic.IMusicItem);
-                await ReactNativeTrackPlayer.updateMetadataForTrack(
-                    0,
-                    mergedTrack as TrackMetadataBase,
-                );
-            }
+            // 10. 异步获取补充信息 - 完全后台执行，绝对不阻塞播放
+            // CRITICAL FIX: Use setTimeout(0) to push to end of event queue after playback starts
+            setTimeout(() => {
+                (async () => {
+                    try {
+                        const info = (await plugin?.methods?.getMusicInfo?.(musicItem)) ?? null;
+                        if (info) {
+                            if (
+                                (typeof info.url === "string" && info.url.trim() === "") ||
+                                (info.url && typeof info.url !== "string")
+                            ) {
+                                delete info.url;
+                            }
+
+                            // 11. 设置补充信息
+                            if (this.isCurrentMusic(musicItem)) {
+                                const mergedTrack = this.mergeTrackSource(track, info);
+                                getDefaultStore().set(currentMusicAtom, mergedTrack as IMusic.IMusicItem);
+                                await ReactNativeTrackPlayer.updateMetadataForTrack(
+                                    0,
+                                    mergedTrack as TrackMetadataBase,
+                                );
+                            }
+                        }
+                    } catch (err) {
+                        devLog('warn', '[TrackPlayer] Failed to fetch additional music info', err);
+                    }
+                })();
+            }, 0);
         } catch (e: any) {
             const message = e?.message;
             if (
