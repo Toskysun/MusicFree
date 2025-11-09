@@ -20,10 +20,44 @@ export function getMediaUniqueKey(mediaItem: ICommon.IMediaBase) {
  */
 export function getPlatformMediaId(mediaItem: ICommon.IMediaBase): string {
     const musicItem = mediaItem as any;
+    const platform = mediaItem.platform?.toLowerCase() || '';
 
-    // QQ音乐优先使用songmid
-    if (mediaItem.platform?.toLowerCase().includes('qq') || mediaItem.platform === 'QQ音乐') {
-        return musicItem.songmid || mediaItem.id;
+    // QQ音乐：如果同时存在id和songmid，都显示
+    if (platform.includes('qq') || mediaItem.platform === 'QQ音乐') {
+        const id = mediaItem.id;
+        const songmid = musicItem.songmid;
+
+        if (id && songmid && id !== songmid) {
+            return `id:${id},mid:${songmid}`;
+        }
+        return songmid || id;
+    }
+
+    // 酷狗音乐：显示所有存在的hash字段
+    if (platform.includes('kg') || platform.includes('酷狗')) {
+        const ids: string[] = [];
+
+        // 主hash（id字段）
+        if (mediaItem.id) {
+            ids.push(`hash:${mediaItem.id}`);
+        }
+
+        // 320k hash
+        if (musicItem['320hash']) {
+            ids.push(`320hash:${musicItem['320hash']}`);
+        }
+
+        // 无损hash
+        if (musicItem.sqhash) {
+            ids.push(`sqhash:${musicItem.sqhash}`);
+        }
+
+        // 高品质hash
+        if (musicItem.ResFileHash) {
+            ids.push(`ResFileHash:${musicItem.ResFileHash}`);
+        }
+
+        return ids.length > 0 ? ids.join(',') : mediaItem.id;
     }
 
     // 其他平台直接返回id
