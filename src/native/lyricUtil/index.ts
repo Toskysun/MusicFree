@@ -42,6 +42,13 @@ interface ILyricUtil extends NativeModule {
     checkSystemAlertPermission: () => Promise<boolean>;
     /** 请求悬浮窗 */
     requestSystemAlertPermission: () => Promise<boolean>;
+    /** 
+     * 解密QRC加密歌词（Native实现）
+     * 使用Triple-DES + Zlib解压算法
+     * @param encryptedHex - QRC加密的十六进制字符串
+     * @returns 解密后的原始文本（可能是XML格式）
+     */
+    decryptQRCLyric: (encryptedHex: string) => Promise<string>;
 }
 
 const LyricUtil: ILyricUtil = NativeModules.LyricUtil;

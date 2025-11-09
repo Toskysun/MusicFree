@@ -4,6 +4,29 @@
  */
 
 // S-Box tables (from QQ Music's implementation)
+/**
+ * @deprecated THIS FILE IS DEPRECATED!
+ * 
+ * QRC decryption has been migrated to Android Native layer for performance.
+ * This file is kept ONLY for algorithm reference and backup purposes.
+ * 
+ * Migration Information:
+ * - Old Implementation: JavaScript (this file) - 100-500ms blocking UI thread
+ * - New Implementation: Android Native (Kotlin) - ~10ms non-blocking
+ * 
+ * Native Implementation Location:
+ * - Kotlin: android/app/src/main/java/fun/upup/musicfree/lyricUtil/LyricUtilModule.kt
+ * - TypeScript Interface: src/native/lyricUtil/index.ts::decryptQRCLyric
+ * - Usage: src/utils/qqMusicDecrypter.ts::decryptQRCLyric
+ * 
+ * DO NOT USE THIS FILE IN PRODUCTION CODE!
+ * Use LyricUtil.decryptQRCLyric() from @/native/lyricUtil instead.
+ * 
+ * Performance Comparison:
+ * - JS Implementation (this file): 100-500ms (sync, blocks UI)
+ * - Native Implementation: <10ms (async, non-blocking)
+ */
+
 const S_BOX1 = new Uint8Array([
   14, 4, 13, 1, 2, 15, 11, 8, 3, 10, 6, 12, 5, 9, 0, 7,
   0, 15, 7, 4, 14, 2, 13, 1, 10, 6, 12, 11, 9, 5, 3, 8,

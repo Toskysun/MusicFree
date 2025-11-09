@@ -140,11 +140,11 @@ class MusicMetadataManager {
           歌曲: musicItem.title
         });
 
-        // Fix: 加密歌词自动解密（QQ音乐QRC格式）
+        // Fix: 加密歌词自动解密（QQ音乐QRC格式 - Native异步解密）
         const { autoDecryptLyric } = require('@/utils/qqMusicDecrypter');
-        const rawLrc = lyricSource.rawLrc ? autoDecryptLyric(lyricSource.rawLrc) : lyricSource.rawLrc;
-        const translation = lyricSource.translation ? autoDecryptLyric(lyricSource.translation) : lyricSource.translation;
-        const romanization = lyricSource.romanization ? autoDecryptLyric(lyricSource.romanization) : lyricSource.romanization;
+        const rawLrc = lyricSource.rawLrc ? await autoDecryptLyric(lyricSource.rawLrc) : lyricSource.rawLrc;
+        const translation = lyricSource.translation ? await autoDecryptLyric(lyricSource.translation) : lyricSource.translation;
+        const romanization = lyricSource.romanization ? await autoDecryptLyric(lyricSource.romanization) : lyricSource.romanization;
 
         devLog('info', '🔓[元数据管理器] 解密后的歌词数据', {
           rawLrc长度: rawLrc?.length,
@@ -156,7 +156,7 @@ class MusicMetadataManager {
         // 如果没有原始歌词，尝试使用旧的lrc字段
         if (!rawLrc) {
           if (lyricSource.lrc && !lyricSource.lrc.startsWith('http')) {
-            return autoDecryptLyric(lyricSource.lrc);
+            return await autoDecryptLyric(lyricSource.lrc);
           }
           return undefined;
         }

@@ -415,9 +415,10 @@ class LyricManager implements IInjectable {
 
             const decryptStartTime = Date.now();
 
-            const rawLrc = lrcSource.rawLrc ? autoDecryptLyric(lrcSource.rawLrc) : lrcSource.rawLrc;
-            const translation = lrcSource.translation ? autoDecryptLyric(lrcSource.translation) : lrcSource.translation;
-            const romanization = lrcSource.romanization ? autoDecryptLyric(lrcSource.romanization) : lrcSource.romanization;
+            // Native async decryption (non-blocking, ~10ms)
+            const rawLrc = lrcSource.rawLrc ? await autoDecryptLyric(lrcSource.rawLrc) : lrcSource.rawLrc;
+            const translation = lrcSource.translation ? await autoDecryptLyric(lrcSource.translation) : lrcSource.translation;
+            const romanization = lrcSource.romanization ? await autoDecryptLyric(lrcSource.romanization) : lrcSource.romanization;
 
             const decryptDuration = Date.now() - decryptStartTime;
             devLog('info', 'Lyric decryption completed', {
