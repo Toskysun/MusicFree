@@ -119,22 +119,19 @@ class LyricManager implements IInjectable {
 
         // Listen to playback state changes for desktop lyric visibility control
         RNTrackPlayer.addEventListener(Event.PlaybackState, async (state) => {
-            const hideWhenPaused = this.appConfig.getConfig("lyric.hideDesktopLyricWhenPaused");
             const showStatusBarLyric = this.appConfig.getConfig("lyric.showStatusBarLyric");
 
-            if (!showStatusBarLyric || hideWhenPaused === false) {
+            if (!showStatusBarLyric) {
                 return;
             }
 
+            const hideWhenPaused = this.appConfig.getConfig("lyric.hideDesktopLyricWhenPaused");
             const isPaused = state.state === State.Paused;
+            const isPlaying = state.state === State.Playing;
             const currentMusic = this.trackPlayer.currentMusic;
 
-            if (isPaused) {
-                // Hide desktop lyric when paused
-                LyricUtil.hideStatusBarLyric();
-                devLog('info', '[LyricManager] Desktop lyric hidden due to pause');
-            } else if (state.state === State.Playing) {
-                // Show desktop lyric when playing
+            if (isPlaying) {
+                // Always show desktop lyric when playing
                 const statusBarLyricConfig = {
                     topPercent: this.appConfig.getConfig("lyric.topPercent"),
                     leftPercent: this.appConfig.getConfig("lyric.leftPercent"),
@@ -157,25 +154,18 @@ class LyricManager implements IInjectable {
                 }
 
                 devLog('info', '[LyricManager] Desktop lyric shown after play');
+            } else if (isPaused && hideWhenPaused === true) {
+                // Hide desktop lyric when paused (only if hideWhenPaused is explicitly enabled)
+                LyricUtil.hideStatusBarLyric();
+                devLog('info', '[LyricManager] Desktop lyric hidden due to pause');
             }
         });
 
 
-        if (this.appConfig.getConfig("lyric.showStatusBarLyric")) {
-            const statusBarLyricConfig = {
-                topPercent: this.appConfig.getConfig("lyric.topPercent"),
-                leftPercent: this.appConfig.getConfig("lyric.leftPercent"),
-                align: this.appConfig.getConfig("lyric.align"),
-                color: this.appConfig.getConfig("lyric.color"),
-                backgroundColor: this.appConfig.getConfig("lyric.backgroundColor"),
-                widthPercent: this.appConfig.getConfig("lyric.widthPercent"),
-                fontSize: this.appConfig.getConfig("lyric.fontSize"),
-            };
-            LyricUtil.showStatusBarLyric(
-                "MusicFree",
-                statusBarLyricConfig ?? {}
-            );
-        }
+        // Hide desktop lyric on app startup to prevent showing stale content
+        // Desktop lyric will be shown automatically when playback starts (via PlaybackState event)
+        LyricUtil.hideStatusBarLyric();
+        devLog('info', '[LyricManager] Desktop lyric hidden on startup');
 
         // Initial async lyric load - non-blocking
         this.refreshLyric(true).catch(err => {
