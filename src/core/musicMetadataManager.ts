@@ -110,7 +110,10 @@ class MusicMetadataManager {
    *   [00:12.34]译：翻译内容
    *   [00:12.34]音：罗马音内容
    */
-  private async getLyricContent(musicItem: IMusic.IMusicItem): Promise<string | undefined> {
+  private async getLyricContent(
+    musicItem: IMusic.IMusicItem,
+    config?: IDownloadMetadataConfig
+  ): Promise<string | undefined> {
     try {
       // Fix: 直接通过插件获取对应歌曲的歌词，不从lyricManager获取
       // 原因：lyricManager中的歌词是当前播放歌曲的，可能与要下载的歌曲不一致
@@ -161,8 +164,29 @@ class MusicMetadataManager {
           return undefined;
         }
 
-        // 如果没有翻译和罗马音，直接返回原始歌词
-        if (!translation && !romanization) {
+        // Check lyric detail configuration
+        const includeOriginal = config?.writeLyricOriginal ?? true;
+        const includeTranslation = config?.writeLyricTranslation ?? true;
+        const includeRomanization = config?.writeLyricRomanization ?? true;
+
+        devLog('info', '🎵[元数据管理器] 歌词写入配置', {
+          包含原文: includeOriginal,
+          包含翻译: includeTranslation,
+          包含罗马音: includeRomanization
+        });
+
+        // If original is disabled, return undefined
+        if (!includeOriginal) {
+          devLog('info', '⚠️[元数据管理器] 原文歌词已禁用，不写入歌词');
+          return undefined;
+        }
+
+        // Filter translation and romanization based on configuration
+        const filteredTranslation = includeTranslation ? translation : undefined;
+        const filteredRomanization = includeRomanization ? romanization : undefined;
+
+        // If no translation and romanization, return raw lyric only
+        if (!filteredTranslation && !filteredRomanization) {
           devLog('info', '🎵[元数据管理器] 返回原始歌词（无翻译/罗马音）', {
             歌词长度: rawLrc.length,
             歌曲: musicItem.title
@@ -170,13 +194,17 @@ class MusicMetadataManager {
           return rawLrc;
         }
 
-        // Fix: 合并翻译和罗马音为增强型LRC格式
-        const mergedLrc = this.mergeEnhancedLyric(rawLrc, translation, romanization);
+        // Merge lyric with filtered translation and romanization
+        const mergedLrc = this.mergeEnhancedLyric(
+          rawLrc,
+          filteredTranslation,
+          filteredRomanization
+        );
 
         devLog('info', '🎵[元数据管理器] 增强型歌词合并完成', {
           原始长度: rawLrc.length,
-          有翻译: !!translation,
-          有罗马音: !!romanization,
+          有翻译: !!filteredTranslation,
+          有罗马音: !!filteredRomanization,
           合并后长度: mergedLrc.length,
           歌曲: musicItem.title
         });
@@ -347,7 +375,7 @@ class MusicMetadataManager {
       // 如果启用歌词写入，获取歌词
       if (config.writeLyric) {
         devLog('info', '🎵[元数据管理器] 开始获取歌词');
-        const lyricContent = await this.getLyricContent(taskInfo.musicItem);
+        const lyricContent = await this.getLyricContent(taskInfo.musicItem, config);
         if (lyricContent) {
           metadata.lyric = lyricContent;
           devLog('info', '✅[元数据管理器] 歌词获取成功', { 长度: lyricContent.length });

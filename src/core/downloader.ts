@@ -307,6 +307,9 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
             writeCover: this.configService.getConfig("basic.writeMetadataCover") ?? true,
             writeLyric: this.configService.getConfig("basic.writeMetadataLyric") ?? true,
             fetchExtendedInfo: this.configService.getConfig("basic.writeMetadataExtended") ?? false,
+            writeLyricOriginal: this.configService.getConfig("basic.writeMetadataLyricOriginal") ?? true,
+            writeLyricTranslation: this.configService.getConfig("basic.writeMetadataLyricTranslation") ?? true,
+            writeLyricRomanization: this.configService.getConfig("basic.writeMetadataLyricRomanization") ?? true,
         };
     }
 

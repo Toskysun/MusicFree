@@ -180,6 +180,12 @@ export interface IDownloadMetadataConfig {
   writeLyric: boolean;
   /** 是否从插件获取扩展信息 */
   fetchExtendedInfo: boolean;
+  /** 是否写入原文歌词 */
+  writeLyricOriginal?: boolean;
+  /** 是否写入翻译歌词 */
+  writeLyricTranslation?: boolean;
+  /** 是否写入音译歌词（罗马音） */
+  writeLyricRomanization?: boolean;
 }
 
 /**

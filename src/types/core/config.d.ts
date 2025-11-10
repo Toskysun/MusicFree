@@ -42,6 +42,10 @@ export interface IAppConfigProperties {
     "basic.writeMetadataCover": boolean;
     "basic.writeMetadataLyric": boolean;
     "basic.writeMetadataExtended": boolean;
+    // 歌词写入细分选项
+    "basic.writeMetadataLyricOriginal": boolean;
+    "basic.writeMetadataLyricTranslation": boolean;
+    "basic.writeMetadataLyricRomanization": boolean;
 
     // Lyric
     "lyric.showStatusBarLyric": boolean;
