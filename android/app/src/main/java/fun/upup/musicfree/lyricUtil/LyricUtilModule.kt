@@ -182,6 +182,125 @@ class LyricUtilModule(private val reactContext: ReactApplicationContext): ReactC
         }
     }
 
+    // ==================== Kuwo Lyric Decryption ====================
+
+    /**
+     * Decrypt Kuwo lyric from base64-encoded encrypted data
+     * Process: Base64 Decode -> XOR Decrypt (optional) -> Zlib Inflate -> GB18030 Decode
+     */
+    @ReactMethod
+    fun decryptKuwoLyric(lrcBase64: String, isGetLyricx: Boolean, promise: Promise) {
+        try {
+            Log.d("LyricUtil", "Starting Kuwo lyric decryption, base64 length: ${lrcBase64.length}, isGetLyricx: $isGetLyricx")
+
+            // Step 1: Base64 decode
+            val lrcBuffer = android.util.Base64.decode(lrcBase64, android.util.Base64.DEFAULT)
+            Log.d("LyricUtil", "Base64 decoded, buffer size: ${lrcBuffer.size}")
+
+            // Step 2: Check if it starts with "tp=content"
+            val headerCheck = String(lrcBuffer, 0, minOf(10, lrcBuffer.size), StandardCharsets.UTF_8)
+            if (headerCheck != "tp=content") {
+                Log.e("LyricUtil", "Invalid Kuwo lyric header: $headerCheck")
+                promise.resolve("")
+                return
+            }
+
+            // Step 3: Find header end marker (\r\n\r\n) and extract data
+            val headerEndIndex = findHeaderEnd(lrcBuffer)
+            if (headerEndIndex == -1) {
+                Log.e("LyricUtil", "Header end marker not found")
+                promise.reject("KW_INVALID_FORMAT", "Header end marker not found")
+                return
+            }
+
+            val lrcData = lrcBuffer.copyOfRange(headerEndIndex + 4, lrcBuffer.size)
+            Log.d("LyricUtil", "Header stripped, data size: ${lrcData.size}")
+
+            // Step 4: Zlib inflate
+            val inflatedData = zlibInflate(lrcData)
+            Log.d("LyricUtil", "Zlib inflated, size: ${inflatedData.size}")
+
+            // Step 5: Process based on isGetLyricx flag
+            val result = if (!isGetLyricx) {
+                // Directly decode as GB18030
+                decodeGB18030(inflatedData)
+            } else {
+                // XOR decrypt then decode as GB18030
+                val xorDecrypted = xorDecrypt(inflatedData)
+                decodeGB18030(xorDecrypted)
+            }
+
+            Log.d("LyricUtil", "Kuwo lyric decryption successful, result length: ${result.length}")
+            promise.resolve(result)
+        } catch (e: Exception) {
+            Log.e("LyricUtil", "Kuwo lyric decryption error: ${e.message}", e)
+            promise.reject("KW_DECRYPT_ERROR", "Failed to decrypt Kuwo lyric: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Find header end marker (\r\n\r\n) in byte array
+     */
+    private fun findHeaderEnd(buffer: ByteArray): Int {
+        for (i in 0 until buffer.size - 3) {
+            if (buffer[i] == '\r'.code.toByte() &&
+                buffer[i + 1] == '\n'.code.toByte() &&
+                buffer[i + 2] == '\r'.code.toByte() &&
+                buffer[i + 3] == '\n'.code.toByte()) {
+                return i
+            }
+        }
+        return -1
+    }
+
+    /**
+     * XOR decrypt with "yeelion" key
+     */
+    private fun xorDecrypt(data: ByteArray): ByteArray {
+        val key = "yeelion".toByteArray(StandardCharsets.UTF_8)
+        val keyLen = key.size
+
+        // First decode from base64 (data is base64 string bytes)
+        val base64Str = String(data, StandardCharsets.UTF_8)
+        val buf = android.util.Base64.decode(base64Str, android.util.Base64.DEFAULT)
+        val bufLen = buf.size
+
+        val output = ByteArray(bufLen)
+        var i = 0
+        while (i < bufLen) {
+            var j = 0
+            while (j < keyLen && i < bufLen) {
+                output[i] = (buf[i].toInt() xor key[j].toInt()).toByte()
+                i++
+                j++
+            }
+        }
+
+        return output
+    }
+
+    /**
+     * Decode byte array as GB18030 (Chinese encoding)
+     */
+    private fun decodeGB18030(data: ByteArray): String {
+        return try {
+            // Try to use GB18030 charset
+            val charset = java.nio.charset.Charset.forName("GB18030")
+            String(data, charset)
+        } catch (e: Exception) {
+            Log.w("LyricUtil", "GB18030 decoding failed, fallback to GBK: ${e.message}")
+            try {
+                // Fallback to GBK
+                val charset = java.nio.charset.Charset.forName("GBK")
+                String(data, charset)
+            } catch (e2: Exception) {
+                Log.w("LyricUtil", "GBK decoding failed, fallback to UTF-8: ${e2.message}")
+                // Final fallback to UTF-8
+                String(data, StandardCharsets.UTF_8)
+            }
+        }
+    }
+
     // ==================== QRC Lyric Decryption ====================
 
     /**
