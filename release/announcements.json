@@ -3,7 +3,13 @@
     {
       "id": "1",
       "title": "公告",
-      "content": "# QQ交流群，推荐加入\n\n## 1064805856\n\n## ikun音源导入链接：https://musicfree-plugins.netlify.app\n\n",
+      "content": [
+        "QQ交流群，推荐加入",
+        "群号：1064805856",
+        "",
+        "插件导入链接：",
+        "https://musicfree-plugins.netlify.app"
+      ],
       "priority": 1,
       "minVersion": "0.6.2",
       "maxVersion": "0.6.99",
@@ -15,10 +21,20 @@
     {
       "id": "2",
       "title": "🎉 在线公告功能已上线",
-      "content": "# 新功能发布！\n\nMusicFree 现已支持在线公告功能，让您及时了解最新动态！\n\n## 近期更新\n\n### v0.6.29 版本更新内容\n\n- 新增搜索截面歌词封面显示\n- 新增播放暂停时自动隐藏桌面歌词\n- 全新下载通知样式\n- 插件冷启动\n\n",
+      "content": [
+        "新功能发布！",
+        "MusicFree 现已支持在线公告功能，让您及时了解最新动态！",
+        "",
+        "近期更新 - v0.6.31 版本：",
+        "• 新增搜索截面歌词封面显示",
+        "• 新增播放暂停时自动隐藏桌面歌词",
+        "• 全新下载通知样式",
+        "• 重构公告样式",
+        "• 插件冷启动"
+      ],
       "priority": 1,
       "minVersion": "0.6.2",
-      "maxVersion": "0.6.26",
+      "maxVersion": "0.6.99",
       "expireTime": "2026-09-30T23:59:59+08:00",
       "showOnce": false,
       "type": "info",
@@ -26,8 +42,16 @@
     },
     {
       "id": "3",
-      "title": "🎯更新通知",
-      "content": "# 请更新插件，旧插件已不再可用！\n\n## 近期插件有极大更新、包括不限于歌词、封面、评论\n\n## 插件导入链接：https://musicfree-plugins.netlify.app\n\n",
+      "title": "🎯 更新通知",
+      "content": [
+        "请更新插件，旧插件已不再可用！",
+        "",
+        "近期插件有极大更新，包括不限于：",
+        "歌词、封面、评论等功能",
+        "",
+        "插件导入链接：",
+        "https://musicfree-plugins.netlify.app"
+      ],
       "priority": 1,
       "minVersion": "0.6.2",
       "maxVersion": "0.6.99",

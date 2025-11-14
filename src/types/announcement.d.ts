@@ -4,8 +4,8 @@ declare namespace IAnnouncement {
         id: string;
         /** 公告标题 */
         title: string;
-        /** 公告内容 (支持Markdown) */
-        content: string;
+        /** 公告内容 (字符串数组，每个元素为一行) */
+        content: string[];
         /** 优先级 (数字越小优先级越高) */
         priority?: number;
         /** 最小版本要求 */
