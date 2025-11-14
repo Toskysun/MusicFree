@@ -386,7 +386,8 @@ jobs:
           git add package.json release/version.json
           git commit -m "chore: update version to ${{ github.ref_name }} [skip ci]"
 
-          # 推送回master分支
+          # Push to master branch directly
+          echo "📤 Pushing version files to master..."
           git push origin HEAD:master
           echo "✅ Version files updated and pushed to master branch"
         fi
