@@ -2,7 +2,7 @@ import FastImage from "@/components/base/fastImage";
 import ListItem from "@/components/base/listItem";
 import ThemeText from "@/components/base/themeText";
 import { ImgAsset } from "@/constants/assetsConst";
-import { getMediaUniqueKey } from "@/utils/mediaUtils";
+import { getMediaUniqueKey, isSameMediaItem } from "@/utils/mediaUtils";
 import rpx from "@/utils/rpx";
 import Toast from "@/utils/toast";
 import { devLog } from "@/utils/log";
@@ -25,6 +25,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import PanelBase from "../base/panelBase";
 import { useI18N } from "@/core/i18n";
 import PersistStatus from "@/utils/persistStatus";
+import { useCurrentMusic } from "@/core/trackPlayer";
 
 interface IMusicItemLyricOptionsProps {
     /** 歌曲信息 */
@@ -40,10 +41,23 @@ interface IOption {
     show?: boolean;
 }
 
+const getAlbumIds = (musicItem: IMusic.IMusicItem) => {
+    const item = musicItem as any;
+    const albumId = item.albumid || item.albumId || item.album_id;
+    const albumMid = item.albummid || item.albumMid;
+    return { albumId, albumMid };
+};
+
 export default function MusicItemLyricOptions(
     props: IMusicItemLyricOptionsProps,
 ) {
-    const { musicItem } = props ?? {};
+    const { musicItem: propsMusicItem } = props ?? {};
+
+    // If this is the currently playing music, use the latest state from TrackPlayer
+    const currentMusic = useCurrentMusic();
+    const musicItem = (currentMusic && isSameMediaItem(currentMusic, propsMusicItem))
+        ? currentMusic
+        : propsMusicItem;
 
     const safeAreaInsets = useSafeAreaInsets();
     const { t } = useI18N();
@@ -51,18 +65,30 @@ export default function MusicItemLyricOptions(
     const options: IOption[] = [
         {
             icon: "identification",
-            title: `ID: ${getMediaUniqueKey(musicItem)}`,
+            title: (() => {
+                const songId = musicItem.id;
+                const songMid = musicItem.songmid || musicItem.mid;
+
+                const ids: string[] = [];
+                if (songId) ids.push(`id: ${songId}`);
+                if (songMid) ids.push(`mid: ${songMid}`);
+
+                if (ids.length > 0) {
+                    return `ID: ${musicItem.platform} (${ids.join(", ")})`;
+                }
+                return `ID: ${getMediaUniqueKey(musicItem)}`;
+            })(),
             onPress: () => {
                 mediaCache.setMediaCache(musicItem);
+                const copyData: any = {
+                    platform: musicItem.platform,
+                    id: musicItem.id,
+                };
+                if (musicItem.songmid || musicItem.mid) {
+                    copyData.songmid = musicItem.songmid || musicItem.mid;
+                }
                 Clipboard.setString(
-                    JSON.stringify(
-                        {
-                            platform: musicItem.platform,
-                            id: musicItem.id,
-                        },
-                        null,
-                        "",
-                    ),
+                    JSON.stringify(copyData, null, ""),
                 );
                 Toast.success(t("toast.copiedToClipboard"));
             },
@@ -82,10 +108,36 @@ export default function MusicItemLyricOptions(
         {
             icon: "album-outline",
             show: !!musicItem.album,
-            title: t("panel.musicItemLyricOptions.album", { album: musicItem.album }),
+            title: (() => {
+                const { albumId, albumMid } = getAlbumIds(musicItem);
+                const albumText = musicItem.album;
+
+                const ids: string[] = [];
+                if (albumId) ids.push(`id: ${albumId}`);
+                if (albumMid) ids.push(`mid: ${albumMid}`);
+
+                if (ids.length > 0) {
+                    return `${t("panel.musicItemLyricOptions.album", { album: albumText })} (${ids.join(", ")})`;
+                }
+                return t("panel.musicItemLyricOptions.album", { album: albumText });
+            })(),
             onPress: () => {
                 try {
-                    Clipboard.setString(musicItem.album.toString());
+                    const { albumId, albumMid } = getAlbumIds(musicItem);
+                    let copyText = musicItem.album.toString();
+
+                    if (albumId || albumMid) {
+                        const copyData: any = {
+                            platform: musicItem.platform,
+                            album: musicItem.album,
+                        };
+                        if (albumId) copyData.albumId = albumId;
+                        if (albumMid) copyData.albumMid = albumMid;
+
+                        copyText = JSON.stringify(copyData, null, "");
+                    }
+
+                    Clipboard.setString(copyText);
                     Toast.success(t("toast.copiedToClipboard"));
                 } catch {
                     Toast.success(t("toast.copiedToClipboardFailed"));

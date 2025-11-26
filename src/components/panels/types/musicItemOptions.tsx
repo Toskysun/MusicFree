@@ -6,9 +6,10 @@ import ThemeText from "@/components/base/themeText";
 import { ImgAsset } from "@/constants/assetsConst";
 import Clipboard from "@react-native-clipboard/clipboard";
 
-import { getMediaUniqueKey, getPlatformMediaId } from "@/utils/mediaUtils";
+import { getMediaUniqueKey, getPlatformMediaId, isSameMediaItem } from "@/utils/mediaUtils";
 import FastImage from "@/components/base/fastImage";
 import Toast from "@/utils/toast";
+import { devLog } from "@/utils/log";
 import LocalMusicSheet from "@/core/localMusicSheet";
 import { localMusicSheetId, musicHistorySheetId } from "@/constants/commonConst";
 import { ROUTE_PATH } from "@/core/router";
@@ -22,7 +23,7 @@ import { hidePanel, showPanel } from "../usePanel";
 import Divider from "@/components/base/divider";
 import { iconSizeConst } from "@/constants/uiConst";
 import Config from "@/core/appConfig";
-import TrackPlayer from "@/core/trackPlayer";
+import TrackPlayer, { useCurrentMusic } from "@/core/trackPlayer";
 import mediaCache from "@/core/mediaCache";
 import { IIconName } from "@/components/base/icon.tsx";
 import MusicSheet from "@/core/musicSheet";
@@ -50,9 +51,31 @@ interface IOption {
     show?: boolean;
 }
 
+const getAlbumIds = (musicItem: IMusic.IMusicItem) => {
+    const item = musicItem as any;
+    const albumId = item.albumid || item.albumId || item.album_id;
+    const albumMid = item.albummid || item.albumMid;
+
+    if (musicItem.album && !albumId && !albumMid) {
+        devLog("warn", "[专辑ID] 未找到专辑ID字段", {
+            platform: musicItem.platform,
+            album: musicItem.album,
+            keys: Object.keys(item).filter(k => k.toLowerCase().includes('album'))
+        });
+    }
+
+    return { albumId, albumMid };
+};
+
 export default function MusicItemOptions(props: IMusicItemOptionsProps) {
-    const { musicItem, musicSheet, from } = props ?? {};
+    const { musicItem: propseMusicItem, musicSheet, from } = props ?? {};
     const { t } = useI18N();
+
+    // If this is the currently playing music, use the latest state from TrackPlayer
+    const currentMusic = useCurrentMusic();
+    const musicItem = (currentMusic && isSameMediaItem(currentMusic, propseMusicItem))
+        ? currentMusic
+        : propseMusicItem;
 
     const safeAreaInsets = useSafeAreaInsets();
 
@@ -62,18 +85,30 @@ export default function MusicItemOptions(props: IMusicItemOptionsProps) {
     const options: IOption[] = [
         {
             icon: "identification",
-            title: `ID: ${musicItem.platform}@${getPlatformMediaId(musicItem)}`,
+            title: (() => {
+                const songId = musicItem.id;
+                const songMid = musicItem.songmid || musicItem.mid;
+
+                const ids: string[] = [];
+                if (songId) ids.push(`id: ${songId}`);
+                if (songMid) ids.push(`mid: ${songMid}`);
+
+                if (ids.length > 0) {
+                    return `ID: ${musicItem.platform} (${ids.join(", ")})`;
+                }
+                return `ID: ${musicItem.platform} ${getPlatformMediaId(musicItem)}`;
+            })(),
             onPress: () => {
                 mediaCache.setMediaCache(musicItem);
+                const copyData: any = {
+                    platform: musicItem.platform,
+                    id: getPlatformMediaId(musicItem),
+                };
+                if (musicItem.songmid || musicItem.mid) {
+                    copyData.songmid = musicItem.songmid || musicItem.mid;
+                }
                 Clipboard.setString(
-                    JSON.stringify(
-                        {
-                            platform: musicItem.platform,
-                            id: getPlatformMediaId(musicItem),
-                        },
-                        null,
-                        "",
-                    ),
+                    JSON.stringify(copyData, null, ""),
                 );
                 Toast.success(t("toast.copiedToClipboard"));
             },
@@ -93,10 +128,36 @@ export default function MusicItemOptions(props: IMusicItemOptionsProps) {
         {
             icon: "album-outline",
             show: !!musicItem.album,
-            title: t("panel.musicItemOptions.album", { album: musicItem.album }),
+            title: (() => {
+                const { albumId, albumMid } = getAlbumIds(musicItem);
+                const albumText = musicItem.album;
+
+                const ids: string[] = [];
+                if (albumId) ids.push(`id: ${albumId}`);
+                if (albumMid) ids.push(`mid: ${albumMid}`);
+
+                if (ids.length > 0) {
+                    return `${t("panel.musicItemOptions.album", { album: albumText })} (${ids.join(", ")})`;
+                }
+                return t("panel.musicItemOptions.album", { album: albumText });
+            })(),
             onPress: () => {
                 try {
-                    Clipboard.setString(musicItem.album.toString());
+                    const { albumId, albumMid } = getAlbumIds(musicItem);
+                    let copyText = musicItem.album.toString();
+
+                    if (albumId || albumMid) {
+                        const copyData: any = {
+                            platform: musicItem.platform,
+                            album: musicItem.album,
+                        };
+                        if (albumId) copyData.albumId = albumId;
+                        if (albumMid) copyData.albumMid = albumMid;
+
+                        copyText = JSON.stringify(copyData, null, "");
+                    }
+
+                    Clipboard.setString(copyText);
                     Toast.success(t("toast.copiedToClipboard"));
                 } catch {
                     Toast.warn(t("toast.copiedToClipboardFailed"));
