@@ -2,10 +2,11 @@ import Mp3Util from '@/native/mp3Util';
 import { errorLog, devLog } from '@/utils/log';
 import { removeFileScheme } from '@/utils/fileUtils';
 import lyricManager from '@/core/lyricManager';
-import type { 
-  IMusicMetadata, 
-  IDownloadMetadataConfig, 
-  IDownloadTaskMetadata 
+import type {
+  IMusicMetadata,
+  IDownloadMetadataConfig,
+  IDownloadTaskMetadata,
+  LyricOrderItem
 } from '@/types/metadata';
 import type { IPluginManager } from '@/types/core/pluginManager';
 
@@ -104,11 +105,8 @@ class MusicMetadataManager {
    * 获取歌词内容（增强型LRC格式，包含翻译和罗马音）
    *
    * 设计说明：
+   * - 根据 lyricOrder 配置决定歌词内容和顺序
    * - 生成增强型LRC格式，适用于支持多行歌词的本地播放器
-   * - 格式示例：
-   *   [00:12.34]原始歌词
-   *   [00:12.34]译：翻译内容
-   *   [00:12.34]音：罗马音内容
    */
   private async getLyricContent(
     musicItem: IMusic.IMusicItem,
@@ -132,7 +130,7 @@ class MusicMetadataManager {
           return undefined;
         }
 
-        devLog('info', '🎵[元数据管理器] 插件返回的歌词数据', {
+        devLog('info', '[元数据管理器] 插件返回的歌词数据', {
           有rawLrc: !!lyricSource.rawLrc,
           有translation: !!lyricSource.translation,
           有romanization: !!lyricSource.romanization,
@@ -145,66 +143,76 @@ class MusicMetadataManager {
 
         // Fix: 加密歌词自动解密（QQ音乐QRC格式 - Native异步解密）
         const { autoDecryptLyric } = require('@/utils/qqMusicDecrypter');
-        const rawLrc = lyricSource.rawLrc ? await autoDecryptLyric(lyricSource.rawLrc) : lyricSource.rawLrc;
-        const translation = lyricSource.translation ? await autoDecryptLyric(lyricSource.translation) : lyricSource.translation;
-        const romanization = lyricSource.romanization ? await autoDecryptLyric(lyricSource.romanization) : lyricSource.romanization;
+        const enableWordByWord = config?.enableWordByWord ?? false;
+        const rawLrc = lyricSource.rawLrc ? await autoDecryptLyric(lyricSource.rawLrc, enableWordByWord) : lyricSource.rawLrc;
+        const translation = lyricSource.translation ? await autoDecryptLyric(lyricSource.translation, enableWordByWord) : lyricSource.translation;
+        const romanization = lyricSource.romanization ? await autoDecryptLyric(lyricSource.romanization, enableWordByWord) : lyricSource.romanization;
 
-        devLog('info', '🔓[元数据管理器] 解密后的歌词数据', {
+        devLog('info', '[元数据管理器] 解密后的歌词数据', {
           rawLrc长度: rawLrc?.length,
           translation长度: translation?.length,
           romanization长度: romanization?.length,
-          romanization前200字符: romanization?.substring(0, 200)
+          romanization前200字符: romanization?.substring(0, 200),
+          enableWordByWord
         });
 
         // 如果没有原始歌词，尝试使用旧的lrc字段
         if (!rawLrc) {
           if (lyricSource.lrc && !lyricSource.lrc.startsWith('http')) {
-            return await autoDecryptLyric(lyricSource.lrc);
+            return await autoDecryptLyric(lyricSource.lrc, enableWordByWord);
           }
           return undefined;
         }
 
-        // Check lyric detail configuration
-        const includeOriginal = config?.writeLyricOriginal ?? true;
-        const includeTranslation = config?.writeLyricTranslation ?? true;
-        const includeRomanization = config?.writeLyricRomanization ?? true;
+        // Get lyric order from config
+        const lyricOrder = config?.lyricOrder ?? ['original', 'translation', 'romanization'];
 
-        devLog('info', '🎵[元数据管理器] 歌词写入配置', {
-          包含原文: includeOriginal,
-          包含翻译: includeTranslation,
-          包含罗马音: includeRomanization
+        devLog('info', '[元数据管理器] 歌词写入配置', {
+          歌词顺序: lyricOrder
         });
 
-        // If original is disabled, return undefined
-        if (!includeOriginal) {
-          devLog('info', '⚠️[元数据管理器] 原文歌词已禁用，不写入歌词');
+        // If order is empty, return undefined
+        if (lyricOrder.length === 0) {
+          devLog('info', '[元数据管理器] 歌词顺序为空，不写入歌词');
           return undefined;
         }
 
-        // Filter translation and romanization based on configuration
-        const filteredTranslation = includeTranslation ? translation : undefined;
-        const filteredRomanization = includeRomanization ? romanization : undefined;
+        // Build lyric content map
+        const lyricContentMap: Record<LyricOrderItem, string | undefined> = {
+          original: rawLrc,
+          translation: translation,
+          romanization: romanization
+        };
 
-        // If no translation and romanization, return raw lyric only
-        if (!filteredTranslation && !filteredRomanization) {
-          devLog('info', '🎵[元数据管理器] 返回原始歌词（无翻译/罗马音）', {
-            歌词长度: rawLrc.length,
-            歌曲: musicItem.title
-          });
-          return rawLrc;
+        // Filter available lyric content based on order
+        const availableLyrics: Array<{type: LyricOrderItem, content: string}> = [];
+        for (const orderItem of lyricOrder) {
+          const content = lyricContentMap[orderItem];
+          if (content && content.trim()) {
+            availableLyrics.push({ type: orderItem, content });
+          }
         }
 
-        // Merge lyric with filtered translation and romanization
-        const mergedLrc = this.mergeEnhancedLyric(
-          rawLrc,
-          filteredTranslation,
-          filteredRomanization
-        );
+        if (availableLyrics.length === 0) {
+          devLog('warn', '[元数据管理器] 没有可用的歌词内容');
+          return undefined;
+        }
 
-        devLog('info', '🎵[元数据管理器] 增强型歌词合并完成', {
-          原始长度: rawLrc.length,
-          有翻译: !!filteredTranslation,
-          有罗马音: !!filteredRomanization,
+        // If only one type of lyric, return it directly
+        if (availableLyrics.length === 1) {
+          devLog('info', '[元数据管理器] 返回单一类型歌词', {
+            类型: availableLyrics[0].type,
+            歌词长度: availableLyrics[0].content.length,
+            歌曲: musicItem.title
+          });
+          return availableLyrics[0].content;
+        }
+
+        // Merge lyrics based on order
+        const mergedLrc = this.mergeEnhancedLyricWithOrder(availableLyrics);
+
+        devLog('info', '[元数据管理器] 增强型歌词合并完成', {
+          合并的歌词类型: availableLyrics.map(l => l.type),
           合并后长度: mergedLrc.length,
           歌曲: musicItem.title
         });
@@ -221,7 +229,34 @@ class MusicMetadataManager {
   }
 
   /**
+   * 合并多种歌词内容（简单顺序拼接）
+   *
+   * 按配置顺序依次拼接完整的歌词内容
+   */
+  private mergeEnhancedLyricWithOrder(
+    lyrics: Array<{type: LyricOrderItem, content: string}>
+  ): string {
+    if (lyrics.length === 0) {
+      return '';
+    }
+
+    // Simply concatenate all lyrics in order
+    const result: string[] = [];
+    for (const lyric of lyrics) {
+      result.push(lyric.content);
+    }
+
+    devLog('info', '[元数据管理器] 歌词拼接完成', {
+      歌词类型: lyrics.map(l => l.type),
+      各部分行数: lyrics.map(l => l.content.split('\n').length)
+    });
+
+    return result.join('\n\n');
+  }
+
+  /**
    * 合并原始歌词、翻译和罗马音为增强型LRC格式（LRCv2标准）
+   * @deprecated 使用 mergeEnhancedLyricWithOrder 替代
    *
    * 格式说明（可切换显示的多语言格式）：
    * [00:12.34]原始歌词

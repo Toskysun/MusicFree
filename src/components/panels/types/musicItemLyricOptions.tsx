@@ -26,6 +26,11 @@ import PanelBase from "../base/panelBase";
 import { useI18N } from "@/core/i18n";
 import PersistStatus from "@/utils/persistStatus";
 import { useCurrentMusic } from "@/core/trackPlayer";
+import PluginManager from "@/core/pluginManager";
+import { autoDecryptLyric } from "@/utils/qqMusicDecrypter";
+import { writeFile } from "react-native-fs";
+import { escapeCharacter } from "@/utils/fileUtils";
+import pathConst from "@/constants/pathConst";
 
 interface IMusicItemLyricOptionsProps {
     /** 歌曲信息 */
@@ -181,6 +186,109 @@ export default function MusicItemLyricOptions(
                     Config.setConfig("lyric.showStatusBarLyric", false);
                 }
                 hidePanel();
+            },
+        },
+        {
+            icon: "font-size",
+            title: t("panel.musicItemLyricOptions.toggleWordByWord", {
+                status: Config.getConfig("lyric.enableWordByWord")
+                    ? t("panel.musicItemLyricOptions.disableWordByWord")
+                    : t("panel.musicItemLyricOptions.enableWordByWord"),
+            }),
+            onPress: () => {
+                const current = Config.getConfig("lyric.enableWordByWord") ?? false;
+                Config.setConfig("lyric.enableWordByWord", !current);
+                // Reload lyric to apply new setting
+                lyricManager.reloadCurrentLyric();
+                Toast.success(!current
+                    ? t("panel.musicItemLyricOptions.wordByWordEnabled")
+                    : t("panel.musicItemLyricOptions.wordByWordDisabled")
+                );
+                hidePanel();
+            },
+        },
+        {
+            icon: "arrow-down-tray",
+            title: t("panel.musicItemLyricOptions.downloadLyricFile"),
+            async onPress() {
+                try {
+                    const plugin = PluginManager.getByMedia(musicItem);
+                    if (!plugin?.methods?.getLyric) {
+                        Toast.warn(t("panel.musicItemLyricOptions.lyricNotSupported"));
+                        return;
+                    }
+
+                    const lyricSource = await plugin.methods.getLyric(musicItem);
+                    if (!lyricSource) {
+                        Toast.warn(t("panel.musicItemLyricOptions.lyricNotFound"));
+                        return;
+                    }
+
+                    // Get config from settings
+                    const lyricFileFormat = Config.getConfig("basic.lyricFileFormat") ?? "lrc";
+                    const lyricOrder = Config.getConfig("basic.lyricOrder") ?? ["original", "translation", "romanization"];
+                    const enableWordByWord = Config.getConfig("lyric.enableWordByWord") ?? false;
+                    const downloadPath = Config.getConfig("basic.downloadPath") ?? pathConst.downloadMusicPath;
+
+                    devLog('info', '[歌词下载] 配置信息', {
+                        format: lyricFileFormat,
+                        order: lyricOrder,
+                        enableWordByWord,
+                        downloadPath
+                    });
+
+                    // Decrypt lyrics (auto-decrypt QRC format)
+                    const rawLrc = lyricSource.rawLrc ? await autoDecryptLyric(lyricSource.rawLrc, enableWordByWord) : undefined;
+                    const translation = lyricSource.translation ? await autoDecryptLyric(lyricSource.translation, enableWordByWord) : undefined;
+                    const romanization = lyricSource.romanization ? await autoDecryptLyric(lyricSource.romanization, enableWordByWord) : undefined;
+
+                    // Build lyric content based on config order
+                    const lyricParts: string[] = [];
+                    for (const orderItem of lyricOrder) {
+                        switch (orderItem) {
+                            case "original":
+                                if (rawLrc) lyricParts.push(rawLrc);
+                                break;
+                            case "translation":
+                                if (translation) lyricParts.push(translation);
+                                break;
+                            case "romanization":
+                                if (romanization) lyricParts.push(romanization);
+                                break;
+                        }
+                    }
+
+                    if (lyricParts.length === 0) {
+                        Toast.warn(t("panel.musicItemLyricOptions.lyricNotFound"));
+                        return;
+                    }
+
+                    // Merge lyric content
+                    const lyricContent = lyricParts.join('\n\n');
+
+                    // Generate filename and path
+                    const safeTitle = escapeCharacter(musicItem.title || "unknown");
+                    const safeArtist = escapeCharacter(musicItem.artist || "unknown");
+                    const filename = `${safeTitle} - ${safeArtist}.${lyricFileFormat}`;
+                    const basePath = downloadPath.endsWith('/') ? downloadPath : `${downloadPath}/`;
+                    const filePath = `${basePath}${filename}`;
+
+                    // Write file
+                    await writeFile(filePath, lyricContent, 'utf8');
+
+                    devLog('info', '[歌词下载] 保存成功', {
+                        path: filePath,
+                        size: lyricContent.length
+                    });
+
+                    Toast.success(t("panel.musicItemLyricOptions.lyricSaved"));
+                    hidePanel();
+                } catch (e: any) {
+                    devLog("warn", "[歌词下载] 下载歌词文件失败", e);
+                    Toast.warn(t("panel.musicItemLyricOptions.downloadLyricFailed", {
+                        reason: e?.message,
+                    }));
+                }
             },
         },
         {

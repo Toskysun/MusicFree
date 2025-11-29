@@ -169,6 +169,11 @@ export interface IMp3Util {
 }
 
 /**
+ * 歌词顺序类型
+ */
+export type LyricOrderItem = "original" | "translation" | "romanization";
+
+/**
  * 下载音乐元数据写入配置
  */
 export interface IDownloadMetadataConfig {
@@ -180,12 +185,10 @@ export interface IDownloadMetadataConfig {
   writeLyric: boolean;
   /** 是否从插件获取扩展信息 */
   fetchExtendedInfo: boolean;
-  /** 是否写入原文歌词 */
-  writeLyricOriginal?: boolean;
-  /** 是否写入翻译歌词 */
-  writeLyricTranslation?: boolean;
-  /** 是否写入音译歌词（罗马音） */
-  writeLyricRomanization?: boolean;
+  /** 歌词内容顺序配置 */
+  lyricOrder: LyricOrderItem[];
+  /** 是否启用逐字歌词 */
+  enableWordByWord: boolean;
 }
 
 /**

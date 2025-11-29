@@ -469,8 +469,19 @@ export interface ILanguageData {
     "panel.musicItemLyricOptions.deleteLocalLyric": string; // 删除本地歌词
     "panel.musicItemLyricOptions.settingFail": string; // 设置失败
     "panel.musicItemLyricOptions.deleteFail": string; // 删除失败
+    "panel.musicItemLyricOptions.downloadLyricFile": string; // 下载歌词文件
+    "panel.musicItemLyricOptions.fetchingLyric": string; // 正在获取歌词
+    "panel.musicItemLyricOptions.lyricNotSupported": string; // 插件不支持获取歌词
+    "panel.musicItemLyricOptions.lyricNotFound": string; // 未找到歌词
+    "panel.musicItemLyricOptions.lyricSaved": string; // 歌词已保存
+    "panel.musicItemLyricOptions.downloadLyricFailed": string; // 下载歌词失败
+    "panel.musicItemLyricOptions.toggleWordByWord": string; // 切换逐字歌词
+    "panel.musicItemLyricOptions.enableWordByWord": string; // 开启
+    "panel.musicItemLyricOptions.disableWordByWord": string; // 关闭
+    "panel.musicItemLyricOptions.wordByWordEnabled": string; // 逐字歌词已开启
+    "panel.musicItemLyricOptions.wordByWordDisabled": string; // 逐字歌词已关闭
 
-    // 面板相关 - 音乐项选项    
+    // 面板相关 - 音乐项选项
     "panel.musicItemOptions.author": string; // 作者
     "panel.musicItemOptions.album": string; // 专辑
     "panel.musicItemOptions.downloaded": string; // 已下载

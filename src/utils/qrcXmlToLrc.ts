@@ -66,6 +66,16 @@ function msToLrcTime(ms: number): string {
 }
 
 /**
+ * Convert milliseconds to angle bracket timestamp format <mm:ss.mmm>
+ */
+function msToAngleBracketTime(ms: number): string {
+  const totalSeconds = ms / 1000;
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, '0')}:${seconds.toFixed(3).padStart(6, '0')}`;
+}
+
+/**
  * Check if line is a metadata tag
  */
 function isMetadataTag(text: string): boolean {
@@ -238,4 +248,101 @@ export function isQrcXml(content: string): boolean {
   const hasLyricContent = content.includes('LyricContent=');
 
   return hasQrcTag && hasLyricContent;
+}
+
+/**
+ * Convert QRC line to word-by-word format with angle bracket timestamps
+ * Input format: [21783,3850]凉(21783,220)风(22003,260)轻(22263,260)...
+ * Output format: [00:21.783]<00:21.783>凉<00:22.003>风<00:22.263>轻...
+ */
+function convertQrcLineToWordByWord(line: string): string {
+  const qrcMatch = line.match(/^\[(\d+),\d+\](.+)$/);
+
+  if (!qrcMatch) {
+    return line;
+  }
+
+  const startTimeMs = parseInt(qrcMatch[1], 10);
+  let textWithWordTiming = qrcMatch[2];
+
+  // Handle metadata tags
+  if (isMetadataTag(textWithWordTiming)) {
+    const metaMatch = textWithWordTiming.match(/^\[([^:]+):(.+)\]$/);
+    if (metaMatch) {
+      const tagName = metaMatch[1];
+      const tagValue = metaMatch[2];
+      const cleanValue = removeWordTiming(tagValue);
+      return `[${tagName}:${cleanValue}]`;
+    }
+    return textWithWordTiming;
+  }
+
+  // Handle [kana:] romanization tags
+  const kanaMatch = textWithWordTiming.match(/^\[kana:(.+)\]$/);
+  if (kanaMatch) {
+    textWithWordTiming = kanaMatch[1];
+  }
+
+  // Extract word-by-word timing: 字(start_ms,duration_ms)
+  const wordPattern = /([^\(\)]+?)\((\d+),\d+\)/g;
+  const formattedWords: string[] = [];
+  let match: RegExpExecArray | null;
+
+  while ((match = wordPattern.exec(textWithWordTiming)) !== null) {
+    const word = match[1];
+    const wordStartMs = parseInt(match[2], 10);
+    const wordTimestamp = msToAngleBracketTime(wordStartMs);
+    formattedWords.push(`<${wordTimestamp}>${word}`);
+  }
+
+  // If no words were extracted, fall back to standard LRC
+  if (formattedWords.length === 0) {
+    const textOnly = removeWordTiming(textWithWordTiming);
+    return `${msToLrcTime(startTimeMs)}${textOnly}`;
+  }
+
+  // Combine line timestamp with word timestamps
+  const lineTimestamp = msToAngleBracketTime(startTimeMs);
+  return `[${lineTimestamp}]${formattedWords.join('')}`;
+}
+
+/**
+ * Convert QRC XML format to word-by-word LRC format
+ * Output format: [00:21.783]<00:21.783>凉<00:22.003>风<00:22.263>轻...
+ */
+export function convertQrcXmlToWordByWord(xmlString: string): string {
+  const lyricContent = extractLyricContent(xmlString);
+
+  if (!lyricContent) {
+    return xmlString;
+  }
+
+  const lines = lyricContent.split('\n');
+  const lrcLines: string[] = [];
+
+  for (const line of lines) {
+    const trimmedLine = line.trim();
+
+    if (!trimmedLine) {
+      continue;
+    }
+
+    // Preserve metadata tags
+    if (isMetadataTag(trimmedLine)) {
+      lrcLines.push(trimmedLine);
+      continue;
+    }
+
+    // Convert QRC format line to word-by-word format
+    const convertedLine = convertQrcLineToWordByWord(trimmedLine);
+    lrcLines.push(convertedLine);
+  }
+
+  // Check if this is instrumental music
+  if (isInstrumentalMusic(lrcLines)) {
+    const metadata = lrcLines.filter(line => isMetadataTag(line));
+    return [...metadata, '[00:00.00]纯音乐，请欣赏'].join('\n');
+  }
+
+  return lrcLines.join('\n');
 }

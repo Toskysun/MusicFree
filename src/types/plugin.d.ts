@@ -103,6 +103,10 @@ declare namespace IPlugin {
         getLyric?: (
             musicItem: IMusic.IMusicItemBase,
         ) => Promise<ILyric.ILyricSource | null>;
+        /** 获取逐字歌词 */
+        getWordByWordLyric?: (
+            musicItem: IMusic.IMusicItemBase,
+        ) => Promise<ILyric.ILyricSource | null>;
         /** 获取专辑信息，里面的歌曲分页 */
         getAlbumInfo?: (
             albumItem: IAlbum.IAlbumItemBase,

@@ -882,6 +882,7 @@ function LyricSetting() {
     const fontSize = useAppConfig("lyric.fontSize");
     const enableAutoSearchLyric = useAppConfig("lyric.autoSearchLyric");
     const hideDesktopLyricWhenPaused = useAppConfig("lyric.hideDesktopLyricWhenPaused");
+    const enableWordByWord = useAppConfig("lyric.enableWordByWord");
 
 
 
@@ -893,6 +894,12 @@ function LyricSetting() {
         t("basicSettings.lyric.autoSearchLyric"),
         "lyric.autoSearchLyric",
         enableAutoSearchLyric ?? false,
+    );
+
+    const wordByWordLyric = createSwitch(
+        "逐字歌词",
+        "lyric.enableWordByWord",
+        enableWordByWord ?? true,
     );
 
     const hideWhenPaused = createSwitch(
@@ -968,6 +975,13 @@ function LyricSetting() {
                 onPress={autoSearchLyric.onPress}>
                 <ListItem.Content title={autoSearchLyric.title} />
                 {autoSearchLyric.right}
+            </ListItem>
+            <ListItem
+                withHorizontalPadding
+                heightType="small"
+                onPress={wordByWordLyric.onPress}>
+                <ListItem.Content title={wordByWordLyric.title} />
+                {wordByWordLyric.right}
             </ListItem>
             <ListItem
                 withHorizontalPadding
