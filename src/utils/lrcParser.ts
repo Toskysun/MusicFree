@@ -223,7 +223,7 @@ export function formatLyricsByTimestamp(
                 case "original":
                     content = item.lrc;
                     if (enableWordByWord && item.hasWordByWord && item.words) {
-                        line = formatWordByWordLine(item.time, content, item.words);
+                        line = formatWordByWordLine(item.time, content, item.words, item.duration);
                     }
                     break;
                 case "translation":
@@ -238,7 +238,7 @@ export function formatLyricsByTimestamp(
                     }
                     content = item.romanization;
                     if (enableWordByWord && item.hasRomanizationWordByWord && item.romanizationWords) {
-                        line = formatWordByWordLine(item.time, content, item.romanizationWords);
+                        line = formatWordByWordLine(item.time, content, item.romanizationWords, item.romanizationDuration);
                     }
                     break;
             }
@@ -260,10 +260,6 @@ export function formatLyricsByTimestamp(
         // Join lines for this timestamp
         if (timestampGroups.length > 0) {
             result += timestampGroups.join('\n') + '\n';
-            // Add blank line between timestamp groups for readability
-            if (i < lrcItems.length - 1) {
-                result += '\n';
-            }
         }
     }
 
@@ -282,12 +278,15 @@ export function formatLyricsByTimestamp(
 
 /**
  * Format word-by-word lyric line using angle bracket notation
+ * Output format: [00:21.783]<00:21.783>凉<00:22.003>风...<00:25.633>
+ *
  * @param lineTime Line start time in seconds
  * @param text Plain text content
  * @param words Word timing data
- * @returns Formatted line with word-by-word timestamps
+ * @param lineDuration Optional line duration in milliseconds
+ * @returns Formatted line with word-by-word timestamps and end timestamp
  */
-function formatWordByWordLine(lineTime: number, text: string, words: ILyric.IWordData[]): string {
+function formatWordByWordLine(lineTime: number, text: string, words: ILyric.IWordData[], lineDuration?: number): string {
     // If no words data, return empty (will fallback to regular format)
     if (!words || words.length === 0) {
         return '';
@@ -295,11 +294,18 @@ function formatWordByWordLine(lineTime: number, text: string, words: ILyric.IWor
 
     const lineTimestamp = timeToLrcTime(lineTime);
     let result = lineTimestamp;
+    let lastEndTimeMs = lineTime * 1000;
 
     for (const word of words) {
         const wordTimestamp = msToTimestamp(word.startTime);
         result += `<${wordTimestamp}>${word.text}`;
+        lastEndTimeMs = word.startTime + (word.duration || 0);
     }
+
+    // Add end timestamp
+    const endTimeMs = lastEndTimeMs > lineTime * 1000 ? lastEndTimeMs : (lineTime * 1000 + (lineDuration || 0));
+    const endTimestamp = msToTimestamp(endTimeMs);
+    result += `<${endTimestamp}>`;
 
     return result;
 }

@@ -9,6 +9,7 @@ import { getMediaUniqueKey, isSameMediaItem } from "@/utils/mediaUtils";
 import network from "@/utils/network";
 import { getQualityOrder } from "@/utils/qualities";
 import { generateFileNameFromConfig, DEFAULT_FILE_NAMING_CONFIG } from "@/utils/fileNamingFormatter";
+import { formatLyricsByTimestamp } from "@/utils/lrcParser";
 import EventEmitter from "eventemitter3";
 import { atom, getDefaultStore, useAtomValue } from "jotai";
 import path from "path-browserify";
@@ -403,36 +404,24 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
             const translation = lyricSource.translation ? await autoDecryptLyric(lyricSource.translation, enableWordByWord) : undefined;
             const romanization = lyricSource.romanization ? await autoDecryptLyric(lyricSource.romanization, enableWordByWord) : undefined;
 
-            // 根据配置的顺序构建歌词内容
-            const lyricParts: string[] = [];
-
-            for (const orderItem of lyricOrder) {
-                switch (orderItem) {
-                    case "original":
-                        if (rawLrc) {
-                            lyricParts.push(rawLrc);
-                        }
-                        break;
-                    case "translation":
-                        if (translation) {
-                            lyricParts.push(translation);
-                        }
-                        break;
-                    case "romanization":
-                        if (romanization) {
-                            lyricParts.push(romanization);
-                        }
-                        break;
-                }
-            }
-
-            if (lyricParts.length === 0) {
-                devLog('warn', '[下载器] 没有可用的歌词内容，跳过歌词文件下载');
+            if (!rawLrc) {
+                devLog('warn', '[下载器] 没有可用的原始歌词，跳过歌词文件下载');
                 return;
             }
 
-            // 合并歌词内容（简单顺序拼接）
-            const lyricContent = lyricParts.join('\n\n');
+            // 使用 formatLyricsByTimestamp 格式化歌词（与播放时一致）
+            const lyricContent = formatLyricsByTimestamp(
+                rawLrc,
+                translation,
+                romanization,
+                lyricOrder,
+                { enableWordByWord }
+            );
+
+            if (!lyricContent) {
+                devLog('warn', '[下载器] 格式化后的歌词为空，跳过歌词文件下载');
+                return;
+            }
 
             // 生成歌词文件路径（与音乐文件同名，不同后缀）
             const musicFilePathWithoutExt = musicFilePath.replace(/\.[^.]+$/, '');

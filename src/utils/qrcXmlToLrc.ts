@@ -253,17 +253,22 @@ export function isQrcXml(content: string): boolean {
 /**
  * Convert QRC line to word-by-word format with angle bracket timestamps
  * Input format: [21783,3850]凉(21783,220)风(22003,260)轻(22263,260)...
- * Output format: [00:21.783]<00:21.783>凉<00:22.003>风<00:22.263>轻...
+ * Output format: [00:21.783]<00:21.783>凉<00:22.003>风<00:22.263>轻...<00:25.633>
+ *
+ * Enhanced to:
+ * 1. Preserve spaces with their own timestamps (e.g., " (214,72)" -> "<00:00.214> ")
+ * 2. Add end timestamp at line end (last word start + duration)
  */
 function convertQrcLineToWordByWord(line: string): string {
-  const qrcMatch = line.match(/^\[(\d+),\d+\](.+)$/);
+  const qrcMatch = line.match(/^\[(\d+),(\d+)\](.+)$/);
 
   if (!qrcMatch) {
     return line;
   }
 
   const startTimeMs = parseInt(qrcMatch[1], 10);
-  let textWithWordTiming = qrcMatch[2];
+  const lineDurationMs = parseInt(qrcMatch[2], 10);
+  let textWithWordTiming = qrcMatch[3];
 
   // Handle metadata tags
   if (isMetadataTag(textWithWordTiming)) {
@@ -284,15 +289,19 @@ function convertQrcLineToWordByWord(line: string): string {
   }
 
   // Extract word-by-word timing: 字(start_ms,duration_ms)
-  const wordPattern = /([^\(\)]+?)\((\d+),\d+\)/g;
+  // Include spaces as separate elements
+  const wordPattern = /([^\(\)]+?)\((\d+),(\d+)\)/g;
   const formattedWords: string[] = [];
   let match: RegExpExecArray | null;
+  let lastEndTimeMs = startTimeMs;
 
   while ((match = wordPattern.exec(textWithWordTiming)) !== null) {
     const word = match[1];
     const wordStartMs = parseInt(match[2], 10);
+    const wordDurationMs = parseInt(match[3], 10);
     const wordTimestamp = msToAngleBracketTime(wordStartMs);
     formattedWords.push(`<${wordTimestamp}>${word}`);
+    lastEndTimeMs = wordStartMs + wordDurationMs;
   }
 
   // If no words were extracted, fall back to standard LRC
@@ -301,9 +310,13 @@ function convertQrcLineToWordByWord(line: string): string {
     return `${msToLrcTime(startTimeMs)}${textOnly}`;
   }
 
-  // Combine line timestamp with word timestamps
+  // Calculate end timestamp: use last word's end time, or line start + duration
+  const endTimeMs = lastEndTimeMs > startTimeMs ? lastEndTimeMs : startTimeMs + lineDurationMs;
+  const endTimestamp = msToAngleBracketTime(endTimeMs);
+
+  // Combine line timestamp with word timestamps and end timestamp
   const lineTimestamp = msToAngleBracketTime(startTimeMs);
-  return `[${lineTimestamp}]${formattedWords.join('')}`;
+  return `[${lineTimestamp}]${formattedWords.join('')}<${endTimestamp}>`;
 }
 
 /**

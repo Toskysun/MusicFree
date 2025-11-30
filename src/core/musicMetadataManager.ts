@@ -2,6 +2,7 @@ import Mp3Util from '@/native/mp3Util';
 import { errorLog, devLog } from '@/utils/log';
 import { removeFileScheme } from '@/utils/fileUtils';
 import lyricManager from '@/core/lyricManager';
+import { formatLyricsByTimestamp } from '@/utils/lrcParser';
 import type {
   IMusicMetadata,
   IDownloadMetadataConfig,
@@ -177,47 +178,32 @@ class MusicMetadataManager {
           return undefined;
         }
 
-        // Build lyric content map
-        const lyricContentMap: Record<LyricOrderItem, string | undefined> = {
-          original: rawLrc,
-          translation: translation,
-          romanization: romanization
-        };
+        // Use formatLyricsByTimestamp from lrcParser for consistent formatting
+        const formattedLyric = formatLyricsByTimestamp(
+          rawLrc,
+          translation,
+          romanization,
+          lyricOrder,
+          { enableWordByWord: enableWordByWord }
+        );
 
-        // Filter available lyric content based on order
-        const availableLyrics: Array<{type: LyricOrderItem, content: string}> = [];
-        for (const orderItem of lyricOrder) {
-          const content = lyricContentMap[orderItem];
-          if (content && content.trim()) {
-            availableLyrics.push({ type: orderItem, content });
-          }
+        if (!formattedLyric) {
+          devLog('warn', '[元数据管理器] 格式化后的歌词为空');
+          return rawLrc; // Fallback to raw lyrics
         }
 
-        if (availableLyrics.length === 0) {
-          devLog('warn', '[元数据管理器] 没有可用的歌词内容');
-          return undefined;
-        }
-
-        // If only one type of lyric, return it directly
-        if (availableLyrics.length === 1) {
-          devLog('info', '[元数据管理器] 返回单一类型歌词', {
-            类型: availableLyrics[0].type,
-            歌词长度: availableLyrics[0].content.length,
-            歌曲: musicItem.title
-          });
-          return availableLyrics[0].content;
-        }
-
-        // Merge lyrics based on order
-        const mergedLrc = this.mergeEnhancedLyricWithOrder(availableLyrics);
-
-        devLog('info', '[元数据管理器] 增强型歌词合并完成', {
-          合并的歌词类型: availableLyrics.map(l => l.type),
-          合并后长度: mergedLrc.length,
+        devLog('info', '[元数据管理器] 歌词格式化完成', {
+          合并的歌词类型: lyricOrder.filter(type => {
+            if (type === 'original') return !!rawLrc;
+            if (type === 'translation') return !!translation;
+            if (type === 'romanization') return !!romanization;
+            return false;
+          }),
+          格式化后长度: formattedLyric.length,
           歌曲: musicItem.title
         });
 
-        return mergedLrc;
+        return formattedLyric;
       } catch (error) {
         errorLog('通过插件获取歌词失败', error);
         return undefined;
@@ -226,147 +212,6 @@ class MusicMetadataManager {
       errorLog('获取歌词失败', error);
       return undefined;
     }
-  }
-
-  /**
-   * 合并多种歌词内容（简单顺序拼接）
-   *
-   * 按配置顺序依次拼接完整的歌词内容
-   */
-  private mergeEnhancedLyricWithOrder(
-    lyrics: Array<{type: LyricOrderItem, content: string}>
-  ): string {
-    if (lyrics.length === 0) {
-      return '';
-    }
-
-    // Simply concatenate all lyrics in order
-    const result: string[] = [];
-    for (const lyric of lyrics) {
-      result.push(lyric.content);
-    }
-
-    devLog('info', '[元数据管理器] 歌词拼接完成', {
-      歌词类型: lyrics.map(l => l.type),
-      各部分行数: lyrics.map(l => l.content.split('\n').length)
-    });
-
-    return result.join('\n\n');
-  }
-
-  /**
-   * 合并原始歌词、翻译和罗马音为增强型LRC格式（LRCv2标准）
-   * @deprecated 使用 mergeEnhancedLyricWithOrder 替代
-   *
-   * 格式说明（可切换显示的多语言格式）：
-   * [00:12.34]原始歌词
-   * [00:12.34]Translation text
-   * [00:12.34]Romanization text
-   */
-  private mergeEnhancedLyric(
-    rawLrc: string,
-    translation?: string,
-    romanization?: string
-  ): string {
-    const rawLines = this.parseLrcLines(rawLrc);
-    const translationLines = translation ? this.parseLrcLines(translation) : [];
-    const romanizationLines = romanization ? this.parseLrcLines(romanization) : [];
-
-    devLog('info', '🔍[元数据管理器] 歌词解析结果', {
-      原始歌词行数: rawLines.length,
-      翻译行数: translationLines.length,
-      罗马音行数: romanizationLines.length,
-      原始前3行: rawLines.slice(0, 3),
-      翻译前3行: translationLines.slice(0, 3),
-      罗马音前3行: romanizationLines.slice(0, 3)
-    });
-
-    // 构建翻译和罗马音的时间戳索引（标准化时间戳作为key）
-    const translationMap = new Map<string, string>();
-    const romanizationMap = new Map<string, string>();
-
-    for (const line of translationLines) {
-      const normalizedTime = this.normalizeTimestamp(line.time);
-      translationMap.set(normalizedTime, line.content);
-    }
-
-    for (const line of romanizationLines) {
-      const normalizedTime = this.normalizeTimestamp(line.time);
-      romanizationMap.set(normalizedTime, line.content);
-    }
-
-    const result: string[] = [];
-    let translationCount = 0;
-    let romanizationCount = 0;
-
-    // 遍历原始歌词，使用LRCv2格式：相同时间戳，多行不同语言
-    for (const line of rawLines) {
-      // 添加原始歌词
-      result.push(`${line.time}${line.content}`);
-
-      const normalizedTime = this.normalizeTimestamp(line.time);
-
-      // 添加翻译（如果存在且不为空）- 使用相同时间戳
-      const trans = translationMap.get(normalizedTime);
-      if (trans && trans.trim()) {
-        result.push(`${line.time}${trans}`);
-        translationCount++;
-      }
-
-      // 添加罗马音（如果存在且不为空）- 使用相同时间戳
-      const roma = romanizationMap.get(normalizedTime);
-      if (roma && roma.trim()) {
-        result.push(`${line.time}${roma}`);
-        romanizationCount++;
-      }
-    }
-
-    devLog('info', '✅[元数据管理器] 歌词合并统计', {
-      写入翻译行数: translationCount,
-      写入罗马音行数: romanizationCount,
-      总行数: result.length
-    });
-
-    return result.join('\n');
-  }
-
-  /**
-   * 标准化LRC时间戳，忽略小数位数差异
-   * [00:12.34] 和 [00:12.340] 应该被视为相同
-   */
-  private normalizeTimestamp(timestamp: string): string {
-    // 提取 [mm:ss.xxx] 格式中的数字部分
-    const match = timestamp.match(/\[(\d+):(\d+)\.(\d+)\]/);
-    if (!match) {
-      return timestamp;
-    }
-
-    const minutes = match[1];
-    const seconds = match[2];
-    const milliseconds = match[3].padEnd(3, '0').substring(0, 3); // 统一为3位小数
-
-    return `[${minutes}:${seconds}.${milliseconds}]`;
-  }
-
-  /**
-   * 解析LRC格式歌词，提取时间戳和内容
-   */
-  private parseLrcLines(lrc: string): Array<{time: string, content: string}> {
-    const lines: Array<{time: string, content: string}> = [];
-    const lrcLines = lrc.split('\n');
-
-    for (const line of lrcLines) {
-      // 匹配时间戳格式 [mm:ss.xx] 或 [mm:ss.xxx]
-      const match = line.match(/^(\[\d+:\d+\.\d+\])(.*)/);
-      if (match) {
-        lines.push({
-          time: match[1],
-          content: match[2]  // 不使用 trim()，保留原始内容
-        });
-      }
-    }
-
-    return lines;
   }
 
   /**
