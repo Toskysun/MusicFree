@@ -102,7 +102,7 @@ export default function MusicItemOptions(props: IMusicItemOptionsProps) {
                 mediaCache.setMediaCache(musicItem);
                 const copyData: any = {
                     platform: musicItem.platform,
-                    id: getPlatformMediaId(musicItem),
+                    id: musicItem.id,
                 };
                 if (musicItem.songmid || musicItem.mid) {
                     copyData.songmid = musicItem.songmid || musicItem.mid;
