@@ -42,10 +42,13 @@ export interface IAppConfigProperties {
     "basic.writeMetadataCover": boolean;
     "basic.writeMetadataLyric": boolean;
     "basic.writeMetadataExtended": boolean;
-    // 歌词写入细分选项
-    "basic.writeMetadataLyricOriginal": boolean;
-    "basic.writeMetadataLyricTranslation": boolean;
-    "basic.writeMetadataLyricRomanization": boolean;
+    // 歌词文件下载相关配置
+    "basic.downloadLyricFile": boolean;
+    "basic.lyricFileFormat": "lrc" | "txt";
+    // 歌词内容顺序配置
+    "basic.lyricOrder": ("original" | "translation" | "romanization")[];
+    // 逐字歌词配置（QRC格式保留逐字时间戳）
+    "basic.enableWordByWordLyric": boolean;
 
     // Lyric
     "lyric.showStatusBarLyric": boolean;
@@ -59,6 +62,8 @@ export interface IAppConfigProperties {
     "lyric.detailFontSize": number;
     "lyric.autoSearchLyric": boolean;
     "lyric.hideDesktopLyricWhenPaused": boolean;
+    "lyric.enableWordByWord": boolean;
+    "lyric.enableWordByWordGlow": boolean;
 
     // Theme
     "theme.background": string;

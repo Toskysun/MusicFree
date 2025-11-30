@@ -276,7 +276,8 @@ export async function initTrackPlayer(logger?: IPerfLogger) {
         ];
     await RNTrackPlayer.updateOptions({
         icon: ImgAsset.logoTransparent,
-        progressUpdateEventInterval: 1,
+        // Frequent updates for smooth word-by-word lyric animation (100ms interval)
+        progressUpdateEventInterval: 0.1,
         android: {
             alwaysPauseOnInterruption: true,
             appKilledPlaybackBehavior:

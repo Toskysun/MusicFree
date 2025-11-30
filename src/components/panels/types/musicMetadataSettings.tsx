@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { StyleSheet, View, TouchableOpacity } from "react-native";
 import { ScrollView } from "react-native-gesture-handler";
 import rpx, { vmax } from "@/utils/rpx";
 import { fontSizeConst } from "@/constants/uiConst";
@@ -11,7 +11,16 @@ import PanelHeader from "../base/panelHeader";
 import Config, { useAppConfig } from "@/core/appConfig";
 import ListItem from "@/components/base/listItem";
 import ThemeSwitch from "@/components/base/switch";
+import Checkbox from "@/components/base/checkbox";
 import Toast from "@/utils/toast";
+
+type LyricOrderItem = "original" | "translation" | "romanization";
+
+const lyricOrderLabels: Record<LyricOrderItem, { label: string; desc: string }> = {
+    original: { label: "原文歌词", desc: "歌曲原始语言的歌词" },
+    translation: { label: "翻译歌词", desc: "歌词的中文翻译" },
+    romanization: { label: "音译歌词", desc: "罗马音/拼音注音" },
+};
 
 interface IMusicMetadataSettingsProps {
     // Reserved for future props
@@ -25,9 +34,10 @@ export default function MusicMetadataSettings(_props: IMusicMetadataSettingsProp
     const currentWriteMetadataCover = useAppConfig("basic.writeMetadataCover");
     const currentWriteMetadataLyric = useAppConfig("basic.writeMetadataLyric");
     const currentWriteMetadataExtended = useAppConfig("basic.writeMetadataExtended");
-    const currentWriteLyricOriginal = useAppConfig("basic.writeMetadataLyricOriginal");
-    const currentWriteLyricTranslation = useAppConfig("basic.writeMetadataLyricTranslation");
-    const currentWriteLyricRomanization = useAppConfig("basic.writeMetadataLyricRomanization");
+    const currentDownloadLyricFile = useAppConfig("basic.downloadLyricFile");
+    const currentLyricFileFormat = useAppConfig("basic.lyricFileFormat");
+    const currentLyricOrder = useAppConfig("basic.lyricOrder");
+    const currentEnableWordByWord = useAppConfig("basic.enableWordByWordLyric");
 
     // Local state management
     const [settings, setSettings] = useState({
@@ -35,35 +45,36 @@ export default function MusicMetadataSettings(_props: IMusicMetadataSettingsProp
         writeMetadataCover: currentWriteMetadataCover ?? true,
         writeMetadataLyric: currentWriteMetadataLyric ?? true,
         writeMetadataExtended: currentWriteMetadataExtended ?? false,
-        writeLyricOriginal: currentWriteLyricOriginal ?? true,
-        writeLyricTranslation: currentWriteLyricTranslation ?? true,
-        writeLyricRomanization: currentWriteLyricRomanization ?? true,
+        downloadLyricFile: currentDownloadLyricFile ?? false,
+        lyricFileFormat: currentLyricFileFormat ?? "lrc" as "lrc" | "txt",
+        lyricOrder: currentLyricOrder ?? ["original", "translation", "romanization"] as LyricOrderItem[],
+        enableWordByWord: currentEnableWordByWord ?? false,
     });
 
     const handleSave = () => {
-        // Save all settings to configuration
         Config.setConfig("basic.writeMetadata", settings.writeMetadata);
         Config.setConfig("basic.writeMetadataCover", settings.writeMetadataCover);
         Config.setConfig("basic.writeMetadataLyric", settings.writeMetadataLyric);
         Config.setConfig("basic.writeMetadataExtended", settings.writeMetadataExtended);
-        Config.setConfig("basic.writeMetadataLyricOriginal", settings.writeLyricOriginal);
-        Config.setConfig("basic.writeMetadataLyricTranslation", settings.writeLyricTranslation);
-        Config.setConfig("basic.writeMetadataLyricRomanization", settings.writeLyricRomanization);
+        Config.setConfig("basic.downloadLyricFile", settings.downloadLyricFile);
+        Config.setConfig("basic.lyricFileFormat", settings.lyricFileFormat);
+        Config.setConfig("basic.lyricOrder", settings.lyricOrder);
+        Config.setConfig("basic.enableWordByWordLyric", settings.enableWordByWord);
 
         Toast.success("音乐标签设置已保存");
         hidePanel();
     };
 
     const handleReset = () => {
-        // Reset to default values
         setSettings({
             writeMetadata: false,
             writeMetadataCover: true,
             writeMetadataLyric: true,
             writeMetadataExtended: false,
-            writeLyricOriginal: true,
-            writeLyricTranslation: true,
-            writeLyricRomanization: true,
+            downloadLyricFile: false,
+            lyricFileFormat: "lrc",
+            lyricOrder: ["original", "translation", "romanization"],
+            enableWordByWord: false,
         });
         Toast.success("已重置为默认值");
     };
@@ -141,6 +152,152 @@ export default function MusicMetadataSettings(_props: IMusicMetadataSettingsProp
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
     );
 
+    // Lyric order toggle handler
+    const toggleLyricOrderItem = (item: LyricOrderItem) => {
+        setSettings(prev => {
+            const currentOrder = prev.lyricOrder;
+            if (currentOrder.includes(item)) {
+                // Remove item (allow empty)
+                return {
+                    ...prev,
+                    lyricOrder: currentOrder.filter(i => i !== item)
+                };
+            } else {
+                // Add item to end
+                return {
+                    ...prev,
+                    lyricOrder: [...currentOrder, item]
+                };
+            }
+        });
+    };
+
+    // Move item up in order
+    const moveLyricOrderUp = (item: LyricOrderItem) => {
+        setSettings(prev => {
+            const currentOrder = [...prev.lyricOrder];
+            const index = currentOrder.indexOf(item);
+            if (index > 0) {
+                [currentOrder[index - 1], currentOrder[index]] = [currentOrder[index], currentOrder[index - 1]];
+            }
+            return { ...prev, lyricOrder: currentOrder };
+        });
+    };
+
+    // Move item down in order
+    const moveLyricOrderDown = (item: LyricOrderItem) => {
+        setSettings(prev => {
+            const currentOrder = [...prev.lyricOrder];
+            const index = currentOrder.indexOf(item);
+            if (index >= 0 && index < currentOrder.length - 1) {
+                [currentOrder[index], currentOrder[index + 1]] = [currentOrder[index + 1], currentOrder[index]];
+            }
+            return { ...prev, lyricOrder: currentOrder };
+        });
+    };
+
+    // Format type toggle handler
+    const setLyricFileFormat = (format: "lrc" | "txt") => {
+        setSettings(prev => ({
+            ...prev,
+            lyricFileFormat: format
+        }));
+    };
+
+    // Render lyric order item with reorder buttons
+    const renderLyricOrderItem = (item: LyricOrderItem) => {
+        const isChecked = settings.lyricOrder.includes(item);
+        const index = settings.lyricOrder.indexOf(item);
+        const { label, desc } = lyricOrderLabels[item];
+
+        return (
+            <View key={item} style={styles.lyricOrderItemRow}>
+                <TouchableOpacity
+                    style={styles.lyricOrderItemLeft}
+                    onPress={() => toggleLyricOrderItem(item)}
+                    activeOpacity={0.7}
+                >
+                    <Checkbox
+                        checked={isChecked}
+                        onPress={() => toggleLyricOrderItem(item)}
+                    />
+                    <View style={styles.lyricOrderTextContainer}>
+                        <ThemeText fontSize="content">{label}</ThemeText>
+                        <ThemeText
+                            fontSize="description"
+                            fontColor="textSecondary"
+                            style={styles.lyricOrderDescription}>
+                            {desc}
+                        </ThemeText>
+                    </View>
+                </TouchableOpacity>
+                {isChecked && (
+                    <View style={styles.reorderButtons}>
+                        <TouchableOpacity
+                            style={[styles.reorderButton, index === 0 && styles.reorderButtonDisabled]}
+                            onPress={() => moveLyricOrderUp(item)}
+                            disabled={index === 0}
+                        >
+                            <ThemeText fontSize="description" fontColor={index === 0 ? "textSecondary" : "text"}>▲</ThemeText>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.reorderButton, index === settings.lyricOrder.length - 1 && styles.reorderButtonDisabled]}
+                            onPress={() => moveLyricOrderDown(item)}
+                            disabled={index === settings.lyricOrder.length - 1}
+                        >
+                            <ThemeText fontSize="description" fontColor={index === settings.lyricOrder.length - 1 ? "textSecondary" : "text"}>▼</ThemeText>
+                        </TouchableOpacity>
+                    </View>
+                )}
+            </View>
+        );
+    };
+
+    // Render format selector
+    const renderFormatSelector = () => {
+        return (
+            <View style={styles.formatSelectorContainer}>
+                <TouchableOpacity
+                    style={[
+                        styles.formatOption,
+                        settings.lyricFileFormat === "lrc" && {
+                            backgroundColor: colors.primary + '20',
+                            borderColor: colors.primary,
+                        }
+                    ]}
+                    onPress={() => setLyricFileFormat("lrc")}
+                    activeOpacity={0.7}
+                >
+                    <ThemeText
+                        fontSize="content"
+                        fontColor={settings.lyricFileFormat === "lrc" ? "primary" : "text"}>
+                        .lrc
+                    </ThemeText>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={[
+                        styles.formatOption,
+                        settings.lyricFileFormat === "txt" && {
+                            backgroundColor: colors.primary + '20',
+                            borderColor: colors.primary,
+                        }
+                    ]}
+                    onPress={() => setLyricFileFormat("txt")}
+                    activeOpacity={0.7}
+                >
+                    <ThemeText
+                        fontSize="content"
+                        fontColor={settings.lyricFileFormat === "txt" ? "primary" : "text"}>
+                        .txt
+                    </ThemeText>
+                </TouchableOpacity>
+            </View>
+        );
+    };
+
+    // Check if lyric features are enabled
+    const lyricFeaturesEnabled = (settings.writeMetadata && settings.writeMetadataLyric) || settings.downloadLyricFile;
+
     return (
         <PanelBase
             keyboardAvoidBehavior="height"
@@ -197,68 +354,87 @@ export default function MusicMetadataSettings(_props: IMusicMetadataSettingsProp
                                             createSwitchHandler('writeMetadataExtended'),
                                             { icon: "📝", level: 1 }
                                         )}
-                                    </>
-                                )}
-
-                                {/* Lyric Options Card */}
-                                {renderCard(
-                                    <>
+                                        {renderDivider()}
                                         {renderSwitchItem(
                                             "写入歌词",
-                                            "自动获取并嵌入 LRC 格式歌词文件",
+                                            "自动获取并嵌入歌词到音乐文件",
                                             settings.writeMetadataLyric,
                                             createSwitchHandler('writeMetadataLyric'),
                                             { icon: "🎵", level: 1 }
                                         )}
-
-                                        {/* Lyric Detail Options - Only show when lyric switch is enabled */}
-                                        {settings.writeMetadataLyric && (
-                                            <>
-                                                {renderDivider()}
-                                                <View style={styles.lyricOptionsContainer}>
-                                                    <ThemeText
-                                                        fontSize="description"
-                                                        fontColor="textSecondary"
-                                                        style={styles.lyricOptionsTitle}>
-                                                        歌词内容选项
-                                                    </ThemeText>
-
-                                                    {renderSwitchItem(
-                                                        "原文歌词",
-                                                        "包含原始语言的歌词文本",
-                                                        settings.writeLyricOriginal,
-                                                        createSwitchHandler('writeLyricOriginal'),
-                                                        { level: 2 }
-                                                    )}
-
-                                                    {renderSwitchItem(
-                                                        "翻译歌词",
-                                                        "包含歌词的中文翻译内容",
-                                                        settings.writeLyricTranslation,
-                                                        createSwitchHandler('writeLyricTranslation'),
-                                                        { level: 2 }
-                                                    )}
-
-                                                    {renderSwitchItem(
-                                                        "音译歌词（罗马音）",
-                                                        "包含歌词的罗马音拼读内容",
-                                                        settings.writeLyricRomanization,
-                                                        createSwitchHandler('writeLyricRomanization'),
-                                                        { level: 2 }
-                                                    )}
-
-                                                    <ThemeText
-                                                        fontSize="description"
-                                                        fontColor="textSecondary"
-                                                        style={styles.lyricOptionsHint}>
-                                                        适用于支持多行显示的播放器
-                                                    </ThemeText>
-                                                </View>
-                                            </>
-                                        )}
                                     </>
                                 )}
                             </>
+                        )}
+
+                        {/* Lyric File Download Card */}
+                        {renderCard(
+                            renderSwitchItem(
+                                "下载歌词文件",
+                                "下载音乐时同时保存独立的歌词文件",
+                                settings.downloadLyricFile,
+                                createSwitchHandler('downloadLyricFile'),
+                                { icon: "📄" }
+                            )
+                        )}
+
+                        {/* Lyric Order Settings - Show when either lyric feature is enabled */}
+                        {lyricFeaturesEnabled && (
+                            renderCard(
+                                <View style={styles.lyricOrderContainer}>
+                                    <ThemeText
+                                        fontSize="content"
+                                        fontWeight="semibold"
+                                        style={styles.lyricOrderTitle}>
+                                        歌词内容设置
+                                    </ThemeText>
+                                    <ThemeText
+                                        fontSize="description"
+                                        fontColor="textSecondary"
+                                        style={styles.lyricOrderSubtitle}>
+                                        选择要包含的歌词类型，可调整顺序
+                                    </ThemeText>
+
+                                    {renderLyricOrderItem("original")}
+                                    {renderLyricOrderItem("translation")}
+                                    {renderLyricOrderItem("romanization")}
+
+                                    {settings.lyricOrder.length > 0 && (
+                                        <ThemeText
+                                            fontSize="description"
+                                            fontColor="textSecondary"
+                                            style={styles.lyricOrderHint}>
+                                            当前顺序：{settings.lyricOrder.map(i => lyricOrderLabels[i].label).join(" → ")}
+                                        </ThemeText>
+                                    )}
+
+                                    {renderDivider()}
+                                    <View style={styles.wordByWordSection}>
+                                        {renderSwitchItem(
+                                            "逐字歌词",
+                                            "保留QRC格式的逐字时间戳（如有）",
+                                            settings.enableWordByWord,
+                                            createSwitchHandler('enableWordByWord'),
+                                            { level: 1 }
+                                        )}
+                                    </View>
+
+                                    {settings.downloadLyricFile && (
+                                        <>
+                                            {renderDivider()}
+                                            <View style={styles.formatSection}>
+                                                <ThemeText
+                                                    fontSize="description"
+                                                    fontColor="textSecondary"
+                                                    style={styles.formatLabel}>
+                                                    歌词文件格式
+                                                </ThemeText>
+                                                {renderFormatSelector()}
+                                            </View>
+                                        </>
+                                    )}
+                                </View>
+                            )
                         )}
 
                         {/* Reset Button */}
@@ -348,25 +524,72 @@ const styles = StyleSheet.create({
         marginHorizontal: rpx(20),
         opacity: 0.3,
     },
-    lyricOptionsContainer: {
-        paddingTop: rpx(8),
+    lyricOrderContainer: {
+        paddingHorizontal: rpx(20),
+        paddingVertical: rpx(16),
     },
-    lyricOptionsTitle: {
-        paddingHorizontal: rpx(32),
-        paddingTop: rpx(8),
-        paddingBottom: rpx(4),
-        fontWeight: '600',
-        textTransform: 'uppercase',
-        fontSize: fontSizeConst.description * 0.9,
-        letterSpacing: 0.5,
+    lyricOrderTitle: {
+        marginBottom: rpx(4),
     },
-    lyricOptionsHint: {
-        paddingHorizontal: rpx(32),
-        paddingTop: rpx(12),
-        paddingBottom: rpx(4),
+    lyricOrderSubtitle: {
+        marginBottom: rpx(12),
+    },
+    lyricOrderItemRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: rpx(10),
+    },
+    lyricOrderItemLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+        gap: rpx(12),
+    },
+    lyricOrderTextContainer: {
+        flex: 1,
+    },
+    lyricOrderDescription: {
+        marginTop: rpx(2),
+    },
+    reorderButtons: {
+        flexDirection: 'row',
+        gap: rpx(8),
+    },
+    reorderButton: {
+        width: rpx(48),
+        height: rpx(48),
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: rpx(8),
+        backgroundColor: 'rgba(128,128,128,0.1)',
+    },
+    reorderButtonDisabled: {
+        opacity: 0.3,
+    },
+    lyricOrderHint: {
+        marginTop: rpx(12),
         fontStyle: 'italic',
-        opacity: 0.7,
-        lineHeight: fontSizeConst.description * 1.4,
+    },
+    wordByWordSection: {
+        marginTop: rpx(8),
+    },
+    formatSection: {
+        paddingTop: rpx(16),
+    },
+    formatLabel: {
+        marginBottom: rpx(8),
+    },
+    formatSelectorContainer: {
+        flexDirection: 'row',
+        gap: rpx(16),
+    },
+    formatOption: {
+        paddingHorizontal: rpx(24),
+        paddingVertical: rpx(12),
+        borderRadius: rpx(8),
+        borderWidth: 1,
+        borderColor: '#ccc',
     },
     resetContainer: {
         marginTop: rpx(8),

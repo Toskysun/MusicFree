@@ -38,6 +38,8 @@ const defaultLyricState = {
 
 const lyricStateAtom = atom<ILyricState>(defaultLyricState);
 const currentLyricItemAtom = atom<IParsedLrcItem | null>(null);
+// 当前播放位置（毫秒），用于逐字歌词效果
+const currentPositionMsAtom = atom<number>(0);
 
 
 class LyricManager implements IInjectable {
@@ -96,6 +98,10 @@ class LyricManager implements IInjectable {
 
         RNTrackPlayer.addEventListener(Event.PlaybackProgressUpdated, evt => {
             const parser = this.lyricParser;
+
+            // 更新当前播放位置（毫秒），用于逐字歌词效果
+            getDefaultStore().set(currentPositionMsAtom, evt.position * 1000);
+
             if (!parser || !this.trackPlayer.isCurrentMusic(parser.musicItem)) {
                 return;
             }
@@ -281,6 +287,13 @@ class LyricManager implements IInjectable {
 
     }
 
+    // Force reload current lyric (used when config changes like enableWordByWord)
+    reloadCurrentLyric() {
+        this.refreshLyric(false, false).catch(err => {
+            devLog('warn', 'Lyric reload failed', err);
+        });
+    }
+
 
     updateLyricOffset(musicItem: IMusic.IMusicItem, offset: number) {
         if (!musicItem) {
@@ -405,10 +418,15 @@ class LyricManager implements IInjectable {
 
             const decryptStartTime = Date.now();
 
+            // Get word-by-word setting from config
+            const enableWordByWord = this.appConfig.getConfig("lyric.enableWordByWord") ?? true;
+            devLog('info', '[Lyric] Word-by-word config', { enableWordByWord });
+
             // Native async decryption (non-blocking, ~10ms)
-            const rawLrc = lrcSource.rawLrc ? await autoDecryptLyric(lrcSource.rawLrc) : lrcSource.rawLrc;
-            const translation = lrcSource.translation ? await autoDecryptLyric(lrcSource.translation) : lrcSource.translation;
-            const romanization = lrcSource.romanization ? await autoDecryptLyric(lrcSource.romanization) : lrcSource.romanization;
+            // Pass enableWordByWord to preserve word-level timing for QRC lyrics
+            const rawLrc = lrcSource.rawLrc ? await autoDecryptLyric(lrcSource.rawLrc, enableWordByWord) : lrcSource.rawLrc;
+            const translation = lrcSource.translation ? await autoDecryptLyric(lrcSource.translation, enableWordByWord) : lrcSource.translation;
+            const romanization = lrcSource.romanization ? await autoDecryptLyric(lrcSource.romanization, enableWordByWord) : lrcSource.romanization;
 
             const decryptDuration = Date.now() - decryptStartTime;
             devLog('info', 'Lyric decryption completed', {
@@ -543,3 +561,5 @@ export default lyricManager;
 
 export const useLyricState = () => useAtomValue(lyricStateAtom);
 export const useCurrentLyricItem = () => useAtomValue(currentLyricItemAtom);
+// 当前播放位置（毫秒），用于逐字歌词效果
+export const useCurrentPositionMs = () => useAtomValue(currentPositionMsAtom);

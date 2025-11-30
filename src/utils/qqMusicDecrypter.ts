@@ -15,7 +15,7 @@
 
 import LyricUtil from '@/native/lyricUtil';
 import {devLog} from '@/utils/log';
-import {convertQrcXmlToLrc, isQrcXml} from '@/utils/qrcXmlToLrc';
+import {convertQrcXmlToLrc, convertQrcXmlToWordByWord, isQrcXml} from '@/utils/qrcXmlToLrc';
 
 /**
  * Decrypt QQ Music QRC encrypted lyrics using Native implementation (async)
@@ -30,16 +30,18 @@ import {convertQrcXmlToLrc, isQrcXml} from '@/utils/qrcXmlToLrc';
  * 3. UTF-8 decoding
  *
  * @param encryptedHex - QRC encrypted lyrics in hex string format
+ * @param enableWordByWord - Whether to preserve word-by-word timing (default: false)
  * @returns Promise<string> - Decrypted lyrics text (may be XML or LRC format)
  * @throws Error with user-friendly Chinese message on decryption failure
  */
-export async function decryptQRCLyric(encryptedHex: string): Promise<string> {
+export async function decryptQRCLyric(encryptedHex: string, enableWordByWord: boolean = false): Promise<string> {
   try {
     const startTime = Date.now();
 
     devLog('info', '[QRC Native] 开始解密', {
       inputLength: encryptedHex.length,
-      isValidLength: encryptedHex.length % 16 === 0
+      isValidLength: encryptedHex.length % 16 === 0,
+      enableWordByWord
     });
 
     // Call Native decryption (Triple-DES + Zlib)
@@ -51,10 +53,13 @@ export async function decryptQRCLyric(encryptedHex: string): Promise<string> {
       preview: decrypted.substring(0, 100)
     });
 
-    // Convert XML to LRC format if needed (lightweight JS operation)
+    // Convert XML to LRC format if needed
     if (isQrcXml(decrypted)) {
-      const lrc = convertQrcXmlToLrc(decrypted);
-      devLog('info', '[QRC Native] XML转LRC完成', {
+      // Use word-by-word format if enabled, otherwise standard LRC
+      const lrc = enableWordByWord
+        ? convertQrcXmlToWordByWord(decrypted)
+        : convertQrcXmlToLrc(decrypted);
+      devLog('info', `[QRC Native] XML转${enableWordByWord ? '逐字' : 'LRC'}完成`, {
         lrcLength: lrc.length,
         preview: lrc.substring(0, 100)
       });
@@ -226,20 +231,22 @@ export function isKuwoEncrypted(lyrics: string): boolean {
  * Auto-decrypt lyrics if encrypted (async)
  *
  * Automatically detects QRC or Kuwo encryption and decrypts if needed.
+ * Also handles decrypted QRC XML format to convert to word-by-word LRC.
  * Falls back to original text on decryption failure.
  *
  * @param lyrics - Potentially encrypted lyrics text
+ * @param enableWordByWord - Whether to preserve word-by-word timing for QRC (default: false)
  * @returns Promise<string> - Decrypted lyrics or original text
  */
-export async function autoDecryptLyric(lyrics: string): Promise<string> {
+export async function autoDecryptLyric(lyrics: string, enableWordByWord: boolean = false): Promise<string> {
   if (!lyrics) {
     return '';
   }
 
-  // Try QRC decryption first (QQ Music)
+  // Try QRC decryption first (QQ Music encrypted hex)
   if (isQRCEncrypted(lyrics)) {
     try {
-      return await decryptQRCLyric(lyrics);
+      return await decryptQRCLyric(lyrics, enableWordByWord);
     } catch (error) {
       devLog('warn', '[QRC Native] 自动解密失败，返回原始内容', error);
       return lyrics;
@@ -255,6 +262,15 @@ export async function autoDecryptLyric(lyrics: string): Promise<string> {
       devLog('warn', '[Kuwo Native] 自动解密失败，返回原始内容', error);
       return lyrics;
     }
+  }
+
+  // Handle already decrypted QRC XML format (not encrypted, but needs format conversion)
+  if (isQrcXml(lyrics)) {
+    devLog('info', '[QRC] 检测到已解密的QRC XML格式，进行格式转换', { enableWordByWord });
+    const lrc = enableWordByWord
+      ? convertQrcXmlToWordByWord(lyrics)
+      : convertQrcXmlToLrc(lyrics);
+    return lrc;
   }
 
   return lyrics;

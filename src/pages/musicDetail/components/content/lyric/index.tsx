@@ -305,27 +305,33 @@ export default function Lyric(props: IProps) {
                             overScrollMode="never"
                             extraData={currentLrcItem}
                             renderItem={({ item, index }) => {
+                                const isHighlighted = currentLrcItem?.index === index;
+
+                                // For highlighted lines with word-by-word data, use separate rendering
+                                // For non-highlighted lines or without word-by-word, use text concatenation
+                                const hasWordByWordEffect = isHighlighted && item.hasWordByWord && item.words?.length;
+
                                 let text = item.lrc;
 
-                                // 构建扩展歌词数组，根据用户配置
-                                const extendedLines: string[] = [];
+                                // Only concatenate text for non-word-by-word mode
+                                if (!hasWordByWordEffect) {
+                                    const extendedLines: string[] = [];
 
-                                if (showRomanization && hasRomanization && item.romanization) {
-                                    extendedLines.push(item.romanization);
-                                }
+                                    if (showRomanization && hasRomanization && item.romanization) {
+                                        extendedLines.push(item.romanization);
+                                    }
 
-                                if (showTranslation && hasTranslation && item.translation) {
-                                    extendedLines.push(item.translation);
-                                }
+                                    if (showTranslation && hasTranslation && item.translation) {
+                                        extendedLines.push(item.translation);
+                                    }
 
-                                // 根据配置决定是否交换罗马音和翻译的顺序
-                                if (swapRomanizationAndTranslation && extendedLines.length === 2) {
-                                    extendedLines.reverse();
-                                }
+                                    if (swapRomanizationAndTranslation && extendedLines.length === 2) {
+                                        extendedLines.reverse();
+                                    }
 
-                                // 将扩展行添加到主歌词文本
-                                if (extendedLines.length > 0) {
-                                    text += '\n' + extendedLines.join('\n');
+                                    if (extendedLines.length > 0) {
+                                        text += '\n' + extendedLines.join('\n');
+                                    }
                                 }
 
                                 return (
@@ -335,9 +341,25 @@ export default function Lyric(props: IProps) {
                                         fontSize={fontSizeStyle.fontSize}
                                         onLayout={handleLyricItemLayout}
                                         light={draggingIndex === index}
-                                        highlight={
-                                            currentLrcItem?.index === index
+                                        highlight={isHighlighted}
+                                        words={item.words}
+                                        hasWordByWord={item.hasWordByWord}
+                                        romanizationWords={
+                                            showRomanization && hasRomanization
+                                                ? item.romanizationWords
+                                                : undefined
                                         }
+                                        hasRomanizationWordByWord={
+                                            showRomanization &&
+                                            hasRomanization &&
+                                            item.hasRomanizationWordByWord
+                                        }
+                                        translation={
+                                            showTranslation && hasTranslation
+                                                ? item.translation
+                                                : undefined
+                                        }
+                                        swapRomanizationAndTranslation={swapRomanizationAndTranslation}
                                     />
                                 );
                             }}

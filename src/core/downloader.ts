@@ -20,6 +20,7 @@ import { IPluginManager } from "@/types/core/pluginManager";
 import downloadNotificationManager from "./downloadNotificationManager"; // 保留兼容性，但现在是简化版本
 import musicMetadataManager from "./musicMetadataManager";
 import type { IDownloadMetadataConfig, IDownloadTaskMetadata } from "@/types/metadata";
+import { autoDecryptLyric } from "@/utils/qqMusicDecrypter";
 
 
 export enum DownloadStatus {
@@ -307,9 +308,8 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
             writeCover: this.configService.getConfig("basic.writeMetadataCover") ?? true,
             writeLyric: this.configService.getConfig("basic.writeMetadataLyric") ?? true,
             fetchExtendedInfo: this.configService.getConfig("basic.writeMetadataExtended") ?? false,
-            writeLyricOriginal: this.configService.getConfig("basic.writeMetadataLyricOriginal") ?? true,
-            writeLyricTranslation: this.configService.getConfig("basic.writeMetadataLyricTranslation") ?? true,
-            writeLyricRomanization: this.configService.getConfig("basic.writeMetadataLyricRomanization") ?? true,
+            lyricOrder: this.configService.getConfig("basic.lyricOrder") ?? ["original", "translation", "romanization"],
+            enableWordByWord: this.configService.getConfig("basic.enableWordByWordLyric") ?? false,
         };
     }
 
@@ -361,6 +361,98 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
                     platform: musicItem.platform,
                 },
                 filePath,
+                error: error instanceof Error ? error.message : String(error),
+            });
+        }
+    }
+
+    /** 下载歌词文件到与音乐文件同目录 */
+    private async downloadLyricFile(musicItem: IMusic.IMusicItem, musicFilePath: string): Promise<void> {
+        const downloadLyricFile = this.configService.getConfig("basic.downloadLyricFile") ?? false;
+        if (!downloadLyricFile) {
+            return;
+        }
+
+        const lyricFileFormat = this.configService.getConfig("basic.lyricFileFormat") ?? "lrc";
+        const lyricOrder = this.configService.getConfig("basic.lyricOrder") ?? ["original", "translation", "romanization"];
+        const enableWordByWord = this.configService.getConfig("basic.enableWordByWordLyric") ?? false;
+
+        devLog('info', '[下载器] 开始下载歌词文件', {
+            musicTitle: musicItem.title,
+            format: lyricFileFormat,
+            order: lyricOrder,
+            enableWordByWord
+        });
+
+        try {
+            const plugin = this.pluginManagerService.getByName(musicItem.platform);
+            if (!plugin) {
+                devLog('warn', '[下载器] 无法获取插件，跳过歌词下载');
+                return;
+            }
+
+            // 获取歌词
+            const lyricSource = await plugin.methods.getLyric(musicItem);
+            if (!lyricSource) {
+                devLog('warn', '[下载器] 无法获取歌词，跳过歌词文件下载');
+                return;
+            }
+
+            // 解密歌词（QRC格式自动解密，支持逐字歌词）
+            const rawLrc = lyricSource.rawLrc ? await autoDecryptLyric(lyricSource.rawLrc, enableWordByWord) : undefined;
+            const translation = lyricSource.translation ? await autoDecryptLyric(lyricSource.translation, enableWordByWord) : undefined;
+            const romanization = lyricSource.romanization ? await autoDecryptLyric(lyricSource.romanization, enableWordByWord) : undefined;
+
+            // 根据配置的顺序构建歌词内容
+            const lyricParts: string[] = [];
+
+            for (const orderItem of lyricOrder) {
+                switch (orderItem) {
+                    case "original":
+                        if (rawLrc) {
+                            lyricParts.push(rawLrc);
+                        }
+                        break;
+                    case "translation":
+                        if (translation) {
+                            lyricParts.push(translation);
+                        }
+                        break;
+                    case "romanization":
+                        if (romanization) {
+                            lyricParts.push(romanization);
+                        }
+                        break;
+                }
+            }
+
+            if (lyricParts.length === 0) {
+                devLog('warn', '[下载器] 没有可用的歌词内容，跳过歌词文件下载');
+                return;
+            }
+
+            // 合并歌词内容（简单顺序拼接）
+            const lyricContent = lyricParts.join('\n\n');
+
+            // 生成歌词文件路径（与音乐文件同名，不同后缀）
+            const musicFilePathWithoutExt = musicFilePath.replace(/\.[^.]+$/, '');
+            const lyricFilePath = `${musicFilePathWithoutExt}.${lyricFileFormat}`;
+
+            // 写入歌词文件
+            const { writeFile } = require('react-native-fs');
+            await writeFile(lyricFilePath.replace('file://', ''), lyricContent, 'utf8');
+
+            devLog('info', '[下载器] 歌词文件下载成功', {
+                path: lyricFilePath,
+                musicTitle: musicItem.title,
+                format: lyricFileFormat,
+                contentLength: lyricContent.length
+            });
+
+        } catch (error) {
+            // 歌词文件下载失败不影响主下载任务
+            errorLog('歌词文件下载失败', {
+                musicItem: musicItem.title,
                 error: error instanceof Error ? error.message : String(error),
             });
         }
@@ -845,6 +937,14 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
             // 异步写入音乐元数据（标签、歌词、封面）- 不阻塞下载完成
             this.writeMetadataToFile(musicItem, targetDownloadPath).catch(error => {
                 errorLog('元数据写入失败，但不影响下载完成', {
+                    musicItem: musicItem.title,
+                    error: error.message
+                });
+            });
+
+            // 异步下载歌词文件 - 不阻塞下载完成
+            this.downloadLyricFile(musicItem, targetDownloadPath).catch(error => {
+                errorLog('歌词文件下载失败，但不影响下载完成', {
                     musicItem: musicItem.title,
                     error: error.message
                 });

@@ -613,6 +613,43 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
         return null;
     }
 
+    /** 获取逐字歌词 */
+    async getWordByWordLyric(
+        originalMusicItem: IMusic.IMusicItemBase,
+    ): Promise<ILyric.ILyricSource | null> {
+        await this.ensurePluginIsMounted();
+
+        // 1. 额外存储的meta信息（关联歌词）
+        const associatedLrc = getMediaExtraProperty(originalMusicItem, "associatedLrc");
+        let musicItem: IMusic.IMusicItem;
+        if (associatedLrc) {
+            musicItem = associatedLrc as IMusic.IMusicItem;
+        } else {
+            musicItem = originalMusicItem as IMusic.IMusicItem;
+        }
+
+        // 2. 检查插件是否支持逐字歌词
+        if (!this.plugin.instance.getWordByWordLyric) {
+            devLog("info", "插件不支持逐字歌词");
+            return null;
+        }
+
+        try {
+            const lrcSource = await this.plugin.instance.getWordByWordLyric(
+                resetMediaItem(musicItem, undefined, true),
+            );
+
+            if (lrcSource?.rawLrc) {
+                devLog("info", "获取逐字歌词成功");
+                return lrcSource;
+            }
+        } catch (e: any) {
+            devLog("error", "获取逐字歌词失败", e, e?.message);
+        }
+
+        return null;
+    }
+
 
     /** 获取专辑信息 */
     async getAlbumInfo(
