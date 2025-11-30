@@ -38,8 +38,8 @@ interface IPersistStatus {
     "lyric.showTranslation": boolean;
     /** 歌词-是否启用罗马音 */
     "lyric.showRomanization": boolean;
-    /** 歌词-是否交换罗马音和翻译的显示顺序 */
-    "lyric.swapRomanizationAndTranslation": boolean;
+    /** 歌词-歌词行顺序 (original=原文, translation=翻译, romanization=罗马音) */
+    "lyric.lyricOrder": ("original" | "translation" | "romanization")[];
     /** 歌词-详情页字体大小 */
     "lyric.detailFontSize": number;
 }

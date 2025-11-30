@@ -47,7 +47,7 @@ export default function MusicMetadataSettings(_props: IMusicMetadataSettingsProp
         writeMetadataExtended: currentWriteMetadataExtended ?? false,
         downloadLyricFile: currentDownloadLyricFile ?? false,
         lyricFileFormat: currentLyricFileFormat ?? "lrc" as "lrc" | "txt",
-        lyricOrder: currentLyricOrder ?? ["original", "translation", "romanization"] as LyricOrderItem[],
+        lyricOrder: currentLyricOrder ?? ["original", "romanization", "translation"] as LyricOrderItem[],
         enableWordByWord: currentEnableWordByWord ?? false,
     });
 

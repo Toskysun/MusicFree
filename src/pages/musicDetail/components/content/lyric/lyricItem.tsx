@@ -25,7 +25,7 @@ interface ILyricItemComponentProps {
     romanizationWords?: ILyric.IWordData[];
     hasRomanizationWordByWord?: boolean;
     translation?: string;
-    swapRomanizationAndTranslation?: boolean;
+    lyricOrder?: ("original" | "translation" | "romanization")[];
     onLayout?: (index: number, height: number) => void;
 }
 
@@ -328,7 +328,7 @@ interface IWordByWordLyricProps {
     words: ILyric.IWordData[];
     romanizationWords?: ILyric.IWordData[];
     translation?: string;
-    swapRomanizationAndTranslation?: boolean;
+    lyricOrder?: ("original" | "translation" | "romanization")[];
     fontSize: number;
     highlightColor: string;
     index?: number;
@@ -340,7 +340,7 @@ function WordByWordLyricLine({
     words,
     romanizationWords,
     translation,
-    swapRomanizationAndTranslation,
+    lyricOrder = ["original", "translation", "romanization"],
     fontSize,
     highlightColor,
     index,
@@ -376,9 +376,27 @@ function WordByWordLyricLine({
     const romanizationFontSize = fontSize * ROMANIZATION_FONT_RATIO;
     const translationFontSize = fontSize * TRANSLATION_FONT_RATIO;
 
+    // Original line component (word-by-word)
+    const originalLine = (isFirst: boolean) => (
+        <View style={[lyricStyles.wordByWordLine, !isFirst && lyricStyles.secondaryLine]} key="original">
+            {words.map((word, wordIndex) => (
+                <KaraokeWord
+                    key={wordIndex}
+                    word={word}
+                    currentTimeMs={currentPositionMs}
+                    primaryColor="white"
+                    highlightColor={highlightColor}
+                    fontSize={fontSize}
+                    isCurrentLine={true}
+                    enableGlow={enableGlow}
+                />
+            ))}
+        </View>
+    );
+
     // Romanization line component
-    const romanizationLine = romanizationWords && romanizationWords.length > 0 && (
-        <View style={[lyricStyles.wordByWordLine, lyricStyles.secondaryLine]}>
+    const romanizationLine = (isFirst: boolean) => romanizationWords && romanizationWords.length > 0 && (
+        <View style={[lyricStyles.wordByWordLine, !isFirst && lyricStyles.secondaryLine]} key="romanization">
             {romanizationWords.map((word, wordIndex) => (
                 <KaraokeWord
                     key={wordIndex}
@@ -395,8 +413,8 @@ function WordByWordLyricLine({
     );
 
     // Translation line component
-    const translationLine = translation && (
-        <View style={lyricStyles.secondaryLine}>
+    const translationLine = (isFirst: boolean) => translation && (
+        <View style={[!isFirst && lyricStyles.secondaryLine]} key="translation">
             <FollowingTranslationLine
                 text={translation}
                 progress={overallProgress}
@@ -405,6 +423,20 @@ function WordByWordLyricLine({
             />
         </View>
     );
+
+    // Render lines based on order
+    const renderLine = (type: string, isFirst: boolean) => {
+        switch (type) {
+            case "original":
+                return originalLine(isFirst);
+            case "romanization":
+                return romanizationLine(isFirst);
+            case "translation":
+                return translationLine(isFirst);
+            default:
+                return null;
+        }
+    };
 
     return (
         <Animated.View
@@ -419,34 +451,8 @@ function WordByWordLyricLine({
                 animatedContainerStyle,
             ]}
         >
-            {/* Primary line: Original lyrics with word-by-word effect */}
-            <View style={lyricStyles.wordByWordLine}>
-                {words.map((word, wordIndex) => (
-                    <KaraokeWord
-                        key={wordIndex}
-                        word={word}
-                        currentTimeMs={currentPositionMs}
-                        primaryColor="white"
-                        highlightColor={highlightColor}
-                        fontSize={fontSize}
-                        isCurrentLine={true}
-                        enableGlow={enableGlow}
-                    />
-                ))}
-            </View>
-
-            {/* Secondary lines: Romanization and Translation (order based on setting) */}
-            {swapRomanizationAndTranslation ? (
-                <>
-                    {translationLine}
-                    {romanizationLine}
-                </>
-            ) : (
-                <>
-                    {romanizationLine}
-                    {translationLine}
-                </>
-            )}
+            {/* Render lines in configured order */}
+            {lyricOrder.map((type, idx) => renderLine(type, idx === 0))}
         </Animated.View>
     );
 }
@@ -520,7 +526,7 @@ function _LyricItemComponent(props: ILyricItemComponentProps) {
         romanizationWords,
         hasRomanizationWordByWord,
         translation,
-        swapRomanizationAndTranslation,
+        lyricOrder,
     } = props;
 
     const colors = useColors();
@@ -534,7 +540,7 @@ function _LyricItemComponent(props: ILyricItemComponentProps) {
                 words={words}
                 romanizationWords={hasRomanizationWordByWord ? romanizationWords : undefined}
                 translation={translation}
-                swapRomanizationAndTranslation={swapRomanizationAndTranslation}
+                lyricOrder={lyricOrder}
                 fontSize={actualFontSize}
                 highlightColor={colors.primary}
                 index={index}
@@ -558,6 +564,16 @@ function _LyricItemComponent(props: ILyricItemComponentProps) {
     );
 }
 
+const arraysEqual = (a?: any[], b?: any[]) => {
+    if (a === b) return true;
+    if (!a || !b) return false;
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+        if (a[i] !== b[i]) return false;
+    }
+    return true;
+};
+
 const LyricItemComponent = memo(
     _LyricItemComponent,
     (prev, curr) =>
@@ -569,7 +585,7 @@ const LyricItemComponent = memo(
         prev.hasWordByWord === curr.hasWordByWord &&
         prev.hasRomanizationWordByWord === curr.hasRomanizationWordByWord &&
         prev.translation === curr.translation &&
-        prev.swapRomanizationAndTranslation === curr.swapRomanizationAndTranslation,
+        arraysEqual(prev.lyricOrder, curr.lyricOrder),
 );
 
 export default LyricItemComponent;

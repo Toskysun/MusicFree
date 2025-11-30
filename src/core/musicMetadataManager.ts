@@ -165,7 +165,7 @@ class MusicMetadataManager {
         }
 
         // Get lyric order from config
-        const lyricOrder = config?.lyricOrder ?? ['original', 'translation', 'romanization'];
+        const lyricOrder = config?.lyricOrder ?? ['original', 'romanization', 'translation'];
 
         devLog('info', '[元数据管理器] 歌词写入配置', {
           歌词顺序: lyricOrder

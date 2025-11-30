@@ -308,7 +308,7 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
             writeCover: this.configService.getConfig("basic.writeMetadataCover") ?? true,
             writeLyric: this.configService.getConfig("basic.writeMetadataLyric") ?? true,
             fetchExtendedInfo: this.configService.getConfig("basic.writeMetadataExtended") ?? false,
-            lyricOrder: this.configService.getConfig("basic.lyricOrder") ?? ["original", "translation", "romanization"],
+            lyricOrder: this.configService.getConfig("basic.lyricOrder") ?? ["original", "romanization", "translation"],
             enableWordByWord: this.configService.getConfig("basic.enableWordByWordLyric") ?? false,
         };
     }
@@ -374,7 +374,7 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
         }
 
         const lyricFileFormat = this.configService.getConfig("basic.lyricFileFormat") ?? "lrc";
-        const lyricOrder = this.configService.getConfig("basic.lyricOrder") ?? ["original", "translation", "romanization"];
+        const lyricOrder = this.configService.getConfig("basic.lyricOrder") ?? ["original", "romanization", "translation"];
         const enableWordByWord = this.configService.getConfig("basic.enableWordByWordLyric") ?? false;
 
         devLog('info', '[下载器] 开始下载歌词文件', {

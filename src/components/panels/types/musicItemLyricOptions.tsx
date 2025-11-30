@@ -227,7 +227,7 @@ export default function MusicItemLyricOptions(
 
                     // Get config from settings
                     const lyricFileFormat = Config.getConfig("basic.lyricFileFormat") ?? "lrc";
-                    const lyricOrder = Config.getConfig("basic.lyricOrder") ?? ["original", "translation", "romanization"];
+                    const lyricOrder = Config.getConfig("basic.lyricOrder") ?? ["original", "romanization", "translation"];
                     const enableWordByWord = Config.getConfig("lyric.enableWordByWord") ?? false;
                     const downloadPath = Config.getConfig("basic.downloadPath") ?? pathConst.downloadMusicPath;
 
@@ -365,11 +365,37 @@ export default function MusicItemLyricOptions(
         },
         {
             icon: "arrows-left-right",
-            title: "切换罗马音与翻译顺序",
+            title: (() => {
+                const order = PersistStatus.get("lyric.lyricOrder") ?? ["original", "romanization", "translation"];
+                const orderLabels: Record<string, string> = {
+                    original: "原",
+                    translation: "译",
+                    romanization: "罗",
+                };
+                const orderText = order.map(o => orderLabels[o] || o).join(" → ");
+                return `歌词顺序: ${orderText}`;
+            })(),
             onPress: () => {
-                const currentSwap = PersistStatus.get("lyric.swapRomanizationAndTranslation");
-                PersistStatus.set("lyric.swapRomanizationAndTranslation", !currentSwap);
-                Toast.success(!currentSwap ? "罗马音在前，翻译在后" : "翻译在前，罗马音在后");
+                const allOrders: ("original" | "translation" | "romanization")[][] = [
+                    ["original", "romanization", "translation"],
+                    ["original", "translation", "romanization"],
+                    ["romanization", "original", "translation"],
+                    ["romanization", "translation", "original"],
+                ];
+                const orderLabels: Record<string, string> = {
+                    original: "原文",
+                    translation: "翻译",
+                    romanization: "罗马音",
+                };
+                const currentOrder = PersistStatus.get("lyric.lyricOrder") ?? ["original", "romanization", "translation"];
+                const currentIndex = allOrders.findIndex(
+                    o => o[0] === currentOrder[0] && o[1] === currentOrder[1] && o[2] === currentOrder[2]
+                );
+                const nextIndex = (currentIndex + 1) % allOrders.length;
+                const nextOrder = allOrders[nextIndex];
+                PersistStatus.set("lyric.lyricOrder", nextOrder);
+                const orderText = nextOrder.map(o => orderLabels[o]).join(" → ");
+                Toast.success(`歌词顺序: ${orderText}`);
                 hidePanel();
             },
         },

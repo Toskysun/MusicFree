@@ -52,9 +52,9 @@ export default function Lyric(props: IProps) {
         "lyric.showRomanization",
         false,
     );
-    const swapRomanizationAndTranslation = PersistStatus.useValue(
-        "lyric.swapRomanizationAndTranslation",
-        false,
+    const lyricOrder = PersistStatus.useValue(
+        "lyric.lyricOrder",
+        ["original", "translation", "romanization"],
     );
     const fontSizeKey = PersistStatus.useValue("lyric.detailFontSize", 1);
     const fontSizeStyle = useMemo(
@@ -312,26 +312,21 @@ export default function Lyric(props: IProps) {
                                 const hasWordByWordEffect = isHighlighted && item.hasWordByWord && item.words?.length;
 
                                 let text = item.lrc;
+                                const order = lyricOrder ?? ["original", "romanization", "translation"];
 
                                 // Only concatenate text for non-word-by-word mode
                                 if (!hasWordByWordEffect) {
-                                    const extendedLines: string[] = [];
+                                    const lineData: Record<string, string | undefined> = {
+                                        original: item.lrc,
+                                        translation: showTranslation && hasTranslation ? item.translation : undefined,
+                                        romanization: showRomanization && hasRomanization ? item.romanization : undefined,
+                                    };
 
-                                    if (showRomanization && hasRomanization && item.romanization) {
-                                        extendedLines.push(item.romanization);
-                                    }
+                                    const orderedLines = order
+                                        .map(type => lineData[type])
+                                        .filter((line): line is string => !!line);
 
-                                    if (showTranslation && hasTranslation && item.translation) {
-                                        extendedLines.push(item.translation);
-                                    }
-
-                                    if (swapRomanizationAndTranslation && extendedLines.length === 2) {
-                                        extendedLines.reverse();
-                                    }
-
-                                    if (extendedLines.length > 0) {
-                                        text += '\n' + extendedLines.join('\n');
-                                    }
+                                    text = orderedLines.join('\n');
                                 }
 
                                 return (
@@ -359,7 +354,7 @@ export default function Lyric(props: IProps) {
                                                 ? item.translation
                                                 : undefined
                                         }
-                                        swapRomanizationAndTranslation={swapRomanizationAndTranslation}
+                                        lyricOrder={order}
                                     />
                                 );
                             }}
