@@ -56,6 +56,8 @@ declare namespace IMusic {
         rawLrc?: string;
         /** 音质信息 */
         qualities?: IQuality;
+        /** 付费标记 0=免费 1=VIP */
+        fee?: number;
         /** 其他可以被序列化的信息 */
         [k: string]: any;
         /** 内部信息 */

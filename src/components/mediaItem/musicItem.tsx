@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { StyleProp, StyleSheet, View, ViewStyle } from "react-native";
 import rpx from "@/utils/rpx";
 import ListItem from "../base/listItem";
@@ -10,6 +10,28 @@ import ThemeText from "../base/themeText";
 import TrackPlayer from "@/core/trackPlayer";
 import Icon from "@/components/base/icon.tsx";
 import { ImgAsset } from "@/constants/assetsConst";
+import Badge, { BadgeType } from "../base/badge";
+
+// 获取音质标志信息
+function getQualityBadge(musicItem: IMusic.IMusicItem): { type: BadgeType; text: string } | null {
+    const qualities = musicItem.qualities;
+    if (!qualities) return null;
+
+    // 按优先级检查音质 (忽略 atmos 以上)
+    if (qualities.hires) {
+        return { type: "hires", text: "HR" };
+    }
+    if (qualities.flac24bit) {
+        return { type: "flac24bit", text: "SQ+" };
+    }
+    if (qualities.flac) {
+        return { type: "flac24bit", text: "SQ" };
+    }
+    if (qualities["320k"]) {
+        return { type: "quality", text: "HQ" };
+    }
+    return null;
+}
 
 interface IMusicItemProps {
     index?: string | number;
@@ -36,6 +58,11 @@ export default function MusicItem(props: IMusicItemProps) {
         containerStyle,
         highlight = false,
     } = props;
+
+    // 获取音质标志
+    const qualityBadge = useMemo(() => getQualityBadge(musicItem), [musicItem]);
+    // 获取 VIP 标志
+    const isVip = musicItem.fee === 1;
 
     return (
         <ListItem
@@ -85,10 +112,17 @@ export default function MusicItem(props: IMusicItemProps) {
                                 size={rpx(22)}
                             />
                         )}
+                        {qualityBadge && (
+                            <Badge type={qualityBadge.type}>{qualityBadge.text}</Badge>
+                        )}
+                        {isVip && (
+                            <Badge type="vip">VIP</Badge>
+                        )}
                         <ThemeText
                             numberOfLines={1}
                             fontSize="description"
-                            fontColor={highlight ? "primary" : "textSecondary"}>
+                            fontColor={highlight ? "primary" : "textSecondary"}
+                            style={styles.artistText}>
                             {musicItem.artist}
                             {musicItem.album ? ` - ${musicItem.album}` : ""}
                         </ThemeText>
@@ -118,9 +152,12 @@ const styles = StyleSheet.create({
     },
     descContainer: {
         flexDirection: "row",
+        alignItems: "center",
         marginTop: rpx(16),
     },
-
+    artistText: {
+        flex: 1,
+    },
     indexText: {
         fontStyle: "italic",
         textAlign: "center",
