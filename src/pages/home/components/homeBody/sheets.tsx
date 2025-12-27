@@ -14,7 +14,7 @@ import rpx from "@/utils/rpx";
 import Toast from "@/utils/toast";
 import { FlashList } from "@shopify/flash-list";
 import React, { useMemo, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { TouchableWithoutFeedback } from "react-native-gesture-handler";
 
 export default function Sheets() {
@@ -94,6 +94,15 @@ export default function Sheets() {
                     </ThemeText>
                 </TouchableWithoutFeedback>
                 <View style={styles.more}>
+                    <IconButton
+                        name="id"
+                        style={styles.newSheetButton}
+                        sizeType="normal"
+                        accessibilityLabel={t("home.playById.a11y")}
+                        onPress={() => {
+                            showPanel("PlayById");
+                        }}
+                    />
                     <IconButton
                         name="plus"
                         style={styles.newSheetButton}

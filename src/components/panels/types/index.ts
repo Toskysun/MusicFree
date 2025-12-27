@@ -5,6 +5,7 @@ import ImportMusicSheet from "./importMusicSheet";
 import MusicItemOptions from "./musicItemOptions";
 import MusicQuality from "./musicQuality";
 import CreateMusicSheet from "./createMusicSheet";
+import PlayById from "./playById";
 import PlayList from "./playList";
 import PlayRate from "./playRate";
 import SearchLrc from "./searchLrc";
@@ -31,6 +32,8 @@ export default {
     CreateMusicSheet,
     /** 导入歌单 */
     ImportMusicSheet,
+    /** 通过ID播放 */
+    PlayById,
     /** 当前播放列表 */
     PlayList: PlayList,
     /** 关联歌词 */

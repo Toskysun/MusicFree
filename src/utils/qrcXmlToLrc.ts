@@ -289,8 +289,9 @@ function convertQrcLineToWordByWord(line: string): string {
   }
 
   // Extract word-by-word timing: 字(start_ms,duration_ms)
-  // Include spaces as separate elements
-  const wordPattern = /([^\(\)]+?)\((\d+),(\d+)\)/g;
+  // Use .+? to match any character including spaces and parentheses
+  // This correctly handles cases like: ((123,45) for literal '(' or )(123,45) for ')'
+  const wordPattern = /(.+?)\((\d+),(\d+)\)/g;
   const formattedWords: string[] = [];
   let match: RegExpExecArray | null;
   let lastEndTimeMs = startTimeMs;

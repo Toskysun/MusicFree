@@ -78,6 +78,7 @@ keystore.properties
 .VSCodeCounter/
 
 .vscode/
+.vs/
 tmp/
 
 *.log
