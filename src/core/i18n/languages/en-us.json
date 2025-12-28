@@ -81,6 +81,7 @@
     "lyric.unlinkLyric": "Unlink Lyrics",
     "lyric.noLyric": "No lyrics available",
     "lyric.searchLyric": "Search Lyrics",
+    "lyric.alignSwitched": "Lyric alignment switched",
     "musicListEditor.selectMusicCount": "{count} songs selected",
     "musicListEditor.addToNextPlay": "Play Next",
     "musicListEditor.addToSheet": "Add to Playlist",

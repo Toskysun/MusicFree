@@ -50,6 +50,14 @@ declare namespace ILyric {
         hasRomanizationWordByWord?: boolean;
         /** 罗马音行持续时间（毫秒） */
         romanizationDuration?: number;
+        /** 翻译伪逐字歌词数据（毫秒） */
+        translationWords?: IWordData[];
+        /** 翻译是否有伪逐字歌词 */
+        hasTranslationWordByWord?: boolean;
+        /** 翻译行持续时间（毫秒） */
+        translationDuration?: number;
+        /** 罗马音是否为伪逐字（非真正的逐字数据） */
+        isRomanizationPseudo?: boolean;
     }
 
     export type IParsedLrc = IParsedLrcItem[];

@@ -3,6 +3,8 @@ import {SvgProps} from 'react-native-svg';
 
 import AlarmOutlineIcon from '@/assets/icons/alarm-outline.svg';
 import AlbumOutlineIcon from '@/assets/icons/album-outline.svg';
+import AlignCenterIcon from '@/assets/icons/align-center.svg';
+import AlignLeftIcon from '@/assets/icons/align-left.svg';
 import ArchiveBoxXMarkIcon from '@/assets/icons/archive-box-x-mark.svg';
 import ArrowDownTrayIcon from '@/assets/icons/arrow-down-tray.svg';
 import ArrowLeftIcon from '@/assets/icons/arrow-left.svg';
@@ -77,7 +79,7 @@ import TrophyIcon from '@/assets/icons/trophy.svg';
 import UserIcon from '@/assets/icons/user.svg';
 import XMarkIcon from '@/assets/icons/x-mark.svg';
 
-export type IIconName = 'alarm-outline' | 'album-outline' | 'archive-box-x-mark' | 'arrow-down-tray' | 'arrow-left' | 'arrow-long-left' | 'arrow-path' | 'arrow-right-end-on-rectangle' | 'arrow-up-tray' | 'arrow-uturn-left' | 'arrows-left-right' | 'bars-3' | 'bookmark-square' | 'chat-bubble-oval-left-ellipsis' | 'check-circle-outline' | 'check-circle' | 'check' | 'circle-stack' | 'clock-outline' | 'code-bracket-square' | 'cog-8-tooth' | 'crosshair' | 'document-outline' | 'ellipsis-vertical' | 'exclamation-circle' | 'fire-outline' | 'fire' | 'folder-music-outline' | 'folder-outline' | 'folder-plus' | 'font-size' | 'hand-thumb-up' | 'heart-outline' | 'heart' | 'home-outline' | 'id' | 'identification' | 'inbox-arrow-down' | 'information-circle' | 'javascript' | 'language' | 'link-slash' | 'link' | 'lyric' | 'magnifying-glass' | 'minus' | 'motion-play' | 'musical-note' | 'pause-circle-outline' | 'pause' | 'pencil-outline' | 'pencil-square' | 'play-circle-outline' | 'play-circle' | 'play' | 'playlist' | 'plus' | 'power-outline' | 'quality-button' | 'question-mark-circle' | 'repeat-song-1' | 'repeat-song' | 'share' | 'shield-keyhole-outline' | 'shuffle' | 'skip-left' | 'skip-right' | 'sort-outline' | 'strategy' | 't-shirt-outline' | 'translation' | 'trash-outline' | 'trophy' | 'user' | 'x-mark';
+export type IIconName = 'alarm-outline' | 'album-outline' | 'align-center' | 'align-left' | 'archive-box-x-mark' | 'arrow-down-tray' | 'arrow-left' | 'arrow-long-left' | 'arrow-path' | 'arrow-right-end-on-rectangle' | 'arrow-up-tray' | 'arrow-uturn-left' | 'arrows-left-right' | 'bars-3' | 'bookmark-square' | 'chat-bubble-oval-left-ellipsis' | 'check-circle-outline' | 'check-circle' | 'check' | 'circle-stack' | 'clock-outline' | 'code-bracket-square' | 'cog-8-tooth' | 'crosshair' | 'document-outline' | 'ellipsis-vertical' | 'exclamation-circle' | 'fire-outline' | 'fire' | 'folder-music-outline' | 'folder-outline' | 'folder-plus' | 'font-size' | 'hand-thumb-up' | 'heart-outline' | 'heart' | 'home-outline' | 'id' | 'identification' | 'inbox-arrow-down' | 'information-circle' | 'javascript' | 'language' | 'link-slash' | 'link' | 'lyric' | 'magnifying-glass' | 'minus' | 'motion-play' | 'musical-note' | 'pause-circle-outline' | 'pause' | 'pencil-outline' | 'pencil-square' | 'play-circle-outline' | 'play-circle' | 'play' | 'playlist' | 'plus' | 'power-outline' | 'quality-button' | 'question-mark-circle' | 'repeat-song-1' | 'repeat-song' | 'share' | 'shield-keyhole-outline' | 'shuffle' | 'skip-left' | 'skip-right' | 'sort-outline' | 'strategy' | 't-shirt-outline' | 'translation' | 'trash-outline' | 'trophy' | 'user' | 'x-mark';
 
 interface IProps extends SvgProps {
     /** 图标名称 */
@@ -89,6 +91,8 @@ interface IProps extends SvgProps {
 const iconMap = {
     'alarm-outline': AlarmOutlineIcon,
     'album-outline': AlbumOutlineIcon,
+    'align-center': AlignCenterIcon,
+    'align-left': AlignLeftIcon,
     'archive-box-x-mark': ArchiveBoxXMarkIcon,
     'arrow-down-tray': ArrowDownTrayIcon,
     'arrow-left': ArrowLeftIcon,

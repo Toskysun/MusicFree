@@ -81,6 +81,7 @@
     "lyric.unlinkLyric": "解除关联",
     "lyric.noLyric": "暂无歌词",
     "lyric.searchLyric": "搜索歌词",
+    "lyric.alignSwitched": "歌词对齐方式已切换",
     "musicListEditor.selectMusicCount": "已选择 {count} 首",
     "musicListEditor.addToNextPlay": "下一首播放",
     "musicListEditor.addToSheet": "加入歌单",

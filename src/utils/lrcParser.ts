@@ -157,6 +157,14 @@ export interface IParsedLrcItem {
     hasRomanizationWordByWord?: boolean;
     /** 罗马音行持续时间（毫秒） */
     romanizationDuration?: number;
+    /** 翻译伪逐字歌词数据 */
+    translationWords?: ILyric.IWordData[];
+    /** 翻译是否有伪逐字歌词 */
+    hasTranslationWordByWord?: boolean;
+    /** 翻译行持续时间（毫秒） */
+    translationDuration?: number;
+    /** 罗马音是否为伪逐字（非真正的逐字数据） */
+    isRomanizationPseudo?: boolean;
 }
 
 /**
@@ -335,6 +343,54 @@ function timeToLrcTime(sec: number): string {
         .padStart(2, "0")}.${secFloat.toFixed(3).slice(2)}]`;
 }
 
+/**
+ * Generate pseudo word-by-word timestamps for translation text
+ * Distributes the line duration evenly across all characters
+ *
+ * @param text Translation text
+ * @param lineStartTimeMs Line start time in milliseconds
+ * @param lineDurationMs Line duration in milliseconds
+ * @returns Array of word data with pseudo timestamps
+ */
+function generatePseudoWordTimestamps(
+    text: string,
+    lineStartTimeMs: number,
+    lineDurationMs: number,
+): ILyric.IWordData[] {
+    if (!text || text.trim().length === 0 || lineDurationMs <= 0) {
+        return [];
+    }
+
+    const words: ILyric.IWordData[] = [];
+    const chars = text.split('');
+    const charCount = chars.length;
+
+    if (charCount === 0) {
+        return [];
+    }
+
+    // Calculate duration per character
+    const durationPerChar = lineDurationMs / charCount;
+
+    for (let i = 0; i < charCount; i++) {
+        const char = chars[i];
+        const startTime = lineStartTimeMs + i * durationPerChar;
+        const duration = durationPerChar;
+
+        // Check if next char is a space
+        const isNextSpace = i < charCount - 1 && chars[i + 1] === ' ';
+
+        words.push({
+            text: char,
+            startTime: Math.round(startTime),
+            duration: Math.round(duration),
+            space: isNextSpace,
+        });
+    }
+
+    return words;
+}
+
 export default class LyricParser {
     private _musicItem?: IMusic.IMusicItem;
 
@@ -425,6 +481,44 @@ export default class LyricParser {
                 this.lrcItems.forEach((item, index) => {
                     item.index = index;
                 });
+
+                // Generate pseudo word-by-word timestamps for translations
+                for (let i = 0; i < this.lrcItems.length; i++) {
+                    const item = this.lrcItems[i];
+                    if (!item.translation || item.translation.trim().length === 0) {
+                        continue;
+                    }
+
+                    // Calculate line duration: use original line's duration if available,
+                    // otherwise calculate from next line's start time
+                    let lineDurationMs: number;
+                    if (item.duration && item.duration > 0) {
+                        lineDurationMs = item.duration;
+                    } else if (i < this.lrcItems.length - 1) {
+                        // Use next line's start time to calculate duration
+                        const nextItemTime = this.lrcItems[i + 1].time;
+                        lineDurationMs = (nextItemTime - item.time) * 1000;
+                    } else {
+                        // Last line: use default duration of 3 seconds
+                        lineDurationMs = 3000;
+                    }
+
+                    // Ensure minimum duration of 500ms
+                    lineDurationMs = Math.max(lineDurationMs, 500);
+
+                    const lineStartTimeMs = item.time * 1000;
+                    const translationWords = generatePseudoWordTimestamps(
+                        item.translation,
+                        lineStartTimeMs,
+                        lineDurationMs,
+                    );
+
+                    if (translationWords.length > 0) {
+                        item.translationWords = translationWords;
+                        item.hasTranslationWordByWord = true;
+                        item.translationDuration = lineDurationMs;
+                    }
+                }
             }
         }
 
@@ -492,6 +586,43 @@ export default class LyricParser {
                 this.lrcItems.forEach((item, index) => {
                     item.index = index;
                 });
+
+                // Generate pseudo word-by-word timestamps for romanization without real word data
+                for (let i = 0; i < this.lrcItems.length; i++) {
+                    const item = this.lrcItems[i];
+                    // Skip if no romanization or already has word-by-word data
+                    if (!item.romanization || item.romanization.trim().length === 0 || item.hasRomanizationWordByWord) {
+                        continue;
+                    }
+
+                    // Calculate line duration: use original line's duration if available,
+                    // otherwise calculate from next line's start time
+                    let lineDurationMs: number;
+                    if (item.duration && item.duration > 0) {
+                        lineDurationMs = item.duration;
+                    } else if (i < this.lrcItems.length - 1) {
+                        const nextItemTime = this.lrcItems[i + 1].time;
+                        lineDurationMs = (nextItemTime - item.time) * 1000;
+                    } else {
+                        lineDurationMs = 3000;
+                    }
+
+                    lineDurationMs = Math.max(lineDurationMs, 500);
+
+                    const lineStartTimeMs = item.time * 1000;
+                    const romanizationWords = generatePseudoWordTimestamps(
+                        item.romanization,
+                        lineStartTimeMs,
+                        lineDurationMs,
+                    );
+
+                    if (romanizationWords.length > 0) {
+                        item.romanizationWords = romanizationWords;
+                        item.hasRomanizationWordByWord = true;
+                        item.romanizationDuration = lineDurationMs;
+                        item.isRomanizationPseudo = true;
+                    }
+                }
             }
         }
     }

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import AlbumCover from "./albumCover";
 import Lyric from "./lyric";
 import useOrientation from "@/hooks/useOrientation";
@@ -12,6 +12,7 @@ export default function Content() {
     );
     const orientation = useOrientation();
     const showAlbumCover = tab === "album" || orientation === "horizontal";
+    const showLyric = tab === "lyric" && orientation !== "horizontal";
 
     const onTurnPageClick = () => {
         if (orientation === "horizontal") {
@@ -26,11 +27,29 @@ export default function Content() {
 
     return (
         <View style={globalStyle.fwflex1}>
-            {showAlbumCover ? (
+            {/* Always render AlbumCover when visible */}
+            {showAlbumCover && (
                 <AlbumCover onTurnPageClick={onTurnPageClick} />
-            ) : (
-                <Lyric onTurnPageClick={onTurnPageClick} />
             )}
+            {/* Keep Lyric mounted to preserve scroll position, use display to hide */}
+            <View style={[
+                globalStyle.fwflex1,
+                !showLyric && styles.hidden,
+            ]}>
+                <Lyric onTurnPageClick={onTurnPageClick} />
+            </View>
         </View>
     );
 }
+
+const styles = StyleSheet.create({
+    hidden: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        opacity: 0,
+        pointerEvents: 'none',
+    },
+});

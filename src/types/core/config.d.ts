@@ -64,6 +64,7 @@ export interface IAppConfigProperties {
     "lyric.hideDesktopLyricWhenPaused": boolean;
     "lyric.enableWordByWord": boolean;
     "lyric.enableWordByWordGlow": boolean;
+    "lyric.detailAlign": "left" | "center";
 
     // Theme
     "theme.background": string;

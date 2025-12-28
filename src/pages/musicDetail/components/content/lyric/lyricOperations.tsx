@@ -5,6 +5,7 @@ import { iconSizeConst } from "@/constants/uiConst";
 import TranslationIcon from "@/assets/icons/translation.svg";
 import LanguageIcon from "@/assets/icons/language.svg";
 import { useAppConfig } from "@/core/appConfig";
+import appConfig from "@/core/appConfig";
 import useColors from "@/hooks/useColors";
 import Toast from "@/utils/toast";
 import { hidePanel, showPanel } from "@/components/panels/usePanel";
@@ -14,6 +15,7 @@ import useOrientation from "@/hooks/useOrientation";
 import HeartIcon from "../heartIcon";
 import Icon from "@/components/base/icon.tsx";
 import lyricManager, { useLyricState } from "@/core/lyricManager";
+import { useI18N } from "@/core/i18n";
 
 interface ILyricOperationsProps {
     scrollToCurrentLrcItem: () => void;
@@ -23,6 +25,7 @@ export default function LyricOperations(props: ILyricOperationsProps) {
     const { scrollToCurrentLrcItem } = props;
 
     const detailFontSize = useAppConfig("lyric.detailFontSize");
+    const lyricAlign = useAppConfig("lyric.detailAlign") ?? "center";
 
     const { hasTranslation, hasRomanization } = useLyricState();
     const showTranslation = PersistStatus.useValue(
@@ -35,6 +38,13 @@ export default function LyricOperations(props: ILyricOperationsProps) {
     );
     const colors = useColors();
     const orientation = useOrientation();
+    const { t } = useI18N();
+
+    const toggleAlign = () => {
+        const newAlign = lyricAlign === "center" ? "left" : "center";
+        appConfig.setConfig("lyric.detailAlign", newAlign);
+        Toast.success(t("lyric.alignSwitched"));
+    };
 
     return (
         <View style={styles.container}>
@@ -52,6 +62,12 @@ export default function LyricOperations(props: ILyricOperationsProps) {
                         },
                     });
                 }}
+            />
+            <Icon
+                name={lyricAlign === "left" ? "align-left" : "align-center"}
+                size={iconSizeConst.normal}
+                color={lyricAlign === "left" ? colors.primary : "white"}
+                onPress={toggleAlign}
             />
             <Icon
                 name="arrows-left-right"
