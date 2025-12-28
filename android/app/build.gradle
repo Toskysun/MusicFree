@@ -185,6 +185,25 @@ android {
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }
     }
+
+    // Customize APK output file names
+    applicationVariants.all { variant ->
+        variant.outputs.all { output ->
+            def abi = output.getFilter(OutputFile.ABI)
+            def versionName = variant.versionName
+            def outputFileName = "MusicFree-v${versionName}"
+
+            if (abi != null) {
+                outputFileName += "-${abi}"
+            } else {
+                outputFileName += "-universal"
+            }
+
+            outputFileName += "-${variant.buildType.name}.apk"
+            outputFileName = outputFileName.replace(" ", "-")
+            output.outputFileName = outputFileName
+        }
+    }
 }
 
 dependencies {

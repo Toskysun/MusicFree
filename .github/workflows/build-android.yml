@@ -117,10 +117,10 @@ jobs:
             existingChangeLog = [];
           }
 
-          // 生成下载链接
+          // 生成下载链接（使用新的文件名格式）
           const downloadUrls = [
-            'https://github.com/${{ github.repository }}/releases/download/' + tagVersion + '/app-arm64-v8a-release.apk',
-            'https://github.com/${{ github.repository }}/releases/download/' + tagVersion + '/app-universal-release.apk'
+            'https://github.com/${{ github.repository }}/releases/download/' + tagVersion + '/MusicFree-v' + version + '-arm64-v8a-release.apk',
+            'https://github.com/${{ github.repository }}/releases/download/' + tagVersion + '/MusicFree-v' + version + '-universal-release.apk'
           ];
 
           // 只更新 version 和 download，保留现有的 changeLog
@@ -286,17 +286,21 @@ jobs:
         echo "🔍 Checking APK files..."
         APK_DIR="android/app/build/outputs/apk/release"
         ls -la $APK_DIR/
-        
+
+        # 从tag获取版本号（去掉v前缀）
+        TAG_VERSION="${{ github.ref_name }}"
+        VERSION=${TAG_VERSION#v}
+
         # Verify all expected APK files exist
         MISSING_FILES=()
         EXPECTED_FILES=(
-          "app-universal-release.apk"
-          "app-arm64-v8a-release.apk" 
-          "app-armeabi-v7a-release.apk"
-          "app-x86_64-release.apk"
-          "app-x86-release.apk"
+          "MusicFree-v${VERSION}-universal-release.apk"
+          "MusicFree-v${VERSION}-arm64-v8a-release.apk"
+          "MusicFree-v${VERSION}-armeabi-v7a-release.apk"
+          "MusicFree-v${VERSION}-x86_64-release.apk"
+          "MusicFree-v${VERSION}-x86-release.apk"
         )
-        
+
         for file in "${EXPECTED_FILES[@]}"; do
           if [[ ! -f "$APK_DIR/$file" ]]; then
             MISSING_FILES+=("$file")
@@ -305,13 +309,62 @@ jobs:
             echo "✅ Found: $file"
           fi
         done
-        
+
         if [[ ${#MISSING_FILES[@]} -gt 0 ]]; then
           echo "🚨 ERROR: ${#MISSING_FILES[@]} APK files are missing!"
           exit 1
         else
           echo "🎉 All APK files are present!"
         fi
+
+    # 📝 生成Release描述
+    - name: Generate Release Body
+      if: startsWith(github.ref, 'refs/tags/')
+      id: release-body
+      run: |
+        echo "📝 Generating release body from version.json..."
+
+        # 从tag获取版本号
+        TAG_VERSION="${{ github.ref_name }}"
+        VERSION=${TAG_VERSION#v}
+
+        # 读取 changeLog 并格式化
+        CHANGELOG=$(node -e "
+          const fs = require('fs');
+          const versionData = JSON.parse(fs.readFileSync('release/version.json', 'utf8'));
+          const changeLog = versionData.changeLog || [];
+
+          // 格式化为 markdown 列表
+          const formattedLog = changeLog.map((item, index) => \`\${index + 1}. \${item}\`).join('\n');
+
+          console.log(formattedLog);
+        ")
+
+        # 创建完整的 Release 描述
+        cat > release_body.md << EOF
+        ## 🎵 MusicFree ${{ github.ref_name }}
+
+        ### 📱 下载选项
+
+        **推荐下载 (适用于所有设备):**
+        - **Universal APK**: [MusicFree-v${VERSION}-universal-release.apk](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/MusicFree-v${VERSION}-universal-release.apk)
+
+        **按设备架构下载 (体积更小):**
+        - **ARM64 (推荐)**: [MusicFree-v${VERSION}-arm64-v8a-release.apk](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/MusicFree-v${VERSION}-arm64-v8a-release.apk) - 适用于大部分现代Android设备
+        - **ARM32**: [MusicFree-v${VERSION}-armeabi-v7a-release.apk](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/MusicFree-v${VERSION}-armeabi-v7a-release.apk) - 适用于老版本Android设备
+        - **x86_64**: [MusicFree-v${VERSION}-x86_64-release.apk](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/MusicFree-v${VERSION}-x86_64-release.apk) - 适用于x86_64模拟器
+        - **x86**: [MusicFree-v${VERSION}-x86-release.apk](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/MusicFree-v${VERSION}-x86-release.apk) - 适用于x86模拟器
+
+        ### 🔄 更新内容
+
+        $CHANGELOG
+
+        ### ⚡ 构建信息
+        - 构建时间: ${{ steps.build-info.outputs.build-time }}
+        - 提交SHA: ${{ github.sha }}
+        EOF
+
+        echo "✅ Release body generated"
 
     # 🎉 创建Release并上传所有APK
     - name: Create Release and Upload APKs
@@ -323,42 +376,11 @@ jobs:
       with:
         tag_name: ${{ github.ref_name }}
         name: MusicFree ${{ github.ref_name }}
-        body: |
-          ## 🎵 MusicFree ${{ github.ref_name }}
-          
-          ### 📱 下载选项
-          
-          **推荐下载 (适用于所有设备):**
-          - **Universal APK**: [app-universal-release.apk](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/app-universal-release.apk)
-          
-          **按设备架构下载 (体积更小):**
-          - **ARM64 (推荐)**: [app-arm64-v8a-release.apk](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/app-arm64-v8a-release.apk) - 适用于大部分现代Android设备
-          - **ARM32**: [app-armeabi-v7a-release.apk](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/app-armeabi-v7a-release.apk) - 适用于老版本Android设备
-          - **x86_64**: [app-x86_64-release.apk](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/app-x86_64-release.apk) - 适用于x86_64模拟器
-          - **x86**: [app-x86-release.apk](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/app-x86-release.apk) - 适用于x86模拟器
-          
-          ### 🔄 更新内容
-          
-          1. 全面支持ikun音源8种音质
-          2. 🚩请使用改版ikun插件
-             - 在线导入地址：`https://musicfree-plugins.netlify.app`
-          3. 原生下载通知与多种文件名功能
-          4. 根据喜好定制音质标签
-          5. 软件启动时打开播放详情页
-          6. 下载时写入音乐标签
-          7. 酷我mflac格式流式播放与下载支持
-          
-          ### ⚡ 构建信息
-          - 构建时间: ${{ steps.build-info.outputs.build-time }}
-          - 提交SHA: ${{ github.sha }}
+        body_path: release_body.md
         draft: false
         prerelease: false
         files: |
-          android/app/build/outputs/apk/release/app-universal-release.apk
-          android/app/build/outputs/apk/release/app-arm64-v8a-release.apk
-          android/app/build/outputs/apk/release/app-armeabi-v7a-release.apk
-          android/app/build/outputs/apk/release/app-x86_64-release.apk
-          android/app/build/outputs/apk/release/app-x86-release.apk
+          android/app/build/outputs/apk/release/MusicFree-*.apk
 
     # 📤 提交更新的版本文件回到仓库
     - name: Commit updated version files
