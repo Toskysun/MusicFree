@@ -289,17 +289,23 @@ function convertQrcLineToWordByWord(line: string): string {
   }
 
   // Extract word-by-word timing: 字(start_ms,duration_ms)
-  // Use .+? to match any character including spaces and parentheses
-  // This correctly handles cases like: ((123,45) for literal '(' or )(123,45) for ')'
-  const wordPattern = /(.+?)\((\d+),(\d+)\)/g;
+  // Use negative lookahead to match content until we hit a timestamp pattern (digits,digits)
+  // This correctly handles spaces, parentheses, and any other characters
+  // Pattern from LDDC project: (?:(?!\(\d+,\d+\)).)*
+  const wordPattern = /((?:(?!\(\d+,\d+\)).)*)?\((\d+),(\d+)\)/g;
   const formattedWords: string[] = [];
   let match: RegExpExecArray | null;
   let lastEndTimeMs = startTimeMs;
 
   while ((match = wordPattern.exec(textWithWordTiming)) !== null) {
-    const word = match[1];
+    const word = match[1] || '';
     const wordStartMs = parseInt(match[2], 10);
     const wordDurationMs = parseInt(match[3], 10);
+    // Skip empty content (pure timestamp without character)
+    if (word === '') {
+      lastEndTimeMs = wordStartMs + wordDurationMs;
+      continue;
+    }
     const wordTimestamp = msToAngleBracketTime(wordStartMs);
     formattedWords.push(`<${wordTimestamp}>${word}`);
     lastEndTimeMs = wordStartMs + wordDurationMs;

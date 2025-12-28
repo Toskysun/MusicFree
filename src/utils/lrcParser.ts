@@ -10,7 +10,10 @@ const ANGLE_BRACKET_TIME_PATTERN = /<([\d:.]+)>/g;
 const HAS_ANGLE_BRACKET_PATTERN = /\[[\d:.]+\]<[\d:.]+>/;
 
 // QRC 格式逐字歌词正则：字(ms,duration)
-const QRC_WORD_PATTERN = /([^\(\)]+?)\((\d+),\d+\)/g;
+// Uses negative lookahead to match any character until a timestamp pattern (digits,digits)
+// This correctly handles spaces, parentheses, and special characters
+// Pattern reference: LDDC project
+const QRC_WORD_PATTERN = /((?:(?!\(\d+,\d+\)).)*)\((\d+),\d+\)/g;
 
 // Time tolerance for matching translation/romanization lines (in seconds)
 // Allows matching when timestamps differ by up to 50ms (0.05 seconds)
@@ -227,13 +230,15 @@ export function formatLyricsByTimestamp(
                     }
                     break;
                 case "translation":
-                    if (!parser.hasTranslation || !item.translation) {
+                    // Use == null to only skip undefined/null, allow empty string (breaks)
+                    if (!parser.hasTranslation || item.translation == null) {
                         continue;
                     }
                     content = item.translation;
                     break;
                 case "romanization":
-                    if (!parser.hasRomanization || !item.romanization) {
+                    // Use == null to only skip undefined/null, allow empty string (breaks)
+                    if (!parser.hasRomanization || item.romanization == null) {
                         continue;
                     }
                     content = item.romanization;
@@ -243,8 +248,13 @@ export function formatLyricsByTimestamp(
                     break;
             }
 
-            // Skip empty content
+            // For empty content: only output timestamp for original lyrics (breaks/pauses)
+            // Skip empty translation/romanization to avoid duplicate empty lines
             if (!content.trim()) {
+                if (langType === "original") {
+                    const timestamp = timeToLrcTime(item.time);
+                    timestampGroups.push(timestamp);
+                }
                 continue;
             }
 
@@ -374,6 +384,7 @@ export default class LyricParser {
                 // 2 pointer with tolerance matching
                 let p1 = 0;
                 let p2 = 0;
+                const matchedTransIndices = new Set<number>();
 
                 while (p1 < this.lrcItems.length) {
                     const lrcItem = this.lrcItems[p1];
@@ -388,12 +399,32 @@ export default class LyricParser {
                     const timeDiff = Math.abs(transLrcItems[p2].time - lrcItem.time);
                     if (timeDiff <= TIME_MATCH_TOLERANCE) {
                         lrcItem.translation = transLrcItems[p2].lrc;
+                        matchedTransIndices.add(p2);
                     } else {
                         lrcItem.translation = "";
                     }
 
                     ++p1;
                 }
+
+                // Add unmatched translation items (including empty lines/breaks)
+                // This preserves timestamps that only exist in translation
+                for (let i = 0; i < transLrcItems.length; i++) {
+                    if (!matchedTransIndices.has(i)) {
+                        this.lrcItems.push({
+                            time: transLrcItems[i].time,
+                            lrc: "",
+                            translation: transLrcItems[i].lrc,
+                            index: this.lrcItems.length,
+                        });
+                    }
+                }
+
+                // Re-sort after adding new items
+                this.lrcItems.sort((a, b) => a.time - b.time);
+                this.lrcItems.forEach((item, index) => {
+                    item.index = index;
+                });
             }
         }
 
@@ -408,6 +439,7 @@ export default class LyricParser {
                 // 2 pointer with tolerance matching - 同时提取文本和逐字数据
                 let p1 = 0;
                 let p2 = 0;
+                const matchedRomaIndices = new Set<number>();
 
                 while (p1 < this.lrcItems.length) {
                     const lrcItem = this.lrcItems[p1];
@@ -422,6 +454,7 @@ export default class LyricParser {
                     const timeDiff = Math.abs(romaLrcItems[p2].time - lrcItem.time);
                     if (timeDiff <= TIME_MATCH_TOLERANCE) {
                         lrcItem.romanization = romaLrcItems[p2].lrc;
+                        matchedRomaIndices.add(p2);
                         // 提取罗马音逐字数据
                         if (romaLrcItems[p2].hasWordByWord && romaLrcItems[p2].words) {
                             lrcItem.romanizationWords = romaLrcItems[p2].words;
@@ -434,6 +467,31 @@ export default class LyricParser {
 
                     ++p1;
                 }
+
+                // Add unmatched romanization items (including empty lines/breaks)
+                // This preserves timestamps that only exist in romanization
+                for (let i = 0; i < romaLrcItems.length; i++) {
+                    if (!matchedRomaIndices.has(i)) {
+                        this.lrcItems.push({
+                            time: romaLrcItems[i].time,
+                            lrc: "",
+                            romanization: romaLrcItems[i].lrc,
+                            index: this.lrcItems.length,
+                            // Include word-by-word data if available
+                            ...(romaLrcItems[i].hasWordByWord && romaLrcItems[i].words ? {
+                                romanizationWords: romaLrcItems[i].words,
+                                hasRomanizationWordByWord: true,
+                                romanizationDuration: romaLrcItems[i].duration,
+                            } : {}),
+                        });
+                    }
+                }
+
+                // Re-sort after adding new items
+                this.lrcItems.sort((a, b) => a.time - b.time);
+                this.lrcItems.forEach((item, index) => {
+                    item.index = index;
+                });
             }
         }
     }
@@ -591,9 +649,8 @@ export default class LyricParser {
 
             if (endIdx > startIdx) {
                 const text = content.substring(startIdx, endIdx);
-                // Fix: Filter out empty text and whitespace-only text to prevent showing time markers
-                const trimmedText = text.trim();
-                if (trimmedText) {
+                // Only filter out truly empty text, preserve spaces as they have their own timestamps
+                if (text) {
                     const nextTime =
                         i < timePositions.length - 1
                             ? timePositions[i + 1].time
@@ -691,9 +748,10 @@ export default class LyricParser {
                 let match: RegExpExecArray | null;
 
                 while ((match = QRC_WORD_PATTERN.exec(content)) !== null) {
-                    const rawWordText = match[1];
+                    const rawWordText = match[1] || '';
                     const wordStartTime = parseInt(match[2], 10);
-                    const wordText = rawWordText.trim();
+                    // Don't trim - preserve space characters with their own timestamps
+                    const wordText = rawWordText;
 
                     if (wordText) {
                         // 计算持续时间：如果有下一个词，用下一个词的开始时间减去当前开始时间
