@@ -112,6 +112,8 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
     private downloadingCount = 0;
     private nativeEventBound = false;
     private internalIdToKey = new Map<string, string>();
+    // Lock to prevent race condition in downloadNextPendingTask
+    private isSchedulingTask = false;
     // 移除自定义通知管理器状态
     // private notificationManagerInitialized = false;
 
@@ -449,14 +451,18 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
 
 
     private async downloadNextPendingTask() {
-        // 移除自定义通知管理器初始化
-        // await this.initializeNotificationManager();
-        
+        // Prevent race condition: use lock to ensure atomic check-and-increment
+        if (this.isSchedulingTask) {
+            return;
+        }
+        this.isSchedulingTask = true;
+
         const maxDownloadCount = Math.max(1, Math.min(+(this.configService.getConfig("basic.maxDownload") || 3), 10));
         const downloadQueue = getDefaultStore().get(downloadQueueAtom);
 
         // 如果超过最大下载数量，或者没有下载任务，则不执行
         if (this.downloadingCount >= maxDownloadCount || this.downloadingCount >= downloadQueue.length) {
+            this.isSchedulingTask = false;
             return;
         }
 
@@ -474,6 +480,7 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
 
         // 没有下一个任务了
         if (!nextTask) {
+            this.isSchedulingTask = false;
             if (this.downloadingCount === 0) {
                 this.emit(DownloaderEvent.DownloadQueueCompleted);
             }
@@ -481,8 +488,11 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
         }
 
         const musicItem = nextTask.musicItem;
-        // 更新下载状态
+        // 更新下载状态 - increment downloadingCount before releasing lock
         this.markTaskAsStarted(musicItem);
+
+        // Release lock after downloadingCount is incremented
+        this.isSchedulingTask = false;
 
         let url = musicItem.url;
         let headers = musicItem.headers;
@@ -610,11 +620,14 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
             } else {
                 this.markTaskAsError(musicItem, DownloadFailReason.Unknown, e);
             }
+            // Trigger next task after error
+            setTimeout(() => this.downloadNextPendingTask(), 0);
             return;
         }
 
         // 预处理完成，可以开始处理下一个任务
-        this.downloadNextPendingTask();
+        // Use setTimeout to ensure lock is released before next call
+        setTimeout(() => this.downloadNextPendingTask(), 0);
         
         // 从musicItem.qualities中获取预期文件大小
         let expectedFileSize = 0;
@@ -972,8 +985,8 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
             }
         }
 
-        // 继续处理下一个任务
-        this.downloadNextPendingTask();
+        // 继续处理下一个任务 - use setTimeout to ensure proper scheduling
+        setTimeout(() => this.downloadNextPendingTask(), 0);
 
         // 如果任务状态是完成，则从队列中移除
         const key = getMediaUniqueKey(musicItem);
@@ -1029,7 +1042,13 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
         const newDownloadQueue = [...downloadQueue, ...musicItems];
         getDefaultStore().set(downloadQueueAtom, newDownloadQueue);
 
-        this.downloadNextPendingTask();
+        // Start multiple concurrent downloads up to maxDownload limit
+        const maxDownloadCount = Math.max(1, Math.min(+(this.configService.getConfig("basic.maxDownload") || 3), 10));
+        const tasksToStart = Math.min(maxDownloadCount, musicItems.length);
+        for (let i = 0; i < tasksToStart; i++) {
+            // Use setTimeout to ensure lock is released between calls
+            setTimeout(() => this.downloadNextPendingTask(), i * 10);
+        }
     }
 
     remove(musicItem: IMusic.IMusicItem) {
@@ -1073,9 +1092,9 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
                 // 简化版本中此调用不会产生实际效果
                 devLog('info', '📢[下载器] 取消通知调用（简化版本）', error);
             });
-            
-            // 触发下一个任务
-            this.downloadNextPendingTask();
+
+            // 触发下一个任务 - use setTimeout to ensure proper scheduling
+            setTimeout(() => this.downloadNextPendingTask(), 0);
             
             return true;
         }
