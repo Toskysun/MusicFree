@@ -20,6 +20,7 @@ import {
 import FastImage from "./fastImage";
 import { ImageStyle } from "react-native-fast-image";
 import Icon, { IIconName } from "@/components/base/icon.tsx";
+import { useAppConfig } from "@/core/appConfig";
 
 interface IListItemProps {
     // 是否有左右边距
@@ -205,6 +206,9 @@ function ListItemImage(props: IListItemImageProps) {
         maskIcon,
     } = props;
 
+    const coverStyle = useAppConfig("theme.coverStyle") ?? "square";
+    const isCircle = coverStyle === "circle";
+
     const defaultStyle: StyleProp<ViewStyle> = {
         marginRight: position === "left" ? defaultPadding : 0,
         marginLeft: position === "right" ? defaultPadding : 0,
@@ -212,15 +216,21 @@ function ListItemImage(props: IListItemImageProps) {
         flexBasis: fixedWidth ? width ?? defaultActionWidth : undefined,
     };
 
+    const imageStyle: StyleProp<ImageStyle> = [
+        styles.leftImage,
+        isCircle && styles.leftImageCircle,
+        contentStyle,
+    ];
+
     return (
         <View style={[styles.actionBase, defaultStyle, containerStyle]}>
             <FastImage
-                style={[styles.leftImage, contentStyle]}
+                style={imageStyle}
                 source={uri}
                 placeholderSource={fallbackImg}
             />
             {maskIcon ? (
-                <View style={[styles.leftImage, styles.imageMask]}>
+                <View style={[styles.leftImage, isCircle && styles.leftImageCircle, styles.imageMask]}>
                     <Icon
                         name={maskIcon}
                         size={iconSizeConst.normal}
@@ -321,6 +331,9 @@ const styles = StyleSheet.create({
         width: rpx(80),
         height: rpx(80),
         borderRadius: rpx(16),
+    },
+    leftImageCircle: {
+        borderRadius: rpx(40),
     },
     imageMask: {
         position: "absolute",
