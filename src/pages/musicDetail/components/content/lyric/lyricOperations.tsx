@@ -16,6 +16,7 @@ import HeartIcon from "../heartIcon";
 import Icon from "@/components/base/icon.tsx";
 import lyricManager, { useLyricState } from "@/core/lyricManager";
 import { useI18N } from "@/core/i18n";
+import { devLog } from "@/utils/log";
 
 interface ILyricOperationsProps {
     scrollToCurrentLrcItem: () => void;
@@ -57,7 +58,8 @@ export default function LyricOperations(props: ILyricOperationsProps) {
                     showPanel("SetFontSize", {
                         defaultSelect: detailFontSize ?? 1,
                         onSelectChange(value) {
-                            PersistStatus.set("lyric.detailFontSize", value);
+                            devLog("Setting lyric font size to:", value);
+                            appConfig.setConfig("lyric.detailFontSize", value);
                             scrollToCurrentLrcItem();
                         },
                     });

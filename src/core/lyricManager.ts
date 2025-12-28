@@ -41,6 +41,10 @@ const currentLyricItemAtom = atom<IParsedLrcItem | null>(null);
 // 当前播放位置（毫秒），用于逐字歌词效果
 const currentPositionMsAtom = atom<number>(0);
 
+// Throttle interval for position updates (ms)
+// 16ms = 60fps, provides buttery smooth animation
+const POSITION_UPDATE_THROTTLE = 16;
+
 
 class LyricManager implements IInjectable {
 
@@ -49,6 +53,11 @@ class LyricManager implements IInjectable {
     private pluginManager!: IPluginManager;
 
     private lyricParser: LyricParser | null = null;
+
+    // Throttle state for position updates
+    private lastPositionUpdateTime: number = 0;
+    private pendingPositionMs: number = 0;
+    private positionUpdateTimer: ReturnType<typeof setTimeout> | null = null;
 
 
     get currentLyricItem() {
@@ -98,9 +107,31 @@ class LyricManager implements IInjectable {
 
         RNTrackPlayer.addEventListener(Event.PlaybackProgressUpdated, evt => {
             const parser = this.lyricParser;
+            const positionMs = evt.position * 1000;
 
-            // 更新当前播放位置（毫秒），用于逐字歌词效果
-            getDefaultStore().set(currentPositionMsAtom, evt.position * 1000);
+            // Throttled position update for smooth animation without JS thread overload
+            const now = Date.now();
+            this.pendingPositionMs = positionMs;
+
+            if (now - this.lastPositionUpdateTime >= POSITION_UPDATE_THROTTLE) {
+                // Enough time has passed, update immediately
+                this.lastPositionUpdateTime = now;
+                getDefaultStore().set(currentPositionMsAtom, positionMs);
+
+                // Clear any pending timer
+                if (this.positionUpdateTimer) {
+                    clearTimeout(this.positionUpdateTimer);
+                    this.positionUpdateTimer = null;
+                }
+            } else if (!this.positionUpdateTimer) {
+                // Schedule an update to ensure we don't miss the final position
+                const delay = POSITION_UPDATE_THROTTLE - (now - this.lastPositionUpdateTime);
+                this.positionUpdateTimer = setTimeout(() => {
+                    this.lastPositionUpdateTime = Date.now();
+                    getDefaultStore().set(currentPositionMsAtom, this.pendingPositionMs);
+                    this.positionUpdateTimer = null;
+                }, delay);
+            }
 
             if (!parser || !this.trackPlayer.isCurrentMusic(parser.musicItem)) {
                 return;

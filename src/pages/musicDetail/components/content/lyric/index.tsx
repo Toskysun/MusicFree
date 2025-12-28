@@ -20,6 +20,7 @@ import { getMediaExtraProperty } from "@/utils/mediaExtra";
 import lyricManager, { useCurrentLyricItem, useLyricState } from "@/core/lyricManager";
 import { useI18N } from "@/core/i18n";
 import { useAppConfig } from "@/core/appConfig";
+import { devLog } from "@/utils/log";
 
 // Smooth scroll animation duration (ms)
 const SCROLL_ANIMATION_DURATION = 400;
@@ -60,10 +61,11 @@ export default function Lyric(props: IProps) {
         "lyric.lyricOrder",
         ["original", "translation", "romanization"],
     );
-    const fontSizeKey = PersistStatus.useValue("lyric.detailFontSize", 1);
+    const fontSizeKey = useAppConfig("lyric.detailFontSize") ?? 1;
+    devLog("Lyric detail page font size:", fontSizeKey);
     const fontSizeStyle = useMemo(
         () => ({
-            fontSize: fontSizeMap[fontSizeKey!],
+            fontSize: fontSizeMap[fontSizeKey],
         }),
         [fontSizeKey],
     );

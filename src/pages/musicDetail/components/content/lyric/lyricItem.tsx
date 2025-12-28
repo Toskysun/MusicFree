@@ -1,14 +1,18 @@
-import React, { memo, useState, useCallback, useEffect, useMemo } from "react";
+import React, { memo, useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { StyleSheet, Text, View, LayoutChangeEvent } from "react-native";
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
     withTiming,
     withRepeat,
+    withSpring,
+    useDerivedValue,
+    interpolate,
+    Extrapolation,
     Easing,
+    runOnJS,
+    cancelAnimation,
 } from "react-native-reanimated";
-import MaskedView from "@react-native-masked-view/masked-view";
-import LinearGradient from "react-native-linear-gradient";
 import rpx from "@/utils/rpx";
 import useColors from "@/hooks/useColors";
 import { fontSizeConst } from "@/constants/uiConst";
@@ -191,7 +195,15 @@ function smoothRise(t: number): number {
     return t * t * (3 - 2 * t);
 }
 
-// Individual word component with smooth gradient fill animation
+// Smooth animation configs for native driver
+const WORD_SPRING_CONFIG = {
+    damping: 20,
+    stiffness: 300,
+    mass: 0.5,
+};
+
+// Individual word component with smooth native-driven animation
+// Uses Reanimated shared values for 60fps animation on UI thread
 const KaraokeWord = memo(({
     word,
     currentTimeMs,
@@ -213,44 +225,90 @@ const KaraokeWord = memo(({
 }) => {
     const { startTime, duration, text, space } = word;
     const endTime = startTime + duration;
-    const [wordSize, setWordSize] = useState({ width: 0, height: 0 });
+    const [wordWidth, setWordWidth] = useState(0);
 
-    // Calculate raw progress (0 to 1)
-    const progress = useMemo(() => {
+    // Shared value for current position (synced from JS thread at 60fps)
+    const currentTimeMsShared = useSharedValue(currentTimeMs);
+
+    // Sync currentTimeMs to SharedValue with spring animation for smoothness
+    // Spring animation interpolates between updates for buttery smooth motion
+    useEffect(() => {
+        if (isCurrentLine) {
+            // Use spring for ultra-smooth animation between 16ms updates
+            currentTimeMsShared.value = withSpring(currentTimeMs, {
+                damping: 35,
+                stiffness: 500,
+                mass: 0.2,
+            });
+        } else {
+            // Direct set for non-current lines (no animation needed)
+            currentTimeMsShared.value = currentTimeMs;
+        }
+    }, [currentTimeMs, isCurrentLine]);
+
+    // Calculate progress on UI thread using derivedValue
+    // Runs at native 60fps without blocking JS thread
+    const animatedProgress = useDerivedValue(() => {
+        'worklet';
         if (!isCurrentLine) return 0;
-        if (currentTimeMs >= endTime) return 1;
-        if (currentTimeMs <= startTime) return 0;
-        return Math.min(1, Math.max(0, (currentTimeMs - startTime) / duration));
-    }, [currentTimeMs, startTime, endTime, duration, isCurrentLine]);
 
-    // Animation states
-    const isCompleted = progress >= 1;
-    const isPending = progress === 0;
+        const currentTime = currentTimeMsShared.value;
+        if (currentTime >= endTime) return 1;
+        if (currentTime <= startTime) return 0;
+
+        // Calculate and clamp progress - all in UI thread
+        const rawProgress = (currentTime - startTime) / duration;
+        return Math.min(1, Math.max(0, rawProgress));
+    }, [isCurrentLine, startTime, endTime, duration]);
+
+    // Animation states (computed from shared value in JS thread)
+    const isCompleted = useMemo(() => {
+        if (!isCurrentLine) return false;
+        return currentTimeMs >= endTime;
+    }, [isCurrentLine, currentTimeMs, endTime]);
+
+    const isPending = useMemo(() => {
+        if (!isCurrentLine) return false;
+        return currentTimeMs <= startTime;
+    }, [isCurrentLine, currentTimeMs, startTime]);
 
     // Handle text size measurement
     const handleLayout = useCallback((event: LayoutChangeEvent) => {
-        const { width, height } = event.nativeEvent.layout;
-        if (width > 0 && height > 0) {
-            setWordSize({ width, height });
+        const { width } = event.nativeEvent.layout;
+        if (width > 0 && width !== wordWidth) {
+            setWordWidth(width);
         }
+    }, [wordWidth]);
+
+    // Animated style for progress overlay (clip effect)
+    const overlayStyle = useAnimatedStyle(() => {
+        const progress = animatedProgress.value;
+        return {
+            width: `${progress * 100}%`,
+            opacity: interpolate(progress, [0, 0.1], [0, 1], Extrapolation.CLAMP),
+        };
     }, []);
 
-    // Calculate gradient locations for smooth edge transition
-    const gradientConfig = useMemo(() => {
-        // Smoother gradient with wider transition zone
-        const edgeStart = Math.max(0, progress - GRADIENT_EDGE_WIDTH);
-        const edgeEnd = Math.min(1, progress + GRADIENT_EDGE_WIDTH * 0.5);
-
+    // Animated style for float effect
+    const floatStyle = useAnimatedStyle(() => {
+        if (isPseudo) return {};
+        const progress = animatedProgress.value;
+        // Smooth cubic easing for natural float
+        const smoothProgress = progress * progress * (3 - 2 * progress);
+        const floatOffset = -fontSize * FLOAT_OFFSET_EM * smoothProgress;
         return {
-            colors: [
-                highlightColor,
-                highlightColor,
-                'rgba(255, 255, 255, 0.5)',
-                'rgba(255, 255, 255, 0.5)',
-            ],
-            locations: [0, edgeStart, edgeEnd, 1],
+            transform: [{ translateY: floatOffset }],
         };
-    }, [progress, highlightColor]);
+    }, [isPseudo, fontSize]);
+
+    // Animated style for glow effect
+    const glowStyle = useAnimatedStyle(() => {
+        if (!enableGlow || duration < LONG_DURATION_MS) return { opacity: 0 };
+        const progress = animatedProgress.value;
+        return {
+            opacity: interpolate(progress, [0.2, 1], [0, 0.5], Extrapolation.CLAMP),
+        };
+    }, [enableGlow, duration]);
 
     // For non-current lines: simple text with better visibility
     if (!isCurrentLine) {
@@ -271,7 +329,7 @@ const KaraokeWord = memo(({
         );
     }
 
-    // For pending words (not yet started) - slightly brighter than non-current
+    // For pending words (not yet started)
     if (isPending) {
         return (
             <Text
@@ -291,8 +349,7 @@ const KaraokeWord = memo(({
         );
     }
 
-    // For completed words - full highlight with float up effect (glow only when enabled)
-    // Disable float for pseudo word-by-word lyrics
+    // For completed words - full highlight with float effect
     if (isCompleted) {
         const floatOffset = isPseudo ? 0 : -fontSize * FLOAT_OFFSET_EM;
         return (
@@ -320,84 +377,74 @@ const KaraokeWord = memo(({
         );
     }
 
-    // Active word: Use MaskedView with LinearGradient for smooth left-to-right fill
-    // Calculate float offset based on progress (smooth rise effect)
-    // Disable float for pseudo word-by-word lyrics
-    const floatProgress = smoothRise(progress);
-    const currentFloatOffset = isPseudo ? 0 : -fontSize * FLOAT_OFFSET_EM * floatProgress;
-
-    // Long duration word has enhanced glow effect (only when glow is enabled)
-    const isLongDuration = duration >= LONG_DURATION_MS;
-    const glowRadius = isLongDuration ? 18 : 12;
-    const glowOpacity = isLongDuration ? 0.5 * progress : 0.3 * progress;
-
+    // Active word: Use efficient overlay-based animation (native driven)
     return (
-        <View style={[styles.wordWrapper, { transform: [{ translateY: currentFloatOffset }] }]}>
-            {/* Measure text size with invisible text */}
+        <Animated.View style={[styles.wordWrapper, floatStyle]}>
+            {/* Base text (unhighlighted) */}
             <Text
                 onLayout={handleLayout}
                 style={[
                     styles.wordText,
-                    styles.measureText,
-                    { fontSize },
+                    {
+                        fontSize,
+                        color: primaryColor,
+                        opacity: 0.5,
+                    },
                 ]}
             >
                 {text}
                 {space ? ' ' : ''}
             </Text>
 
-            {/* Gradient-filled text using MaskedView */}
-            {wordSize.width > 0 && (
-                <MaskedView
-                    style={[styles.maskedContainer, { width: wordSize.width, height: wordSize.height }]}
-                    maskElement={
-                        <Text
-                            style={[
-                                styles.wordText,
-                                styles.maskText,
-                                { fontSize },
-                            ]}
-                        >
-                            {text}
-                            {space ? ' ' : ''}
-                        </Text>
-                    }
-                >
-                    <LinearGradient
-                        colors={gradientConfig.colors}
-                        locations={gradientConfig.locations}
-                        start={{ x: 0, y: 0.5 }}
-                        end={{ x: 1, y: 0.5 }}
-                        style={[styles.gradient, { width: wordSize.width, height: wordSize.height }]}
-                    />
-                </MaskedView>
-            )}
-
-            {/* Enhanced glow effect for long duration words (only when enabled) */}
-            {enableGlow && isLongDuration && progress > 0.2 && (
+            {/* Highlighted overlay with clip effect */}
+            <Animated.View
+                style={[
+                    styles.overlayContainer,
+                    overlayStyle,
+                ]}
+            >
                 <Text
                     style={[
                         styles.wordText,
-                        styles.glowText,
+                        styles.overlayText,
                         {
                             fontSize,
                             color: highlightColor,
-                            opacity: glowOpacity,
+                            width: wordWidth || 'auto',
+                        },
+                    ]}
+                    numberOfLines={1}
+                >
+                    {text}
+                    {space ? ' ' : ''}
+                </Text>
+            </Animated.View>
+
+            {/* Glow effect for long duration words */}
+            {enableGlow && duration >= LONG_DURATION_MS && (
+                <Animated.Text
+                    style={[
+                        styles.wordText,
+                        styles.glowText,
+                        glowStyle,
+                        {
+                            fontSize,
+                            color: highlightColor,
                             textShadowColor: highlightColor,
                             textShadowOffset: { width: 0, height: 0 },
-                            textShadowRadius: glowRadius,
+                            textShadowRadius: 18,
                         },
                     ]}
                 >
                     {text}
                     {space ? ' ' : ''}
-                </Text>
+                </Animated.Text>
             )}
-        </View>
+        </Animated.View>
     );
 });
 
-// Translation line with smooth gradient fill effect (same as karaoke words)
+// Translation line with smooth native-driven animation
 const FollowingTranslationLine = memo(({
     text,
     progress,
@@ -411,74 +458,79 @@ const FollowingTranslationLine = memo(({
     highlightColor: string;
     align?: LyricAlign;
 }) => {
-    const [textSize, setTextSize] = useState({ width: 0, height: 0 });
+    const [textWidth, setTextWidth] = useState(0);
+
+    // Sync progress to SharedValue with spring for ultra-smooth animation
+    const progressShared = useSharedValue(progress);
+
+    useEffect(() => {
+        // Use spring animation for smooth interpolation between updates
+        progressShared.value = withSpring(progress, {
+            damping: 35,
+            stiffness: 500,
+            mass: 0.2,
+        });
+    }, [progress]);
 
     // Handle text size measurement
     const handleLayout = useCallback((event: LayoutChangeEvent) => {
-        const { width, height } = event.nativeEvent.layout;
-        if (width > 0 && height > 0) {
-            setTextSize({ width, height });
+        const { width } = event.nativeEvent.layout;
+        if (width > 0 && width !== textWidth) {
+            setTextWidth(width);
         }
-    }, []);
+    }, [textWidth]);
 
-    // Calculate gradient locations for smooth edge transition (same as KaraokeWord)
-    const gradientConfig = useMemo(() => {
-        const edgeStart = Math.max(0, progress - GRADIENT_EDGE_WIDTH);
-        const edgeEnd = Math.min(1, progress + GRADIENT_EDGE_WIDTH);
-
+    // Animated style for progress overlay - computed on UI thread
+    const overlayStyle = useAnimatedStyle(() => {
+        'worklet';
         return {
-            colors: [
-                highlightColor,
-                highlightColor,
-                'rgba(255, 255, 255, 0.35)',
-                'rgba(255, 255, 255, 0.35)',
-            ],
-            locations: [0, edgeStart, edgeEnd, 1],
+            width: `${progressShared.value * 100}%`,
+            opacity: interpolate(progressShared.value, [0, 0.1], [0, 1], Extrapolation.CLAMP),
         };
-    }, [progress, highlightColor]);
+    }, []);
 
     return (
         <View style={[
             styles.translationLineContainer,
             { alignItems: align === "left" ? "flex-start" : "center" },
         ]}>
-            {/* Measure text size with invisible text */}
+            {/* Base text (unhighlighted) */}
             <Text
                 onLayout={handleLayout}
                 style={[
                     styles.wordText,
-                    styles.measureText,
-                    { fontSize },
+                    {
+                        fontSize,
+                        color: 'white',
+                        opacity: 0.35,
+                    },
                 ]}
             >
                 {text}
             </Text>
 
-            {/* Gradient-filled text using MaskedView */}
-            {textSize.width > 0 && (
-                <MaskedView
-                    style={[styles.maskedContainer, { width: textSize.width, height: textSize.height }]}
-                    maskElement={
-                        <Text
-                            style={[
-                                styles.wordText,
-                                styles.maskText,
-                                { fontSize },
-                            ]}
-                        >
-                            {text}
-                        </Text>
-                    }
+            {/* Highlighted overlay with clip effect */}
+            <Animated.View
+                style={[
+                    styles.overlayContainer,
+                    overlayStyle,
+                ]}
+            >
+                <Text
+                    style={[
+                        styles.wordText,
+                        styles.overlayText,
+                        {
+                            fontSize,
+                            color: highlightColor,
+                            width: textWidth || 'auto',
+                        },
+                    ]}
+                    numberOfLines={1}
                 >
-                    <LinearGradient
-                        colors={gradientConfig.colors}
-                        locations={gradientConfig.locations}
-                        start={{ x: 0, y: 0.5 }}
-                        end={{ x: 1, y: 0.5 }}
-                        style={[styles.gradient, { width: textSize.width, height: textSize.height }]}
-                    />
-                </MaskedView>
-            )}
+                    {text}
+                </Text>
+            </Animated.View>
         </View>
     );
 });
@@ -997,17 +1049,15 @@ const styles = StyleSheet.create({
     measureText: {
         opacity: 0,
     },
-    maskedContainer: {
+    overlayContainer: {
         position: 'absolute',
         left: 0,
         top: 0,
+        height: '100%',
+        overflow: 'hidden',
     },
-    maskText: {
-        color: 'black',
-        backgroundColor: 'transparent',
-    },
-    gradient: {
-        flex: 1,
+    overlayText: {
+        // Text inside overlay container - must not wrap
     },
     glowText: {
         position: 'absolute',

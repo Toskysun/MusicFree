@@ -182,6 +182,26 @@ class AppConfig implements IAppConfig {
             this.setConfig("basic.fileNamingMaxLength", 200);
         }
 
+        if (schemaVersion < 3) {
+            // Migrate lyric.detailFontSize from PersistStatus to AppConfig
+            const getOrCreateMMKV = (await import("@/utils/getOrCreateMMKV")).default;
+            const persistStatusStore = getOrCreateMMKV("App.PersistStatus");
+            const detailFontSizeStr = persistStatusStore.getString("lyric.detailFontSize");
+
+            if (detailFontSizeStr !== undefined && this.getConfig("lyric.detailFontSize") === undefined) {
+                try {
+                    const detailFontSize = JSON.parse(detailFontSizeStr);
+                    if (typeof detailFontSize === "number") {
+                        this.setConfig("lyric.detailFontSize", detailFontSize);
+                    }
+                } catch (e) {
+                    // Ignore parse errors
+                }
+            }
+
+            configStore.set("$schema", "3");
+        }
+
     }
 
     async setup(): Promise<void> {
