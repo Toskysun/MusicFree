@@ -65,6 +65,8 @@ export interface IAppConfigProperties {
     "lyric.enableWordByWord": boolean;
     "lyric.enableWordByWordGlow": boolean;
     "lyric.detailAlign": "left" | "center";
+    "lyric.desktopShowTranslation": boolean;
+    "lyric.desktopShowRomanization": boolean;
 
     // Theme
     "theme.background": string;

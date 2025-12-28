@@ -115,10 +115,8 @@ class LyricManager implements IInjectable {
                 getDefaultStore().set(currentLyricItemAtom, newLyricItem ?? null);
 
                 // 更新状态栏歌词
-                const showTranslation = PersistStatus.get("lyric.showTranslation");
-
                 if (this.appConfig.getConfig("lyric.showStatusBarLyric")) {
-                    this.updateDesktopLyricDisplay(newLyricItem, showTranslation);
+                    this.updateDesktopLyricDisplay(newLyricItem);
                 }
             }
         });
@@ -154,9 +152,8 @@ class LyricManager implements IInjectable {
 
                 // Update to current lyric if available
                 const currentLyricItem = this.currentLyricItem;
-                const showTranslation = PersistStatus.get("lyric.showTranslation");
                 if (currentLyricItem) {
-                    this.updateDesktopLyricDisplay(currentLyricItem, showTranslation);
+                    this.updateDesktopLyricDisplay(currentLyricItem);
                 }
 
                 devLog('info', '[LyricManager] Desktop lyric shown after play');
@@ -179,13 +176,28 @@ class LyricManager implements IInjectable {
         });
     }
 
-    private updateDesktopLyricDisplay(lyricItem: IParsedLrcItem | null, showTranslation: boolean | null) {
-        LyricUtil.setStatusBarLyricText(
-            (lyricItem?.lrc ?? "") +
-            (showTranslation
-                ? `\n${lyricItem?.translation ?? ""}`
-                : ""),
-        );
+    private updateDesktopLyricDisplay(lyricItem: IParsedLrcItem | null) {
+        const desktopShowTranslation = this.appConfig.getConfig("lyric.desktopShowTranslation") ?? false;
+        const desktopShowRomanization = this.appConfig.getConfig("lyric.desktopShowRomanization") ?? false;
+        const lyricOrder = PersistStatus.get("lyric.lyricOrder") ?? ["original", "translation", "romanization"];
+
+        const original = lyricItem?.lrc ?? "";
+        const translation = desktopShowTranslation ? (lyricItem?.translation ?? "") : "";
+        const romanization = desktopShowRomanization ? (lyricItem?.romanization ?? "") : "";
+
+        // Build lines according to lyric order
+        const lines: string[] = [];
+        for (const type of lyricOrder) {
+            if (type === "original" && original) {
+                lines.push(original);
+            } else if (type === "translation" && translation) {
+                lines.push(translation);
+            } else if (type === "romanization" && romanization) {
+                lines.push(romanization);
+            }
+        }
+
+        LyricUtil.setStatusBarLyricText(lines.join("\n"));
     }
 
     associateLyric(musicItem: IMusic.IMusicItem, linkToMusicItem: ICommon.IMediaBase) {
@@ -465,12 +477,7 @@ class LyricManager implements IInjectable {
 
             if (this.appConfig.getConfig("lyric.showStatusBarLyric")) {
                 if (currentLyric) {
-                    LyricUtil.setStatusBarLyricText(
-                        (currentLyric?.lrc ?? "") +
-                        (this.lyricParser.hasTranslation
-                            ? `\n${currentLyric?.translation ?? ""}`
-                            : ""),
-                    );
+                    this.updateDesktopLyricDisplay(currentLyric);
                 } else {
                     const musicItem = this.trackPlayer.currentMusic;
                     LyricUtil.setStatusBarLyricText(musicItem ? `${musicItem.title} - ${musicItem.artist}` : "MusicFree");

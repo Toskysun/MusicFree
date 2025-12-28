@@ -884,6 +884,8 @@ function LyricSetting() {
     const hideDesktopLyricWhenPaused = useAppConfig("lyric.hideDesktopLyricWhenPaused");
     const enableWordByWord = useAppConfig("lyric.enableWordByWord");
     const enableWordByWordGlow = useAppConfig("lyric.enableWordByWordGlow");
+    const desktopShowTranslation = useAppConfig("lyric.desktopShowTranslation");
+    const desktopShowRomanization = useAppConfig("lyric.desktopShowRomanization");
 
     const colors = useColors();
 
@@ -911,6 +913,18 @@ function LyricSetting() {
         t("basicSettings.lyric.hideDesktopLyricWhenPaused"),
         "lyric.hideDesktopLyricWhenPaused",
         hideDesktopLyricWhenPaused ?? true,
+    );
+
+    const desktopTranslation = createSwitch(
+        "桌面歌词显示翻译",
+        "lyric.desktopShowTranslation",
+        desktopShowTranslation ?? false,
+    );
+
+    const desktopRomanization = createSwitch(
+        "桌面歌词显示罗马音",
+        "lyric.desktopShowRomanization",
+        desktopShowRomanization ?? false,
     );
 
     const openStatusBarLyric = createSwitch(
@@ -1008,6 +1022,20 @@ function LyricSetting() {
                 onPress={hideWhenPaused.onPress}>
                 <ListItem.Content title={hideWhenPaused.title} />
                 {hideWhenPaused.right}
+            </ListItem>
+            <ListItem
+                withHorizontalPadding
+                heightType="small"
+                onPress={desktopTranslation.onPress}>
+                <ListItem.Content title={desktopTranslation.title} />
+                {desktopTranslation.right}
+            </ListItem>
+            <ListItem
+                withHorizontalPadding
+                heightType="small"
+                onPress={desktopRomanization.onPress}>
+                <ListItem.Content title={desktopRomanization.title} />
+                {desktopRomanization.right}
             </ListItem>
             <View style={lyricStyles.sliderContainer}>
                 <ThemeText>{t("basicSettings.lyric.leftRightDistance")}</ThemeText>
