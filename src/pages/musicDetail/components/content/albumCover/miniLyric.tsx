@@ -35,6 +35,7 @@ export default function MiniLyric(props: IMiniLyricProps) {
     const { lyrics, loading, hasTranslation, hasRomanization } = useLyricState();
     const orientation = useOrientation();
     const coverStyle = useAppConfig("theme.coverStyle") ?? "square";
+    const enableBreathingDots = useAppConfig("lyric.enableBreathingDots") ?? true;
 
     const showTranslation = PersistStatus.useValue(
         "lyric.showTranslation",
@@ -177,6 +178,10 @@ export default function MiniLyric(props: IMiniLyricProps) {
 
                                 if (type === "original") {
                                     if (isEmptyLyric) {
+                                        // Only show breathing dots if enabled
+                                        if (!enableBreathingDots) {
+                                            return <View key="original" style={styles.dotsContainer} />;
+                                        }
                                         return (
                                             <View key="original" style={styles.dotsContainer}>
                                                 <BreathingDots

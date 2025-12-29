@@ -884,6 +884,7 @@ function LyricSetting() {
     const hideDesktopLyricWhenPaused = useAppConfig("lyric.hideDesktopLyricWhenPaused");
     const enableWordByWord = useAppConfig("lyric.enableWordByWord");
     const enableWordByWordGlow = useAppConfig("lyric.enableWordByWordGlow");
+    const enableBreathingDots = useAppConfig("lyric.enableBreathingDots");
     const desktopShowTranslation = useAppConfig("lyric.desktopShowTranslation");
     const desktopShowRomanization = useAppConfig("lyric.desktopShowRomanization");
 
@@ -907,6 +908,12 @@ function LyricSetting() {
         "逐字歌词光晕",
         "lyric.enableWordByWordGlow",
         enableWordByWordGlow ?? false,
+    );
+
+    const breathingDots = createSwitch(
+        "空歌词行呼吸灯特效",
+        "lyric.enableBreathingDots",
+        enableBreathingDots ?? true,
     );
 
     const hideWhenPaused = createSwitch(
@@ -1008,6 +1015,13 @@ function LyricSetting() {
                 onPress={wordByWordGlow.onPress}>
                 <ListItem.Content title={wordByWordGlow.title} />
                 {wordByWordGlow.right}
+            </ListItem>
+            <ListItem
+                withHorizontalPadding
+                heightType="small"
+                onPress={breathingDots.onPress}>
+                <ListItem.Content title={breathingDots.title} />
+                {breathingDots.right}
             </ListItem>
             <ListItem
                 withHorizontalPadding

@@ -965,6 +965,7 @@ function _LyricItemComponent(props: ILyricItemComponentProps) {
     const colors = useColors();
     const actualFontSize = fontSize || fontSizeConst.content;
     const enableGlow = useAppConfig("lyric.enableWordByWordGlow") ?? false;
+    const enableBreathingDots = useAppConfig("lyric.enableBreathingDots") ?? true;
 
     // Render karaoke-style word-by-word lyrics for highlighted lines (priority over empty check)
     if (highlight && hasWordByWord && words && words.length > 0) {
@@ -990,8 +991,8 @@ function _LyricItemComponent(props: ILyricItemComponentProps) {
     // Check if lyric text is empty (empty string or only whitespace)
     const isEmptyLyric = !text || text.trim() === '';
 
-    // Render breathing dots for empty lyric lines
-    if (isEmptyLyric) {
+    // Render breathing dots for empty lyric lines (only if enabled)
+    if (isEmptyLyric && enableBreathingDots) {
         return (
             <View
                 onLayout={({ nativeEvent }) => {
@@ -1010,6 +1011,23 @@ function _LyricItemComponent(props: ILyricItemComponentProps) {
                     highlight={!!highlight}
                 />
             </View>
+        );
+    }
+
+    // If breathing dots disabled, render empty space for empty lyrics
+    if (isEmptyLyric) {
+        return (
+            <View
+                onLayout={({ nativeEvent }) => {
+                    if (index !== undefined) {
+                        onLayout?.(index, nativeEvent.layout.height);
+                    }
+                }}
+                style={[
+                    lyricStyles.multiLineContainer,
+                    { alignItems: align === "left" ? "flex-start" : "center" },
+                ]}
+            />
         );
     }
 
