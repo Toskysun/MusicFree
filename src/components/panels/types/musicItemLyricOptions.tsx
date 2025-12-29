@@ -14,7 +14,7 @@ import Divider from "@/components/base/divider";
 import { IIconName } from "@/components/base/icon.tsx";
 import { hidePanel } from "@/components/panels/usePanel.ts";
 import { iconSizeConst } from "@/constants/uiConst";
-import Config from "@/core/appConfig";
+import Config, { useAppConfig } from "@/core/appConfig";
 import lyricManager from "@/core/lyricManager";
 import mediaCache from "@/core/mediaCache";
 import LyricUtil from "@/native/lyricUtil";
@@ -67,6 +67,7 @@ export default function MusicItemLyricOptions(
 
     const safeAreaInsets = useSafeAreaInsets();
     const { t } = useI18N();
+    const lyricAlign = useAppConfig("lyric.detailAlign") ?? "left";
 
     const options: IOption[] = [
         {
@@ -205,6 +206,17 @@ export default function MusicItemLyricOptions(
                     ? t("panel.musicItemLyricOptions.wordByWordEnabled")
                     : t("panel.musicItemLyricOptions.wordByWordDisabled")
                 );
+                hidePanel();
+            },
+        },
+        {
+            icon: lyricAlign === "left" ? "align-left" : "align-center",
+            title: t("lyric.detailAlign") + `: ${lyricAlign === "left" ? t("basicSettings.lyric.align.left") : t("basicSettings.lyric.align.center")}`,
+            onPress: () => {
+                const newAlign = lyricAlign === "center" ? "left" : "center";
+                Config.setConfig("lyric.detailAlign", newAlign);
+                const alignText = newAlign === "left" ? t("basicSettings.lyric.align.left") : t("basicSettings.lyric.align.center");
+                Toast.success(t("lyric.alignSwitched") + `: ${alignText}`);
                 hidePanel();
             },
         },

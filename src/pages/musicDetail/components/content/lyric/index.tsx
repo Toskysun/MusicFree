@@ -69,7 +69,7 @@ export default function Lyric(props: IProps) {
         }),
         [fontSizeKey],
     );
-    const lyricAlign = useAppConfig("lyric.detailAlign") ?? "center";
+    const lyricAlign = useAppConfig("lyric.detailAlign") ?? "left";
 
     const [draggingIndex, setDraggingIndex, setDraggingIndexImmi] =
         useDelayFalsy<number | undefined>(undefined, 2000);

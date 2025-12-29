@@ -34,7 +34,7 @@ const DOTS_CONFIG = {
 };
 
 // Breathing dots component for empty lyric lines
-const BreathingDots = memo(({
+export const BreathingDots = memo(({
     color,
     align = "center",
     highlight = false,
@@ -413,7 +413,6 @@ const KaraokeWord = memo(({
                             width: wordWidth || 'auto',
                         },
                     ]}
-                    numberOfLines={1}
                 >
                     {text}
                     {space ? ' ' : ''}
@@ -526,7 +525,6 @@ const FollowingTranslationLine = memo(({
                             width: textWidth || 'auto',
                         },
                     ]}
-                    numberOfLines={1}
                 >
                     {text}
                 </Text>
@@ -776,6 +774,7 @@ function RegularLyricLine({
 function MultiLineRegularLyric({
     text,
     romanizationText,
+    romanizationWords,
     translation,
     lyricOrder = ["original", "translation", "romanization"],
     fontSize,
@@ -788,6 +787,7 @@ function MultiLineRegularLyric({
 }: {
     text: string;
     romanizationText?: string;
+    romanizationWords?: ILyric.IWordData[];
     translation?: string;
     lyricOrder?: ("original" | "translation" | "romanization")[];
     fontSize: number;
@@ -841,12 +841,51 @@ function MultiLineRegularLyric({
         </Text>
     );
 
-    // Romanization line component
-    const romanizationLine = (isFirst: boolean) => romanizationText && (
-        <Text key="romanization" style={getLineStyle(isFirst)}>
-            {romanizationText}
-        </Text>
-    );
+    // Romanization line component - use flex layout when words available for consistent spacing
+    const justifyContent = align === "left" ? "flex-start" : "center";
+    const romanizationLine = (isFirst: boolean) => {
+        if (!romanizationText && (!romanizationWords || romanizationWords.length === 0)) return null;
+
+        // Use word-by-word flex layout to match highlighted line spacing
+        if (romanizationWords && romanizationWords.length > 0) {
+            return (
+                <View
+                    key="romanization"
+                    style={[
+                        lyricStyles.wordByWordLine,
+                        { justifyContent },
+                        !isFirst && lyricStyles.secondaryLine,
+                    ]}
+                >
+                    {romanizationWords.map((word, wordIndex) => (
+                        <Text
+                            key={wordIndex}
+                            style={[
+                                styles.wordText,
+                                {
+                                    fontSize: getLineFontSize(isFirst),
+                                    color: highlight ? primaryColor : 'white',
+                                    opacity: highlight ? 1 : 0.6,
+                                },
+                                highlight && lyricStyles.highlightItem,
+                                light && lyricStyles.draggingItem,
+                            ]}
+                        >
+                            {word.text}
+                            {word.space ? ' ' : ''}
+                        </Text>
+                    ))}
+                </View>
+            );
+        }
+
+        // Fallback to single text when no word data
+        return (
+            <Text key="romanization" style={getLineStyle(isFirst)}>
+                {romanizationText}
+            </Text>
+        );
+    };
 
     // Translation line component
     const translationLine = (isFirst: boolean) => translation && (
@@ -872,7 +911,7 @@ function MultiLineRegularLyric({
     // Determine which lines actually exist
     const existingLines = lyricOrder.filter(type => {
         if (type === "original") return !!text;
-        if (type === "romanization") return !!romanizationText;
+        if (type === "romanization") return !!romanizationText || (romanizationWords && romanizationWords.length > 0);
         if (type === "translation") return !!translation;
         return false;
     });
@@ -925,6 +964,27 @@ function _LyricItemComponent(props: ILyricItemComponentProps) {
     const actualFontSize = fontSize || fontSizeConst.content;
     const enableGlow = useAppConfig("lyric.enableWordByWordGlow") ?? false;
 
+    // Render karaoke-style word-by-word lyrics for highlighted lines (priority over empty check)
+    if (highlight && hasWordByWord && words && words.length > 0) {
+        return (
+            <WordByWordLyricLine
+                words={words}
+                romanizationWords={hasRomanizationWordByWord ? romanizationWords : undefined}
+                isRomanizationPseudo={isRomanizationPseudo}
+                translation={translation}
+                translationWords={hasTranslationWordByWord ? translationWords : undefined}
+                hasTranslationWordByWord={hasTranslationWordByWord}
+                lyricOrder={lyricOrder}
+                fontSize={actualFontSize}
+                highlightColor={colors.primary}
+                index={index}
+                onLayout={onLayout}
+                enableGlow={enableGlow}
+                align={align}
+            />
+        );
+    }
+
     // Check if lyric text is empty (empty string or only whitespace)
     const isEmptyLyric = !text || text.trim() === '';
 
@@ -951,29 +1011,8 @@ function _LyricItemComponent(props: ILyricItemComponentProps) {
         );
     }
 
-    // Render karaoke-style word-by-word lyrics for highlighted lines
-    if (highlight && hasWordByWord && words && words.length > 0) {
-        return (
-            <WordByWordLyricLine
-                words={words}
-                romanizationWords={hasRomanizationWordByWord ? romanizationWords : undefined}
-                isRomanizationPseudo={isRomanizationPseudo}
-                translation={translation}
-                translationWords={hasTranslationWordByWord ? translationWords : undefined}
-                hasTranslationWordByWord={hasTranslationWordByWord}
-                lyricOrder={lyricOrder}
-                fontSize={actualFontSize}
-                highlightColor={colors.primary}
-                index={index}
-                onLayout={onLayout}
-                enableGlow={enableGlow}
-                align={align}
-            />
-        );
-    }
-
     // Check if we have multi-line content (translation or romanization)
-    const hasMultiLine = !!(translation || romanization);
+    const hasMultiLine = !!(translation || romanization || (romanizationWords && romanizationWords.length > 0));
 
     // Use multi-line component for lines with multi-line content
     if (hasMultiLine) {
@@ -981,6 +1020,7 @@ function _LyricItemComponent(props: ILyricItemComponentProps) {
             <MultiLineRegularLyric
                 text={text || ''}
                 romanizationText={romanization}
+                romanizationWords={romanizationWords}
                 translation={translation}
                 lyricOrder={lyricOrder}
                 fontSize={actualFontSize}
@@ -1032,6 +1072,7 @@ const LyricItemComponent = memo(
         prev.isRomanizationPseudo === curr.isRomanizationPseudo &&
         prev.hasTranslationWordByWord === curr.hasTranslationWordByWord &&
         prev.romanization === curr.romanization &&
+        prev.romanizationWords === curr.romanizationWords &&
         prev.translation === curr.translation &&
         prev.align === curr.align &&
         arraysEqual(prev.lyricOrder, curr.lyricOrder),

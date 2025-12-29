@@ -10,8 +10,18 @@ import { Animated, Easing, View } from "react-native";
 import Operations from "./operations";
 import { showPanel } from "@/components/panels/usePanel.ts";
 import { useAppConfig } from "@/core/appConfig";
+import MiniLyric from "./miniLyric";
+import SongInfo from "./songInfo";
 
 const ROTATION_DURATION = 25000; // 25秒转一圈
+export const COVER_SIZE = rpx(600); // 大封面尺寸
+export const COVER_MARGIN = (rpx(750) - COVER_SIZE) / 2; // 封面左右边距
+
+// 根据封面样式计算实际左边距
+export function getCoverLeftMargin(coverStyle: string) {
+    const size = coverStyle === "circle" ? COVER_SIZE : COVER_SIZE - rpx(30);
+    return (rpx(750) - size) / 2;
+}
 
 interface IProps {
     onTurnPageClick?: () => void;
@@ -92,14 +102,14 @@ export default function AlbumCover(props: IProps) {
 
     const artworkStyle = useMemo(() => {
         if (orientation === "vertical") {
-            const size = isCircle ? rpx(600) : rpx(500);
+            const size = isCircle ? COVER_SIZE : COVER_SIZE - rpx(30);
             return {
                 width: size,
                 height: size,
                 borderRadius: isCircle ? size / 2 : rpx(16),
             };
         } else {
-            const size = isCircle ? rpx(320) : rpx(260);
+            const size = isCircle ? rpx(285) : rpx(260);
             return {
                 width: size,
                 height: size,
@@ -107,6 +117,14 @@ export default function AlbumCover(props: IProps) {
             };
         }
     }, [orientation, isCircle]);
+
+    const containerStyle = useMemo(() => {
+        return {
+            width: "100%" as const,
+            alignItems: "center" as const,
+            marginTop: orientation === "vertical" ? rpx(16) : rpx(40),
+        };
+    }, [orientation]);
 
     const longPress = Gesture.LongPress()
         .onStart(() => {
@@ -128,8 +146,8 @@ export default function AlbumCover(props: IProps) {
 
     return (
         <>
-            <GestureDetector gesture={combineGesture}>
-                <View style={globalStyle.fullCenter}>
+            <View style={containerStyle}>
+                <GestureDetector gesture={combineGesture}>
                     <Animated.View
                         style={
                             isCircle
@@ -142,8 +160,11 @@ export default function AlbumCover(props: IProps) {
                             placeholderSource={ImgAsset.albumDefault}
                         />
                     </Animated.View>
-                </View>
-            </GestureDetector>
+                </GestureDetector>
+            </View>
+            <SongInfo />
+            <View style={{ flex: 1 }} />
+            <MiniLyric onPress={onTurnPageClick} />
             <Operations />
         </>
     );

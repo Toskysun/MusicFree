@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { Image, Pressable, StyleSheet, View } from "react-native";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import rpx from "@/utils/rpx";
 
 import LocalMusicSheet from "@/core/localMusicSheet";
@@ -10,18 +10,30 @@ import toast from "@/utils/toast";
 import useOrientation from "@/hooks/useOrientation";
 import { showPanel } from "@/components/panels/usePanel";
 import { showDialog, hideDialog } from "@/components/dialogs/useDialog";
-import TrackPlayer, { useCurrentMusic } from "@/core/trackPlayer";
+import TrackPlayer, { useCurrentMusic, useMusicQuality } from "@/core/trackPlayer";
 import { iconSizeConst } from "@/constants/uiConst";
 import PersistStatus from "@/utils/persistStatus";
-import HeartIcon from "../heartIcon";
 import Icon from "@/components/base/icon.tsx";
 import PluginManager from "@/core/pluginManager";
 import downloader from "@/core/downloader";
 import i18n from "@/core/i18n";
 
+// Quality abbreviation mapping
+const qualityAbbr: Record<IMusic.IQualityKey, string> = {
+    "128k": "LQ",
+    "192k": "MQ",
+    "320k": "HQ",
+    "flac": "SQ",
+    "flac24bit": "HR",
+    "hires": "HR",
+    "atmos": "AT",
+    "atmos_plus": "A+",
+    "master": "MS",
+};
+
 export default function Operations() {
     const musicItem = useCurrentMusic();
-    // const currentQuality = useMusicQuality();
+    const currentQuality = useMusicQuality();
     const isDownloaded = LocalMusicSheet.useIsLocal(musicItem);
 
     const rate = PersistStatus.useValue("music.rate", 100);
@@ -39,11 +51,8 @@ export default function Operations() {
                 styles.wrapper,
                 orientation === "horizontal" ? styles.horizontalWrapper : null,
             ]}>
-            <HeartIcon />
-            <Icon
-                name="quality-button"
-                size={iconSizeConst.normal}
-                color="white"
+            <Pressable
+                style={styles.qualityButton}
                 onPress={() => {
                     if (!musicItem) {
                         return;
@@ -58,8 +67,11 @@ export default function Operations() {
                             }
                         },
                     });
-                }}
-            />
+                }}>
+                <Text style={styles.qualityText}>
+                    {qualityAbbr[currentQuality] || "HQ"}
+                </Text>
+            </Pressable>
             <Icon
                 name={isDownloaded ? "check-circle-outline" : "arrow-down-tray"}
                 size={iconSizeConst.normal}
@@ -184,5 +196,16 @@ const styles = StyleSheet.create({
     quality: {
         width: rpx(52),
         height: rpx(52),
+    },
+    qualityButton: {
+        height: rpx(42),
+        justifyContent: "center",
+        alignItems: "center",
+    },
+    qualityText: {
+        color: "white",
+        fontSize: rpx(26),
+        fontWeight: "400",
+        lineHeight: rpx(42),
     },
 });

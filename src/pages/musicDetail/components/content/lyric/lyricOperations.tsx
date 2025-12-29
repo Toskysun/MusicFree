@@ -11,11 +11,8 @@ import Toast from "@/utils/toast";
 import { hidePanel, showPanel } from "@/components/panels/usePanel";
 import TrackPlayer from "@/core/trackPlayer";
 import PersistStatus from "@/utils/persistStatus";
-import useOrientation from "@/hooks/useOrientation";
-import HeartIcon from "../heartIcon";
 import Icon from "@/components/base/icon.tsx";
 import lyricManager, { useLyricState } from "@/core/lyricManager";
-import { useI18N } from "@/core/i18n";
 import { devLog } from "@/utils/log";
 
 interface ILyricOperationsProps {
@@ -26,7 +23,6 @@ export default function LyricOperations(props: ILyricOperationsProps) {
     const { scrollToCurrentLrcItem } = props;
 
     const detailFontSize = useAppConfig("lyric.detailFontSize");
-    const lyricAlign = useAppConfig("lyric.detailAlign") ?? "center";
 
     const { hasTranslation, hasRomanization } = useLyricState();
     const showTranslation = PersistStatus.useValue(
@@ -38,18 +34,9 @@ export default function LyricOperations(props: ILyricOperationsProps) {
         false,
     );
     const colors = useColors();
-    const orientation = useOrientation();
-    const { t } = useI18N();
-
-    const toggleAlign = () => {
-        const newAlign = lyricAlign === "center" ? "left" : "center";
-        appConfig.setConfig("lyric.detailAlign", newAlign);
-        Toast.success(t("lyric.alignSwitched"));
-    };
 
     return (
         <View style={styles.container}>
-            {orientation === "vertical" ? <HeartIcon /> : null}
             <Icon
                 name="font-size"
                 size={iconSizeConst.normal}
@@ -64,12 +51,6 @@ export default function LyricOperations(props: ILyricOperationsProps) {
                         },
                     });
                 }}
-            />
-            <Icon
-                name={lyricAlign === "left" ? "align-left" : "align-center"}
-                size={iconSizeConst.normal}
-                color={lyricAlign === "left" ? colors.primary : "white"}
-                onPress={toggleAlign}
             />
             <Icon
                 name="arrows-left-right"
@@ -114,26 +95,28 @@ export default function LyricOperations(props: ILyricOperationsProps) {
                     // }
                 }}
             />
-            <TranslationIcon
-                width={iconSizeConst.normal}
-                height={iconSizeConst.normal}
-                opacity={!hasTranslation ? 0.2 : showTranslation ? 1 : 0.5}
-                color={
-                    showTranslation && hasTranslation ? colors.primary : "white"
-                }
-                onPress={() => {
-                    if (!hasTranslation) {
-                        Toast.warn("当前歌曲无翻译");
-                        return;
+            {(hasTranslation || !hasRomanization) ? (
+                <TranslationIcon
+                    width={iconSizeConst.normal}
+                    height={iconSizeConst.normal}
+                    opacity={!hasTranslation ? 0.2 : showTranslation ? 1 : 0.5}
+                    color={
+                        showTranslation && hasTranslation ? colors.primary : "white"
                     }
+                    onPress={() => {
+                        if (!hasTranslation) {
+                            Toast.warn("当前歌曲无翻译");
+                            return;
+                        }
 
-                    PersistStatus.set(
-                        "lyric.showTranslation",
-                        !showTranslation,
-                    );
-                    scrollToCurrentLrcItem();
-                }}
-            />
+                        PersistStatus.set(
+                            "lyric.showTranslation",
+                            !showTranslation,
+                        );
+                        scrollToCurrentLrcItem();
+                    }}
+                />
+            ) : null}
             {hasRomanization ? (
                 <LanguageIcon
                     width={iconSizeConst.normal}

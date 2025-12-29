@@ -173,6 +173,12 @@ android {
         jvmTarget = "17"
     }
 
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
     buildTypes {
         debug {
             signingConfig signingConfigs.debug

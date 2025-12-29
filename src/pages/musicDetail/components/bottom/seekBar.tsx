@@ -23,7 +23,6 @@ export default function SeekBar() {
 
     return (
         <View style={style.wrapper}>
-            <TimeLabel time={tmpProgress ?? progress.position} />
             <Slider
                 style={style.slider}
                 minimumTrackTintColor={"#cccccc"}
@@ -49,7 +48,10 @@ export default function SeekBar() {
                 }}
                 value={progress.position}
             />
-            <TimeLabel time={progress.duration} />
+            <View style={style.timeRow}>
+                <TimeLabel time={tmpProgress ?? progress.position} />
+                <TimeLabel time={progress.duration} />
+            </View>
         </View>
     );
 }
@@ -57,14 +59,17 @@ export default function SeekBar() {
 const style = StyleSheet.create({
     wrapper: {
         width: "100%",
-        height: rpx(40),
-        justifyContent: "center",
-        alignItems: "center",
-        flexDirection: "row",
+        paddingHorizontal: rpx(36),
     },
     slider: {
-        width: "73%",
+        width: "100%",
         height: rpx(40),
+    },
+    timeRow: {
+        width: "100%",
+        flexDirection: "row",
+        justifyContent: "space-between",
+        paddingHorizontal: rpx(24),
     },
     text: {
         fontSize: fontSizeConst.description,
