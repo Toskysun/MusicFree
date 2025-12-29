@@ -789,6 +789,9 @@ class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactCo
     // ================== Internal HTTP downloader with Notification ==================
 
     private val DOWNLOAD_CHANNEL_ID = "musicfree_downloads"
+    private val DOWNLOAD_GROUP_KEY = "fun.upup.musicfree.DOWNLOAD_GROUP"
+    // Track active notification IDs to manage cleanup
+    private val activeNotificationIds = java.util.concurrent.ConcurrentHashMap<String, Int>()
 
     /**
      * 格式化文件大小显示
@@ -855,6 +858,7 @@ class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactCo
             .setProgress(100, progress, indeterminate)
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)
             .setSilent(true)
+            .setGroup(DOWNLOAD_GROUP_KEY)
             .setStyle(NotificationCompat.BigPictureStyle())  // 使用BigPictureStyle以更好地显示封面
     }
 
@@ -921,6 +925,8 @@ class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactCo
                 val call = client.newCall(req)
                 var httpId: String = "http:$notifId"
                 registerCall(httpId, call)
+                // Track notification ID for cleanup
+                activeNotificationIds[httpId] = notifId
                 val resp = call.execute()
                 if (!resp.isSuccessful) throw IOException("HTTP ${'$'}{resp.code}")
 
@@ -1089,6 +1095,8 @@ class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactCo
 
                         // 下载完成通知 - 保持封面显示
                         val finalSize = formatFileSize(downloaded)
+                        // Use a new notification ID for completion to allow auto-dismiss
+                        val completeNotifId = (System.currentTimeMillis() % Int.MAX_VALUE).toInt()
                         val done = NotificationCompat.Builder(reactApplicationContext, DOWNLOAD_CHANNEL_ID)
                             .setSmallIcon(android.R.drawable.stat_sys_download_done)
                             .setContentTitle("下载完成")
@@ -1100,12 +1108,19 @@ class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactCo
                             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                             .setContentIntent(openPending)
                             .setCategory(NotificationCompat.CATEGORY_STATUS)
+                            .setGroup(DOWNLOAD_GROUP_KEY)
+                            .setTimeoutAfter(5000)  // Auto-dismiss after 5 seconds
                             .setStyle(NotificationCompat.BigPictureStyle()
                                 .bigPicture(largeIcon)  // 大图样式显示封面
                                 .bigLargeIcon(null as Bitmap?))  // 隐藏右侧小图标，让大图更突出
                             .addAction(android.R.drawable.ic_menu_view, "打开文件", openPending)
                             .build()
-                        notifier.notify(notifId, done)
+                        // Cancel the progress notification first
+                        notifier.cancel(notifId)
+                        // Show completion notification with new ID
+                        notifier.notify(completeNotifId, done)
+                        // Remove from tracking
+                        activeNotificationIds.remove(httpId)
                     } catch (_: Exception) {}
                 }
 
@@ -1129,6 +1144,8 @@ class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactCo
                             .setContentText(titleStr)
                             .setOngoing(false)
                             .setPriority(NotificationCompat.PRIORITY_LOW)
+                            .setGroup(DOWNLOAD_GROUP_KEY)
+                            .setTimeoutAfter(8000)  // Auto-dismiss after 8 seconds
                             .setStyle(NotificationCompat.BigTextStyle().bigText(titleStr))
                             .build()
                         notifier.notify((System.currentTimeMillis() % Int.MAX_VALUE).toInt(), fail)
@@ -1145,7 +1162,10 @@ class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactCo
                     emitEvent(evt, map)
                 } catch (_: Exception) {}
             } finally {
-                try { removeCall("http:${'$'}notifId") } catch (_: Exception) {}
+                try {
+                    removeCall("http:${'$'}notifId")
+                    activeNotificationIds.remove("http:${'$'}notifId")
+                } catch (_: Exception) {}
             }
         }.start()
     }
