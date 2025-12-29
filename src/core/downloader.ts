@@ -238,30 +238,45 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
     // 开始下载
     private markTaskAsStarted(musicItem: IMusic.IMusicItem) {
         this.downloadingCount++;
+        devLog('info', '▶️[下载器] 任务开始', {
+            title: musicItem.title,
+            downloadingCount: this.downloadingCount
+        });
         this.updateDownloadTask(musicItem, {
             status: DownloadStatus.Preparing,
         });
-        
+
         // 系统下载管理器会自动处理通知
     }
 
     private markTaskAsCompleted(musicItem: IMusic.IMusicItem, filePath?: string) {
         this.downloadingCount--;
+        devLog('info', '✅[下载器] 任务完成', {
+            title: musicItem.title,
+            downloadingCount: this.downloadingCount,
+            filePath
+        });
         this.updateDownloadTask(musicItem, {
             status: DownloadStatus.Completed,
         });
-        
+
         // 系统下载管理器会自动处理通知
     }
 
     private markTaskAsError(musicItem: IMusic.IMusicItem, reason: DownloadFailReason, error?: Error) {
         this.downloadingCount--;
+        devLog('info', '❌[下载器] 任务失败', {
+            title: musicItem.title,
+            downloadingCount: this.downloadingCount,
+            reason,
+            error: error?.message
+        });
         this.updateDownloadTask(musicItem, {
             status: DownloadStatus.Error,
             errorReason: reason,
         });
         this.emit(DownloaderEvent.DownloadTaskError, reason, musicItem, error);
-        
+
         // 系统下载管理器会自动处理通知
     }
 
@@ -453,6 +468,7 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
     private async downloadNextPendingTask() {
         // Prevent race condition: use lock to ensure atomic check-and-increment
         if (this.isSchedulingTask) {
+            devLog('info', '🔒[下载器] 调度锁生效，跳过本次调度');
             return;
         }
         this.isSchedulingTask = true;
@@ -460,9 +476,21 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
         const maxDownloadCount = Math.max(1, Math.min(+(this.configService.getConfig("basic.maxDownload") || 3), 10));
         const downloadQueue = getDefaultStore().get(downloadQueueAtom);
 
+        devLog('info', '📋[下载器] 调度检查', {
+            downloadingCount: this.downloadingCount,
+            maxDownloadCount,
+            queueLength: downloadQueue.length,
+            pendingTasks: Array.from(downloadTasks.values()).filter(t => t.status === DownloadStatus.Pending).length
+        });
+
         // 如果超过最大下载数量，或者没有下载任务，则不执行
         if (this.downloadingCount >= maxDownloadCount || this.downloadingCount >= downloadQueue.length) {
             this.isSchedulingTask = false;
+            devLog('info', '⏸️[下载器] 达到并发上限或队列已满，等待中', {
+                downloadingCount: this.downloadingCount,
+                maxDownloadCount,
+                queueLength: downloadQueue.length
+            });
             return;
         }
 
@@ -725,7 +753,8 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
                 await mkdirR(folder);
             }
         } catch (e: any) {
-            this.emit(DownloaderEvent.DownloadTaskError, DownloadFailReason.NoWritePermission, musicItem, e);
+            this.markTaskAsError(musicItem, DownloadFailReason.NoWritePermission, e);
+            setTimeout(() => this.downloadNextPendingTask(), 0);
             return;
         }
 
@@ -887,11 +916,9 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
                     }, 30 * 60 * 1000);
                 });
             };
-            
-            if (!useInternal) {
+
             if (!useInternal) {
                 await checkDownloadStatus();
-            }
             }
             if (willDownloadEncrypted) {
                 try {
@@ -928,6 +955,7 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
                         output: targetDownloadPath
                     });
                     this.markTaskAsError(musicItem, DownloadFailReason.Unknown, e);
+                    setTimeout(() => this.downloadNextPendingTask(), 0);
                     return;
                 }
             }
