@@ -47,6 +47,17 @@ class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactCo
         const val EXTRA_ID = "id"
         private val httpCalls = ConcurrentHashMap<String, okhttp3.Call>()
 
+        // Singleton OkHttpClient for all downloads to avoid resource exhaustion
+        private val downloadClient: OkHttpClient by lazy {
+            OkHttpClient.Builder()
+                .followRedirects(true)
+                .followSslRedirects(true)
+                .connectTimeout(15, TimeUnit.SECONDS)
+                .readTimeout(60, TimeUnit.SECONDS)
+                .connectionPool(okhttp3.ConnectionPool(10, 5, TimeUnit.MINUTES))
+                .build()
+        }
+
         fun registerCall(id: String, call: okhttp3.Call) { httpCalls[id] = call }
         fun removeCall(id: String) { httpCalls.remove(id) }
         fun cancelCall(id: String) { httpCalls[id]?.cancel() }
@@ -881,12 +892,8 @@ class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactCo
                 val notifId = (System.currentTimeMillis() % Int.MAX_VALUE).toInt()
                 val notifier = NotificationManagerCompat.from(reactApplicationContext)
 
-                val client = OkHttpClient.Builder()
-                    .followRedirects(true)
-                    .followSslRedirects(true)
-                    .connectTimeout(15, TimeUnit.SECONDS)
-                    .readTimeout(60, TimeUnit.SECONDS)
-                    .build()
+                // Use singleton client to avoid resource exhaustion
+                val client = downloadClient
 
                 // Parse options early and keep variables visible to catch/finally
                 // url: allow string or nested map { url|uri|href }
