@@ -1,16 +1,17 @@
-import React, { useCallback, useEffect, useMemo, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import rpx from "@/utils/rpx";
 import { ImgAsset } from "@/constants/assetsConst";
 import FastImage from "@/components/base/fastImage";
 import useOrientation from "@/hooks/useOrientation";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useCurrentMusic, useMusicState, MusicState } from "@/core/trackPlayer";
-import { Animated, Easing, View } from "react-native";
+import { Animated, Easing, useWindowDimensions, View } from "react-native";
 import Operations from "./operations";
 import { showPanel } from "@/components/panels/usePanel.ts";
 import { useAppConfig } from "@/core/appConfig";
 import MiniLyric from "./miniLyric";
 import SongInfo from "./songInfo";
+import DeviceInfo from "react-native-device-info";
 
 const ROTATION_DURATION = 25000; // 25秒转一圈
 export const COVER_SIZE = rpx(600); // 大封面尺寸
@@ -32,10 +33,44 @@ export default function AlbumCover(props: IProps) {
 
     const musicItem = useCurrentMusic();
     const orientation = useOrientation();
+    const { height: windowHeight } = useWindowDimensions();
     const coverStyle = useAppConfig("theme.coverStyle") ?? "square";
     const musicState = useMusicState();
     const isPlaying = musicState === MusicState.Playing;
     const isCircle = coverStyle === "circle";
+    const isTablet = useMemo(() => DeviceInfo.isTablet(), []);
+
+    const [hideMiniLyricByOverflow, setHideMiniLyricByOverflow] = useState(false);
+    const [containerHeight, setContainerHeight] = useState<number | null>(null);
+    const [operationsBottom, setOperationsBottom] = useState<number | null>(null);
+
+    const hideMiniLyricByDevice = useMemo(() => {
+        if (!isTablet || orientation !== "vertical") {
+            return false;
+        }
+
+        return windowHeight <= 720;
+    }, [isTablet, orientation, windowHeight]);
+
+    const hideMiniLyric = hideMiniLyricByDevice || (isTablet && hideMiniLyricByOverflow);
+
+    useEffect(() => {
+        if (!isTablet || hideMiniLyricByDevice || hideMiniLyricByOverflow) {
+            return;
+        }
+        if (containerHeight === null || operationsBottom === null) {
+            return;
+        }
+        if (operationsBottom > containerHeight + rpx(2)) {
+            setHideMiniLyricByOverflow(true);
+        }
+    }, [
+        containerHeight,
+        hideMiniLyricByDevice,
+        hideMiniLyricByOverflow,
+        isTablet,
+        operationsBottom,
+    ]);
 
     // 旋转动画
     const spinValue = useRef(new Animated.Value(0)).current;
@@ -170,7 +205,11 @@ export default function AlbumCover(props: IProps) {
     }
 
     return (
-        <>
+        <View
+            style={styles.verticalRoot}
+            onLayout={(event) => {
+                setContainerHeight(event.nativeEvent.layout.height);
+            }}>
             <View style={containerStyle}>
                 <GestureDetector gesture={combineGesture}>
                     <Animated.View
@@ -188,17 +227,29 @@ export default function AlbumCover(props: IProps) {
                 </GestureDetector>
             </View>
             <SongInfo showHeart />
-            <MiniLyric
-                onPress={onTurnPageClick}
-                disableMaskedView={disableMaskedView}
-            />
+            <View style={hideMiniLyric ? styles.hidden : null}>
+                <MiniLyric
+                    onPress={onTurnPageClick}
+                    disableMaskedView={disableMaskedView}
+                />
+            </View>
             <View style={{ flex: 1 }} />
-            <Operations />
-        </>
+            <View
+                onLayout={(event) => {
+                    const layout = event.nativeEvent.layout;
+                    setOperationsBottom(layout.y + layout.height);
+                }}>
+                <Operations />
+            </View>
+        </View>
     );
 }
 
 const styles = {
+    verticalRoot: {
+        width: "100%" as const,
+        flex: 1,
+    },
     horizontalRoot: {
         width: "100%" as const,
         flex: 1,
@@ -216,5 +267,8 @@ const styles = {
     },
     horizontalOperations: {
         paddingHorizontal: rpx(12),
+    },
+    hidden: {
+        display: "none" as const,
     },
 } as const;
