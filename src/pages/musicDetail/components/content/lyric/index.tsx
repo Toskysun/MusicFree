@@ -22,6 +22,7 @@ import { useI18N } from "@/core/i18n";
 import { useAppConfig } from "@/core/appConfig";
 import { devLog } from "@/utils/log";
 import SongInfo from "../albumCover/songInfo";
+import useOrientation from "@/hooks/useOrientation";
 
 // Smooth scroll animation duration (ms)
 const SCROLL_ANIMATION_DURATION = 400;
@@ -46,6 +47,8 @@ const fontSizeMap = {
 
 export default function Lyric(props: IProps) {
     const { onTurnPageClick } = props;
+    const orientation = useOrientation();
+    const isHorizontal = orientation === "horizontal";
 
     const { loading, meta, lyrics, hasTranslation, hasRomanization } =
         useLyricState();
@@ -124,14 +127,14 @@ export default function Lyric(props: IProps) {
     const blankComponent = useMemo(() => {
         return (
             <View
-                style={styles.empty}
+                style={[styles.empty, isHorizontal ? styles.emptyHorizontal : null]}
                 onLayout={evt => {
                     itemHeightsRef.current.blankHeight =
                         evt.nativeEvent.layout.height;
                 }}
             />
         );
-    }, []);
+    }, [isHorizontal]);
 
     const handleLyricItemLayout = useCallback(
         (index: number, height: number) => {
@@ -328,6 +331,11 @@ export default function Lyric(props: IProps) {
         <>
             <GestureDetector gesture={tapGesture}>
                 <View style={globalStyle.fwflex1}>
+                    {isHorizontal ? (
+                        <View style={styles.horizontalHeader}>
+                            <SongInfo />
+                        </View>
+                    ) : null}
                     {loading ? (
                         <Loading color="white" />
                     ) : lyrics?.length ? (
@@ -356,7 +364,7 @@ export default function Lyric(props: IProps) {
                                     setIsListReady(true);
                                 });
                             }}
-                            fadingEdgeLength={120}
+                            fadingEdgeLength={isHorizontal ? 80 : 120}
                             // Initial position without animation
                             onContentSizeChange={onContentSizeChange}
                             // Load all lyrics at once for instant positioning
@@ -371,7 +379,11 @@ export default function Lyric(props: IProps) {
                             ListHeaderComponent={
                                 <>
                                     {blankComponent}
-                                    <View style={styles.lyricMeta}>
+                                    <View
+                                        style={[
+                                            styles.lyricMeta,
+                                            isHorizontal ? styles.lyricMetaHorizontal : null,
+                                        ]}>
                                         {associateMusicItem ? (
                                             <>
                                                 <Text
@@ -408,7 +420,11 @@ export default function Lyric(props: IProps) {
                             onMomentumScrollEnd={onScrollEndDrag}
                             onScroll={onScroll}
                             scrollEventThrottle={16}
-                            style={[styles.wrapper, { opacity: isListReady ? 1 : 0 }]}
+                            style={[
+                                styles.wrapper,
+                                isHorizontal ? styles.wrapperHorizontal : null,
+                                { opacity: isHorizontal ? 1 : isListReady ? 1 : 0 },
+                            ]}
                             data={lyrics}
                             overScrollMode="never"
                             extraData={currentLrcItem?.index}
@@ -483,6 +499,7 @@ export default function Lyric(props: IProps) {
                         <View
                             style={[
                                 styles.draggingTime,
+                                isHorizontal ? styles.draggingTimeHorizontal : null,
                                 layout?.height
                                     ? {
                                         top:
@@ -516,13 +533,24 @@ export default function Lyric(props: IProps) {
 }
 
 const styles = StyleSheet.create({
+    horizontalHeader: {
+        width: "100%",
+        marginTop: rpx(18),
+        marginBottom: rpx(6),
+    },
     wrapper: {
         width: "100%",
         marginVertical: rpx(48),
         flex: 1,
     },
+    wrapperHorizontal: {
+        marginVertical: rpx(18),
+    },
     empty: {
         paddingTop: "70%",
+    },
+    emptyHorizontal: {
+        paddingTop: "40%",
     },
     white: {
         color: "white",
@@ -536,6 +564,10 @@ const styles = StyleSheet.create({
         left: 0,
         paddingHorizontal: rpx(48),
         bottom: rpx(48),
+    },
+    lyricMetaHorizontal: {
+        paddingHorizontal: rpx(24),
+        bottom: rpx(18),
     },
     lyricMetaText: {
         color: "white",
@@ -557,6 +589,9 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
+    },
+    draggingTimeHorizontal: {
+        marginTop: rpx(18),
     },
     draggingTimeText: {
         color: "#dddddd",

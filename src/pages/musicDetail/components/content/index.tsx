@@ -1,15 +1,10 @@
-import React, { useState, useEffect, useRef } from "react";
-import { StyleSheet, View, LayoutAnimation, Platform, UIManager } from "react-native";
+import React, { useState } from "react";
+import { StyleSheet, View } from "react-native";
 import AlbumCover from "./albumCover";
 import Lyric from "./lyric";
 import useOrientation from "@/hooks/useOrientation";
 import Config from "@/core/appConfig";
 import globalStyle from "@/constants/globalStyle";
-
-// Enable LayoutAnimation on Android
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-    UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 
 interface IContentProps {
     disableMaskedView?: boolean;
@@ -21,21 +16,6 @@ export default function Content(props: IContentProps) {
         Config.getConfig("basic.musicDetailDefault") || "album",
     );
     const orientation = useOrientation();
-    const prevOrientation = useRef(orientation);
-
-    // Smooth layout transition when orientation changes
-    useEffect(() => {
-        if (prevOrientation.current !== orientation) {
-            LayoutAnimation.configureNext(
-                LayoutAnimation.create(
-                    200,
-                    LayoutAnimation.Types.easeInEaseOut,
-                    LayoutAnimation.Properties.opacity
-                )
-            );
-            prevOrientation.current = orientation;
-        }
-    }, [orientation]);
 
     const showAlbumCover = tab === "album" || orientation === "horizontal";
     const showLyric = tab === "lyric" && orientation !== "horizontal";

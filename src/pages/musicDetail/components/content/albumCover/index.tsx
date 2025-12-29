@@ -5,7 +5,6 @@ import FastImage from "@/components/base/fastImage";
 import useOrientation from "@/hooks/useOrientation";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useCurrentMusic, useMusicState, MusicState } from "@/core/trackPlayer";
-import globalStyle from "@/constants/globalStyle";
 import { Animated, Easing, View } from "react-native";
 import Operations from "./operations";
 import { showPanel } from "@/components/panels/usePanel.ts";
@@ -145,6 +144,31 @@ export default function AlbumCover(props: IProps) {
 
     const combineGesture = Gesture.Race(tap, longPress);
 
+    if (orientation === "horizontal") {
+        return (
+            <View style={styles.horizontalRoot}>
+                <View style={styles.horizontalCoverArea}>
+                    <GestureDetector gesture={combineGesture}>
+                        <Animated.View
+                            style={[
+                                styles.horizontalCoverWrapper,
+                                isCircle ? { transform: [{ rotate: spin }] } : null,
+                            ]}>
+                            <FastImage
+                                style={artworkStyle}
+                                source={musicItem?.artwork}
+                                placeholderSource={ImgAsset.albumDefault}
+                            />
+                        </Animated.View>
+                    </GestureDetector>
+                </View>
+                <View style={styles.horizontalOperations}>
+                    <Operations />
+                </View>
+            </View>
+        );
+    }
+
     return (
         <>
             <View style={containerStyle}>
@@ -173,3 +197,24 @@ export default function AlbumCover(props: IProps) {
         </>
     );
 }
+
+const styles = {
+    horizontalRoot: {
+        width: "100%" as const,
+        flex: 1,
+    },
+    horizontalCoverArea: {
+        width: "100%" as const,
+        flex: 1,
+        justifyContent: "center" as const,
+        alignItems: "center" as const,
+        paddingHorizontal: rpx(24),
+    },
+    horizontalCoverWrapper: {
+        justifyContent: "center" as const,
+        alignItems: "center" as const,
+    },
+    horizontalOperations: {
+        paddingHorizontal: rpx(12),
+    },
+} as const;

@@ -17,6 +17,7 @@ export default function MusicDetail() {
     const orientation = useOrientation();
     const navigation = useNavigation<any>();
     const [isExiting, setIsExiting] = useState(false);
+    const isHorizontal = orientation === "horizontal";
 
     useEffect(() => {
         const needAwake = Config.getConfig("basic.musicDetailAwake");
@@ -62,13 +63,22 @@ export default function MusicDetail() {
             <SafeAreaView style={globalStyle.fwflex1}>
                 <StatusBar backgroundColor={"transparent"} />
                 <View style={style.bodyWrapper}>
-                    <View style={globalStyle.flex1}>
+                    <View
+                        style={[
+                            globalStyle.flex1,
+                            isHorizontal ? style.leftPane : null,
+                        ]}>
                         <NavBar onBack={() => setIsExiting(true)} />
                         <Content disableMaskedView={isExiting} />
                         <Bottom />
                     </View>
-                    {orientation === "horizontal" ? (
-                        <View style={globalStyle.flex1}>
+                    {isHorizontal ? <View style={style.divider} /> : null}
+                    {isHorizontal ? (
+                        <View
+                            style={[
+                                globalStyle.flex1,
+                                style.rightPane,
+                            ]}>
                             <Lyric />
                         </View>
                     ) : null}
@@ -83,5 +93,15 @@ const style = StyleSheet.create({
         width: "100%",
         flex: 1,
         flexDirection: "row",
+    },
+    leftPane: {
+        flex: 0.44,
+    },
+    rightPane: {
+        flex: 0.56,
+    },
+    divider: {
+        width: StyleSheet.hairlineWidth,
+        backgroundColor: "rgba(255, 255, 255, 0.12)",
     },
 });

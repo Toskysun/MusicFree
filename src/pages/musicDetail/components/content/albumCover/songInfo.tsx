@@ -22,14 +22,27 @@ export default function SongInfo(props: ISongInfoProps) {
     const coverStyle = useAppConfig("theme.coverStyle") ?? "square";
     const isFavorite = useFavorite(musicItem);
 
-    const containerStyle = useMemo(() => ({
-        paddingHorizontal: getCoverLeftMargin(coverStyle),
-    }), [coverStyle]);
+    const containerStyle = useMemo(() => {
+        if (isHorizontal) {
+            return {
+                paddingHorizontal: rpx(24),
+            };
+        }
+        return {
+            paddingHorizontal: getCoverLeftMargin(coverStyle),
+        };
+    }, [coverStyle, isHorizontal]);
 
     return (
-        <View style={[styles.container, containerStyle, isHorizontal && styles.hidden]}>
-            <View style={styles.titleRow}>
-                <Text numberOfLines={2} style={styles.title}>
+        <View style={[
+            styles.container,
+            containerStyle,
+            isHorizontal ? styles.horizontalContainer : null,
+        ]}>
+            <View style={[styles.titleRow, isHorizontal ? styles.titleRowHorizontal : null]}>
+                <Text
+                    numberOfLines={isHorizontal ? 1 : 2}
+                    style={[styles.title, isHorizontal ? styles.horizontalTitle : null]}>
                     {musicItem?.title ?? "--"}
                 </Text>
                 {showHeart && (
@@ -50,7 +63,7 @@ export default function SongInfo(props: ISongInfoProps) {
                     />
                 )}
             </View>
-            <View style={styles.artistRow}>
+            <View style={[styles.artistRow, isHorizontal ? styles.artistRowHorizontal : null]}>
                 <Text numberOfLines={1} style={styles.artist}>
                     {musicItem?.artist ?? "--"}
                 </Text>
@@ -62,7 +75,7 @@ export default function SongInfo(props: ISongInfoProps) {
                     />
                 ) : null}
             </View>
-            {musicItem?.album ? (
+            {!isHorizontal && musicItem?.album ? (
                 <Text numberOfLines={1} style={styles.album}>
                     {musicItem.album}
                 </Text>
@@ -85,6 +98,10 @@ const styles = StyleSheet.create({
         width: "100%",
         marginBottom: rpx(20),
     },
+    titleRowHorizontal: {
+        alignItems: "center",
+        marginBottom: rpx(10),
+    },
     title: {
         color: "white",
         fontSize: fontSizeConst.title,
@@ -98,6 +115,9 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         marginBottom: rpx(4),
+    },
+    artistRowHorizontal: {
+        marginBottom: 0,
     },
     artist: {
         color: "white",
@@ -122,9 +142,11 @@ const styles = StyleSheet.create({
         opacity: 0.7,
         width: "100%",
     },
-    hidden: {
-        opacity: 0,
-        height: 0,
-        overflow: "hidden",
+    horizontalContainer: {
+        marginTop: 0,
+        paddingVertical: rpx(12),
+    },
+    horizontalTitle: {
+        fontSize: fontSizeConst.appbar,
     },
 });
