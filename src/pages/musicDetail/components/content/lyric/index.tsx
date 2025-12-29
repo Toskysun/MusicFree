@@ -21,6 +21,7 @@ import lyricManager, { useCurrentLyricItem, useLyricState } from "@/core/lyricMa
 import { useI18N } from "@/core/i18n";
 import { useAppConfig } from "@/core/appConfig";
 import { devLog } from "@/utils/log";
+import SongInfo from "../albumCover/songInfo";
 
 // Smooth scroll animation duration (ms)
 const SCROLL_ANIMATION_DURATION = 400;

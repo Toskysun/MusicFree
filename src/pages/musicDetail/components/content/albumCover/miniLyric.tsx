@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { Platform, StyleSheet, Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
     useSharedValue,
@@ -7,6 +7,8 @@ import Animated, {
     withTiming,
     Easing,
 } from "react-native-reanimated";
+import MaskedView from "@react-native-masked-view/masked-view";
+import LinearGradient from "react-native-linear-gradient";
 import rpx from "@/utils/rpx";
 import { useCurrentLyricItem, useLyricState } from "@/core/lyricManager";
 import useColors from "@/hooks/useColors";
@@ -19,6 +21,7 @@ import { getCoverLeftMargin } from "./index";
 
 interface IMiniLyricProps {
     onPress?: () => void;
+    disableMaskedView?: boolean;
 }
 
 const LINE_HEIGHT = rpx(40);
@@ -26,7 +29,7 @@ const SECONDARY_LINE_HEIGHT = rpx(28);
 const GROUP_SPACING = rpx(4);
 
 export default function MiniLyric(props: IMiniLyricProps) {
-    const { onPress } = props;
+    const { onPress, disableMaskedView } = props;
     const colors = useColors();
     const currentLyricItem = useCurrentLyricItem();
     const { lyrics, loading, hasTranslation, hasRomanization } = useLyricState();
@@ -61,11 +64,7 @@ export default function MiniLyric(props: IMiniLyricProps) {
         return height + GROUP_SPACING;
     };
 
-    // Dynamic container height based on content
-    const containerHeight = useMemo(() => {
-        const hasExtra = (showTranslation && hasTranslation) || (showRomanization && hasRomanization);
-        return hasExtra ? rpx(220) : rpx(140);
-    }, [showTranslation, hasTranslation, showRomanization, hasRomanization]);
+    const containerHeight = rpx(220);
 
     const dynamicContainerStyle = useMemo(() => ({
         paddingHorizontal: getCoverLeftMargin(coverStyle),
@@ -90,7 +89,7 @@ export default function MiniLyric(props: IMiniLyricProps) {
             }
             lastIndex.current = currentIndex;
         }
-    }, [currentIndex, lyrics.length, showTranslation, showRomanization, containerHeight]);
+    }, [currentIndex, lyrics.length, showTranslation, showRomanization]);
 
     const animatedStyle = useAnimatedStyle(() => ({
         transform: [{ translateY: translateY.value }],
@@ -102,8 +101,29 @@ export default function MiniLyric(props: IMiniLyricProps) {
         })
         .runOnJS(true);
 
+    const FADE_HEIGHT = rpx(60);
+
+    const maskElement = useMemo(() => (
+        <View style={styles.maskContainer}>
+            <LinearGradient
+                colors={["transparent", "black"]}
+                style={{ height: FADE_HEIGHT }}
+            />
+            <View style={{ flex: 1, backgroundColor: "black" }} />
+            <LinearGradient
+                colors={["black", "transparent"]}
+                style={{ height: FADE_HEIGHT }}
+            />
+        </View>
+    ), []);
+
     // Don't show when no lyrics, loading, or horizontal orientation
     const isHidden = !lyrics.length || loading || orientation === "horizontal";
+
+    // Early return when hidden to avoid MaskedView height caching issues
+    if (isHidden) {
+        return null;
+    }
 
     // Calculate opacity based on distance from current line
     const getLineOpacity = (index: number) => {
@@ -115,66 +135,80 @@ export default function MiniLyric(props: IMiniLyricProps) {
         return 0.25;
     };
 
+    const shouldUseMask = Platform.OS !== "android" || !disableMaskedView;
+
+    const lyricsContent = (
+        <View style={styles.contentContainer}>
+            <Animated.View style={[styles.lyricsWrapper, animatedStyle]}>
+            {lyrics.map((lyric, index) => {
+                const isActive = index === currentIndex;
+                const isEmptyLyric = !lyric.lrc || lyric.lrc.trim() === "";
+                const lineOpacity = getLineOpacity(index);
+
+                return (
+                    <View key={index} style={[styles.lyricGroup, { opacity: lineOpacity }]}>
+                        {isEmptyLyric ? (
+                            <View style={styles.dotsContainer}>
+                                <BreathingDots
+                                    color={isActive ? colors.primary : "white"}
+                                    align="left"
+                                    highlight={isActive}
+                                />
+                            </View>
+                        ) : (
+                            <Text
+                                style={[
+                                    styles.lyricLine,
+                                    { color: isActive ? colors.primary : "white" },
+                                ]}
+                                numberOfLines={1}>
+                                {lyric.lrc}
+                            </Text>
+                        )}
+                        {showRomanization && hasRomanization && (
+                            <Text
+                                style={[
+                                    styles.secondaryLine,
+                                    { color: isActive ? colors.primary : "white" },
+                                ]}
+                                numberOfLines={1}>
+                                {lyric.romanization || " "}
+                            </Text>
+                        )}
+                        {showTranslation && hasTranslation && (
+                            <Text
+                                style={[
+                                    styles.secondaryLine,
+                                    { color: isActive ? colors.primary : "white" },
+                                ]}
+                                numberOfLines={1}>
+                                {lyric.translation || " "}
+                            </Text>
+                        )}
+                    </View>
+                );
+            })}
+            </Animated.View>
+        </View>
+    );
+
     return (
         <GestureDetector gesture={tap}>
-            <View style={[styles.container, dynamicContainerStyle, { height: containerHeight }, isHidden && styles.hidden]}>
-                <ScrollView
-                    style={styles.contentContainer}
-                    scrollEnabled={false}
-                    fadingEdgeLength={100}
-                    showsVerticalScrollIndicator={false}
-                >
-                    <Animated.View style={[styles.lyricsWrapper, animatedStyle]}>
-                        {lyrics.map((lyric, index) => {
-                            const isActive = index === currentIndex;
-                            const isEmptyLyric = !lyric.lrc || lyric.lrc.trim() === '';
-                            const lineOpacity = getLineOpacity(index);
-
-                            return (
-                                <View key={index} style={[styles.lyricGroup, { opacity: lineOpacity }]}>
-                                    {isEmptyLyric ? (
-                                        <View style={styles.dotsContainer}>
-                                            <BreathingDots
-                                                color={isActive ? colors.primary : "white"}
-                                                align="left"
-                                                highlight={isActive}
-                                            />
-                                        </View>
-                                    ) : (
-                                        <Text
-                                            style={[
-                                                styles.lyricLine,
-                                                { color: isActive ? colors.primary : "white" },
-                                            ]}
-                                            numberOfLines={1}>
-                                            {lyric.lrc}
-                                        </Text>
-                                    )}
-                                    {showRomanization && hasRomanization && (
-                                        <Text
-                                            style={[
-                                                styles.secondaryLine,
-                                                { color: isActive ? colors.primary : "white" },
-                                            ]}
-                                            numberOfLines={1}>
-                                            {lyric.romanization || " "}
-                                        </Text>
-                                    )}
-                                    {showTranslation && hasTranslation && (
-                                        <Text
-                                            style={[
-                                                styles.secondaryLine,
-                                                { color: isActive ? colors.primary : "white" },
-                                            ]}
-                                            numberOfLines={1}>
-                                            {lyric.translation || " "}
-                                        </Text>
-                                    )}
-                                </View>
-                            );
-                        })}
-                    </Animated.View>
-                </ScrollView>
+            <View style={[styles.container, dynamicContainerStyle, { height: containerHeight }]}>
+                {shouldUseMask ? (
+                    <MaskedView
+                        style={styles.maskedView}
+                        maskElement={maskElement}
+                        androidRenderingMode={
+                            Platform.OS === "android" ? "software" : undefined
+                        }
+                        collapsable={false}
+                    >
+                        {lyricsContent}
+                    </MaskedView>
+                ) : (
+                    lyricsContent
+                )}
             </View>
         </GestureDetector>
     );
@@ -185,12 +219,22 @@ const styles = StyleSheet.create({
         width: "100%",
         justifyContent: "center",
         alignItems: "center",
-        marginBottom: rpx(48),
+        marginTop: rpx(24),
+    },
+    maskContainer: {
+        flex: 1,
+        width: "100%",
     },
     contentContainer: {
         width: "100%",
         height: "100%",
         overflow: "hidden",
+    },
+    maskedView: {
+        width: "100%",
+        height: "100%",
+        overflow: "hidden",
+        backgroundColor: "transparent",
     },
     lyricsWrapper: {
         width: "100%",
@@ -219,11 +263,5 @@ const styles = StyleSheet.create({
         textAlign: "left",
         lineHeight: SECONDARY_LINE_HEIGHT,
         height: SECONDARY_LINE_HEIGHT,
-    },
-    hidden: {
-        opacity: 0,
-        height: 0,
-        overflow: "hidden",
-        marginBottom: 0,
     },
 });

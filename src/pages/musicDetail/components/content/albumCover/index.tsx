@@ -25,10 +25,11 @@ export function getCoverLeftMargin(coverStyle: string) {
 
 interface IProps {
     onTurnPageClick?: () => void;
+    disableMaskedView?: boolean;
 }
 
 export default function AlbumCover(props: IProps) {
-    const { onTurnPageClick } = props;
+    const { onTurnPageClick, disableMaskedView } = props;
 
     const musicItem = useCurrentMusic();
     const orientation = useOrientation();
@@ -162,9 +163,12 @@ export default function AlbumCover(props: IProps) {
                     </Animated.View>
                 </GestureDetector>
             </View>
-            <SongInfo />
+            <SongInfo showHeart />
+            <MiniLyric
+                onPress={onTurnPageClick}
+                disableMaskedView={disableMaskedView}
+            />
             <View style={{ flex: 1 }} />
-            <MiniLyric onPress={onTurnPageClick} />
             <Operations />
         </>
     );

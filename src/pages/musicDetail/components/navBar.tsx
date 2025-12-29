@@ -3,9 +3,13 @@ import { StyleSheet, View } from "react-native";
 import rpx from "@/utils/rpx";
 import { useNavigation } from "@react-navigation/native";
 import IconButton from "@/components/base/iconButton";
-import HeartIcon from "./content/heartIcon";
 
-export default function NavBar() {
+interface INavBarProps {
+    onBack?: () => void;
+}
+
+export default function NavBar(props: INavBarProps) {
+    const { onBack } = props;
     const navigation = useNavigation();
 
     return (
@@ -16,13 +20,12 @@ export default function NavBar() {
                 color="white"
                 style={styles.button}
                 onPress={() => {
-                    navigation.goBack();
+                    onBack?.();
+                    requestAnimationFrame(() => {
+                        navigation.goBack();
+                    });
                 }}
             />
-            <View style={styles.spacer} />
-            <View style={styles.button}>
-                <HeartIcon />
-            </View>
         </View>
     );
 }

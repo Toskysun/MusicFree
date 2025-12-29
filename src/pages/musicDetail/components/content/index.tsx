@@ -11,7 +11,12 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
     UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-export default function Content() {
+interface IContentProps {
+    disableMaskedView?: boolean;
+}
+
+export default function Content(props: IContentProps) {
+    const { disableMaskedView } = props;
     const [tab, selectTab] = useState<"album" | "lyric">(
         Config.getConfig("basic.musicDetailDefault") || "album",
     );
@@ -53,7 +58,10 @@ export default function Content() {
                 globalStyle.fwflex1,
                 !showAlbumCover && styles.hidden,
             ]}>
-                <AlbumCover onTurnPageClick={onTurnPageClick} />
+                <AlbumCover
+                    onTurnPageClick={onTurnPageClick}
+                    disableMaskedView={disableMaskedView}
+                />
             </View>
             {/* Keep Lyric mounted to preserve scroll position, use display to hide */}
             <View style={[
@@ -75,5 +83,6 @@ const styles = StyleSheet.create({
         bottom: 0,
         opacity: 0,
         pointerEvents: 'none',
+        transform: [{ translateX: 10000 }],
     },
 });
