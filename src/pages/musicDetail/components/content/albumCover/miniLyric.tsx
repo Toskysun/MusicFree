@@ -44,22 +44,37 @@ export default function MiniLyric(props: IMiniLyricProps) {
         "lyric.showRomanization",
         false,
     );
+    const lyricOrder = PersistStatus.useValue(
+        "lyric.lyricOrder",
+        ["original", "translation", "romanization"],
+    );
 
     const translateY = useSharedValue(0);
     const lastIndex = useRef(-1);
 
     const currentIndex = currentLyricItem?.index ?? -1;
 
-    // Calculate group height (one line includes original + romanization + translation)
+    // Calculate group height (first visible line uses large font, others use small font)
     const getGroupHeight = () => {
-        let height = LINE_HEIGHT; // Original lyric
+        // Determine which types are visible
+        const visibleTypes: string[] = [];
+        for (const type of lyricOrder) {
+            if (type === "original") {
+                visibleTypes.push(type);
+            } else if (type === "romanization" && showRomanization && hasRomanization) {
+                visibleTypes.push(type);
+            } else if (type === "translation" && showTranslation && hasTranslation) {
+                visibleTypes.push(type);
+            }
+        }
 
-        if (showRomanization && hasRomanization) {
-            height += SECONDARY_LINE_HEIGHT;
+        if (visibleTypes.length === 0) {
+            return LINE_HEIGHT + GROUP_SPACING;
         }
-        if (showTranslation && hasTranslation) {
-            height += SECONDARY_LINE_HEIGHT;
-        }
+
+        // First visible uses large font, others use small font
+        let height = LINE_HEIGHT; // First line
+        height += (visibleTypes.length - 1) * SECONDARY_LINE_HEIGHT; // Remaining lines
 
         return height + GROUP_SPACING;
     };
@@ -89,7 +104,7 @@ export default function MiniLyric(props: IMiniLyricProps) {
             }
             lastIndex.current = currentIndex;
         }
-    }, [currentIndex, lyrics.length, showTranslation, showRomanization]);
+    }, [currentIndex, lyrics.length, showTranslation, showRomanization, lyricOrder]);
 
     const animatedStyle = useAnimatedStyle(() => ({
         transform: [{ translateY: translateY.value }],
@@ -147,44 +162,72 @@ export default function MiniLyric(props: IMiniLyricProps) {
 
                 return (
                     <View key={index} style={[styles.lyricGroup, { opacity: lineOpacity }]}>
-                        {isEmptyLyric ? (
-                            <View style={styles.dotsContainer}>
-                                <BreathingDots
-                                    color={isActive ? colors.primary : "white"}
-                                    align="left"
-                                    highlight={isActive}
-                                />
-                            </View>
-                        ) : (
-                            <Text
-                                style={[
-                                    styles.lyricLine,
-                                    { color: isActive ? colors.primary : "white" },
-                                ]}
-                                numberOfLines={1}>
-                                {lyric.lrc}
-                            </Text>
-                        )}
-                        {showRomanization && hasRomanization && (
-                            <Text
-                                style={[
-                                    styles.secondaryLine,
-                                    { color: isActive ? colors.primary : "white" },
-                                ]}
-                                numberOfLines={1}>
-                                {lyric.romanization || " "}
-                            </Text>
-                        )}
-                        {showTranslation && hasTranslation && (
-                            <Text
-                                style={[
-                                    styles.secondaryLine,
-                                    { color: isActive ? colors.primary : "white" },
-                                ]}
-                                numberOfLines={1}>
-                                {lyric.translation || " "}
-                            </Text>
-                        )}
+                        {(() => {
+                            // Find first visible type
+                            const firstVisibleType = lyricOrder.find((type) => {
+                                if (type === "original") return true;
+                                if (type === "romanization") return showRomanization && hasRomanization;
+                                if (type === "translation") return showTranslation && hasTranslation;
+                                return false;
+                            });
+
+                            return lyricOrder.map((type) => {
+                                const isPrimary = type === firstVisibleType;
+                                const textStyle = isPrimary ? styles.lyricLine : styles.secondaryLine;
+
+                                if (type === "original") {
+                                    if (isEmptyLyric) {
+                                        return (
+                                            <View key="original" style={styles.dotsContainer}>
+                                                <BreathingDots
+                                                    color={isActive ? colors.primary : "white"}
+                                                    align="left"
+                                                    highlight={isActive}
+                                                />
+                                            </View>
+                                        );
+                                    }
+                                    return (
+                                        <Text
+                                            key="original"
+                                            style={[
+                                                textStyle,
+                                                { color: isActive ? colors.primary : "white" },
+                                            ]}
+                                            numberOfLines={1}>
+                                            {lyric.lrc}
+                                        </Text>
+                                    );
+                                }
+                                if (type === "romanization" && showRomanization && hasRomanization) {
+                                    return (
+                                        <Text
+                                            key="romanization"
+                                            style={[
+                                                textStyle,
+                                                { color: isActive ? colors.primary : "white" },
+                                            ]}
+                                            numberOfLines={1}>
+                                            {lyric.romanization || " "}
+                                        </Text>
+                                    );
+                                }
+                                if (type === "translation" && showTranslation && hasTranslation) {
+                                    return (
+                                        <Text
+                                            key="translation"
+                                            style={[
+                                                textStyle,
+                                                { color: isActive ? colors.primary : "white" },
+                                            ]}
+                                            numberOfLines={1}>
+                                            {lyric.translation || " "}
+                                        </Text>
+                                    );
+                                }
+                                return null;
+                            });
+                        })()}
                     </View>
                 );
             })}
