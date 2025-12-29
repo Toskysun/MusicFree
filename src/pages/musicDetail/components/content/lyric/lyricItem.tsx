@@ -213,6 +213,7 @@ const KaraokeWord = memo(({
     isCurrentLine,
     enableGlow,
     isPseudo = false,
+    noSpace = false,
 }: {
     word: ILyric.IWordData;
     currentTimeMs: number;
@@ -222,6 +223,7 @@ const KaraokeWord = memo(({
     isCurrentLine: boolean;
     enableGlow: boolean;
     isPseudo?: boolean;
+    noSpace?: boolean;
 }) => {
     const { startTime, duration, text, space } = word;
     const endTime = startTime + duration;
@@ -324,7 +326,7 @@ const KaraokeWord = memo(({
                 ]}
             >
                 {text}
-                {space ? ' ' : ''}
+                {!noSpace && space ? ' ' : ''}
             </Text>
         );
     }
@@ -344,7 +346,7 @@ const KaraokeWord = memo(({
                 ]}
             >
                 {text}
-                {space ? ' ' : ''}
+                {!noSpace && space ? ' ' : ''}
             </Text>
         );
     }
@@ -371,7 +373,7 @@ const KaraokeWord = memo(({
                     ]}
                 >
                     {text}
-                    {space ? ' ' : ''}
+                    {!noSpace && space ? ' ' : ''}
                 </Text>
             </View>
         );
@@ -393,7 +395,7 @@ const KaraokeWord = memo(({
                 ]}
             >
                 {text}
-                {space ? ' ' : ''}
+                {!noSpace && space ? ' ' : ''}
             </Text>
 
             {/* Highlighted overlay with clip effect */}
@@ -415,7 +417,7 @@ const KaraokeWord = memo(({
                     ]}
                 >
                     {text}
-                    {space ? ' ' : ''}
+                    {!noSpace && space ? ' ' : ''}
                 </Text>
             </Animated.View>
 
@@ -436,7 +438,7 @@ const KaraokeWord = memo(({
                     ]}
                 >
                     {text}
-                    {space ? ' ' : ''}
+                    {!noSpace && space ? ' ' : ''}
                 </Animated.Text>
             )}
         </Animated.View>
@@ -626,6 +628,7 @@ function WordByWordLyricLine({
                     isCurrentLine={true}
                     enableGlow={enableGlow}
                     isPseudo={isRomanizationPseudo}
+                    noSpace={true}
                 />
             ))}
         </View>
@@ -872,7 +875,6 @@ function MultiLineRegularLyric({
                             ]}
                         >
                             {word.text}
-                            {word.space ? ' ' : ''}
                         </Text>
                     ))}
                 </View>
