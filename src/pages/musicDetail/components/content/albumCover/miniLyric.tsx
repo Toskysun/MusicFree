@@ -200,16 +200,16 @@ export default function MiniLyric(props: IMiniLyricProps) {
 
                                 if (type === "original") {
                                     if (isEmptyLyric) {
-                                        // Only show breathing dots if enabled
-                                        if (!enableBreathingDots) {
+                                        // Render breathing dots ONLY for current playing empty line
+                                        if (!enableBreathingDots || !isActive) {
                                             return <View key="original" style={styles.dotsContainer} />;
                                         }
                                         return (
                                             <View key="original" style={styles.dotsContainer}>
                                                 <BreathingDots
-                                                    color={isActive ? colors.primary : "white"}
+                                                    color={colors.primary}
                                                     align="left"
-                                                    highlight={isActive}
+                                                    highlight={true}
                                                 />
                                             </View>
                                         );
