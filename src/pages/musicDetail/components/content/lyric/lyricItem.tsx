@@ -32,6 +32,7 @@ const DOTS_CONFIG = {
     dotAlphaMin: 0.4,
     dotAlphaMax: 1.0,
 };
+const DOTS_ROW_WIDTH = DOTS_CONFIG.number * DOTS_CONFIG.size + (DOTS_CONFIG.number - 1) * DOTS_CONFIG.margin;
 
 // Breathing dots component for empty lyric lines
 export const BreathingDots = memo(({
@@ -103,8 +104,13 @@ export const BreathingDots = memo(({
     const containerStyle = useAnimatedStyle(() => {
         const angle = breathingProgress.value * 2 * Math.PI - Math.PI / 2;
         const scale = DOTS_CONFIG.breathingCenter + DOTS_CONFIG.breathingAmplitude * Math.sin(angle);
+        const finalScale = highlight ? scale * HIGHLIGHT_SCALE : scale;
+        const translateX = align === "left" ? (DOTS_ROW_WIDTH * (finalScale - 1)) / 2 : 0;
         return {
-            transform: [{ scale: highlight ? scale * HIGHLIGHT_SCALE : scale }],
+            transform: [
+                { scale: finalScale },
+                { translateX },
+            ],
         };
     });
 
