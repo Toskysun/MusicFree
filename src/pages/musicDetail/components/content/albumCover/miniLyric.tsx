@@ -70,8 +70,15 @@ export default function MiniLyric(props: IMiniLyricProps) {
 
     const currentIndex = currentLyricItem?.index ?? -1;
 
-    // Calculate group height (first visible line uses large font, others use small font)
-    const getGroupHeight = () => {
+    // Calculate height for a single lyric line
+    const getLineHeight = (lyric: typeof lyrics[0]) => {
+        const isEmptyLyric = !lyric.lrc || lyric.lrc.trim() === "";
+
+        // Empty lyrics only show one line
+        if (isEmptyLyric) {
+            return LINE_HEIGHT + GROUP_SPACING;
+        }
+
         // Determine which types are visible
         const visibleTypes: string[] = [];
         for (const type of effectiveLyricOrder) {
@@ -95,6 +102,15 @@ export default function MiniLyric(props: IMiniLyricProps) {
         return height + GROUP_SPACING;
     };
 
+    // Calculate cumulative offset for a given index
+    const getCumulativeOffset = (targetIndex: number) => {
+        let offset = 0;
+        for (let i = 0; i < targetIndex; i++) {
+            offset += getLineHeight(lyrics[i]);
+        }
+        return offset;
+    };
+
     const containerHeight = layout === "compact" ? COMPACT_CONTAINER_HEIGHT : DEFAULT_CONTAINER_HEIGHT;
 
     const dynamicContainerStyle = useMemo(() => ({
@@ -104,9 +120,10 @@ export default function MiniLyric(props: IMiniLyricProps) {
     // Handle position updates
     useEffect(() => {
         if (currentIndex >= 0 && lyrics.length > 0) {
-            const groupHeight = getGroupHeight();
+            const currentLineHeight = getLineHeight(lyrics[currentIndex]);
+            const cumulativeOffset = getCumulativeOffset(currentIndex);
             // Center the current line in container
-            const targetY = -currentIndex * groupHeight + (containerHeight - groupHeight) / 2;
+            const targetY = -cumulativeOffset + (containerHeight - currentLineHeight) / 2;
 
             if (lastIndex.current === -1) {
                 // First time: set position directly without animation
@@ -194,26 +211,27 @@ export default function MiniLyric(props: IMiniLyricProps) {
                                 return false;
                             });
 
+                            // Empty lyrics only show original line
+                            if (isEmptyLyric) {
+                                if (!enableBreathingDots || !isActive) {
+                                    return <View key="original" style={styles.dotsContainer} />;
+                                }
+                                return (
+                                    <View key="original" style={styles.dotsContainer}>
+                                        <BreathingDots
+                                            color={colors.primary}
+                                            align="left"
+                                            highlight={true}
+                                        />
+                                    </View>
+                                );
+                            }
+
                             return effectiveLyricOrder.map((type) => {
                                 const isPrimary = type === firstVisibleType;
                                 const textStyle = isPrimary ? styles.lyricLine : styles.secondaryLine;
 
                                 if (type === "original") {
-                                    if (isEmptyLyric) {
-                                        // Render breathing dots ONLY for current playing empty line
-                                        if (!enableBreathingDots || !isActive) {
-                                            return <View key="original" style={styles.dotsContainer} />;
-                                        }
-                                        return (
-                                            <View key="original" style={styles.dotsContainer}>
-                                                <BreathingDots
-                                                    color={colors.primary}
-                                                    align="left"
-                                                    highlight={true}
-                                                />
-                                            </View>
-                                        );
-                                    }
                                     return (
                                         <Text
                                             key="original"
