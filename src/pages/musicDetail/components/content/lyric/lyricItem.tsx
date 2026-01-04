@@ -991,8 +991,8 @@ function _LyricItemComponent(props: ILyricItemComponentProps) {
     // Check if lyric text is empty (empty string or only whitespace)
     const isEmptyLyric = !text || text.trim() === '';
 
-    // Render breathing dots for empty lyric lines (only if enabled)
-    if (isEmptyLyric && enableBreathingDots) {
+    // Render breathing dots ONLY for current playing empty line (highlight=true)
+    if (isEmptyLyric && enableBreathingDots && highlight) {
         return (
             <View
                 onLayout={({ nativeEvent }) => {
@@ -1008,7 +1008,7 @@ function _LyricItemComponent(props: ILyricItemComponentProps) {
                 <BreathingDots
                     color={colors.primary}
                     align={align}
-                    highlight={!!highlight}
+                    highlight={true}
                 />
             </View>
         );
