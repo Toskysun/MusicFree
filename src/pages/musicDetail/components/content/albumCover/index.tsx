@@ -11,7 +11,7 @@ import { showPanel } from "@/components/panels/usePanel.ts";
 import { useAppConfig } from "@/core/appConfig";
 import MiniLyric from "./miniLyric";
 import SongInfo from "./songInfo";
-import DeviceInfo from "react-native-device-info";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const ROTATION_DURATION = 25000; // 25秒转一圈
 export const COVER_SIZE = rpx(600); // 大封面尺寸
@@ -33,43 +33,49 @@ export default function AlbumCover(props: IProps) {
 
     const musicItem = useCurrentMusic();
     const orientation = useOrientation();
-    const { height: windowHeight } = useWindowDimensions();
+    const { height: windowHeight, width: windowWidth } = useWindowDimensions();
+    const safeAreaInsets = useSafeAreaInsets();
     const coverStyle = useAppConfig("theme.coverStyle") ?? "square";
     const musicState = useMusicState();
     const isPlaying = musicState === MusicState.Playing;
     const isCircle = coverStyle === "circle";
-    const isTablet = useMemo(() => DeviceInfo.isTablet(), []);
 
-    const [hideMiniLyricByOverflow, setHideMiniLyricByOverflow] = useState(false);
     const [containerHeight, setContainerHeight] = useState<number | null>(null);
     const [operationsBottom, setOperationsBottom] = useState<number | null>(null);
 
-    const hideMiniLyricByDevice = useMemo(() => {
-        if (!isTablet || orientation !== "vertical") {
-            return false;
+    const usableWindowHeight = windowHeight - safeAreaInsets.top - safeAreaInsets.bottom;
+    const usableAspectRatio = usableWindowHeight / Math.max(1, windowWidth);
+    const baseMiniLyricLayout = useMemo(() => {
+        if (orientation !== "vertical") {
+            return "normal" as const;
         }
-
-        return windowHeight <= 720;
-    }, [isTablet, orientation, windowHeight]);
-
-    const hideMiniLyric = hideMiniLyricByDevice || (isTablet && hideMiniLyricByOverflow);
+        return usableAspectRatio < 1.9 ? ("compact" as const) : ("normal" as const);
+    }, [orientation, usableAspectRatio]);
+    const [miniLyricLayout, setMiniLyricLayout] = useState<"normal" | "compact" | "hidden">(baseMiniLyricLayout);
 
     useEffect(() => {
-        if (!isTablet || hideMiniLyricByDevice || hideMiniLyricByOverflow) {
+        setMiniLyricLayout(baseMiniLyricLayout);
+    }, [baseMiniLyricLayout, windowHeight, windowWidth, safeAreaInsets.bottom, safeAreaInsets.top]);
+
+    useEffect(() => {
+        if (orientation !== "vertical") {
             return;
         }
         if (containerHeight === null || operationsBottom === null) {
             return;
         }
         if (operationsBottom > containerHeight + rpx(2)) {
-            setHideMiniLyricByOverflow(true);
+            setOperationsBottom(null);
+            setMiniLyricLayout((current) => {
+                if (current === "normal") return "compact";
+                if (current === "compact") return "hidden";
+                return "hidden";
+            });
         }
     }, [
         containerHeight,
-        hideMiniLyricByDevice,
-        hideMiniLyricByOverflow,
-        isTablet,
         operationsBottom,
+        orientation,
     ]);
 
     // 旋转动画
@@ -227,10 +233,11 @@ export default function AlbumCover(props: IProps) {
                 </GestureDetector>
             </View>
             <SongInfo showHeart />
-            <View style={hideMiniLyric ? styles.hidden : null}>
+            <View style={miniLyricLayout === "hidden" ? styles.hidden : null}>
                 <MiniLyric
                     onPress={onTurnPageClick}
                     disableMaskedView={disableMaskedView}
+                    layout={miniLyricLayout === "compact" ? "compact" : "normal"}
                 />
             </View>
             <View style={{ flex: 1 }} />

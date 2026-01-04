@@ -22,14 +22,22 @@ import { getCoverLeftMargin } from "./index";
 interface IMiniLyricProps {
     onPress?: () => void;
     disableMaskedView?: boolean;
+    layout?: "normal" | "compact";
 }
 
 const LINE_HEIGHT = rpx(40);
 const SECONDARY_LINE_HEIGHT = rpx(28);
 const GROUP_SPACING = rpx(4);
+const DEFAULT_CONTAINER_HEIGHT = rpx(220);
+const COMPACT_CONTAINER_HEIGHT = rpx(130);
+const DEFAULT_FADE_HEIGHT = rpx(60);
+const COMPACT_FADE_HEIGHT = rpx(10);
+const DEFAULT_CONTAINER_MARGIN_TOP = rpx(24);
+const COMPACT_CONTAINER_MARGIN_TOP = rpx(12);
 
 export default function MiniLyric(props: IMiniLyricProps) {
     const { onPress, disableMaskedView } = props;
+    const layout = props.layout ?? "normal";
     const colors = useColors();
     const currentLyricItem = useCurrentLyricItem();
     const { lyrics, loading, hasTranslation, hasRomanization } = useLyricState();
@@ -50,6 +58,13 @@ export default function MiniLyric(props: IMiniLyricProps) {
         ["original", "translation", "romanization"],
     );
 
+    const effectiveLyricOrder = useMemo(
+        () => (layout === "compact" ? ["original"] : lyricOrder),
+        [layout, lyricOrder],
+    );
+    const effectiveShowTranslation = layout === "compact" ? false : showTranslation;
+    const effectiveShowRomanization = layout === "compact" ? false : showRomanization;
+
     const translateY = useSharedValue(0);
     const lastIndex = useRef(-1);
 
@@ -59,12 +74,12 @@ export default function MiniLyric(props: IMiniLyricProps) {
     const getGroupHeight = () => {
         // Determine which types are visible
         const visibleTypes: string[] = [];
-        for (const type of lyricOrder) {
+        for (const type of effectiveLyricOrder) {
             if (type === "original") {
                 visibleTypes.push(type);
-            } else if (type === "romanization" && showRomanization && hasRomanization) {
+            } else if (type === "romanization" && effectiveShowRomanization && hasRomanization) {
                 visibleTypes.push(type);
-            } else if (type === "translation" && showTranslation && hasTranslation) {
+            } else if (type === "translation" && effectiveShowTranslation && hasTranslation) {
                 visibleTypes.push(type);
             }
         }
@@ -80,7 +95,7 @@ export default function MiniLyric(props: IMiniLyricProps) {
         return height + GROUP_SPACING;
     };
 
-    const containerHeight = rpx(220);
+    const containerHeight = layout === "compact" ? COMPACT_CONTAINER_HEIGHT : DEFAULT_CONTAINER_HEIGHT;
 
     const dynamicContainerStyle = useMemo(() => ({
         paddingHorizontal: getCoverLeftMargin(coverStyle),
@@ -105,7 +120,14 @@ export default function MiniLyric(props: IMiniLyricProps) {
             }
             lastIndex.current = currentIndex;
         }
-    }, [currentIndex, lyrics.length, showTranslation, showRomanization, lyricOrder]);
+    }, [
+        containerHeight,
+        currentIndex,
+        effectiveLyricOrder,
+        effectiveShowRomanization,
+        effectiveShowTranslation,
+        lyrics.length,
+    ]);
 
     const animatedStyle = useAnimatedStyle(() => ({
         transform: [{ translateY: translateY.value }],
@@ -117,21 +139,21 @@ export default function MiniLyric(props: IMiniLyricProps) {
         })
         .runOnJS(true);
 
-    const FADE_HEIGHT = rpx(60);
+    const fadeHeight = layout === "compact" ? COMPACT_FADE_HEIGHT : DEFAULT_FADE_HEIGHT;
 
     const maskElement = useMemo(() => (
         <View style={styles.maskContainer}>
             <LinearGradient
                 colors={["transparent", "black"]}
-                style={{ height: FADE_HEIGHT }}
+                style={{ height: fadeHeight }}
             />
             <View style={{ flex: 1, backgroundColor: "black" }} />
             <LinearGradient
                 colors={["black", "transparent"]}
-                style={{ height: FADE_HEIGHT }}
+                style={{ height: fadeHeight }}
             />
         </View>
-    ), []);
+    ), [fadeHeight]);
 
     // Don't show when no lyrics, loading, or horizontal orientation
     const isHidden = !lyrics.length || loading || orientation === "horizontal";
@@ -165,14 +187,14 @@ export default function MiniLyric(props: IMiniLyricProps) {
                     <View key={index} style={[styles.lyricGroup, { opacity: lineOpacity }]}>
                         {(() => {
                             // Find first visible type
-                            const firstVisibleType = lyricOrder.find((type) => {
+                            const firstVisibleType = effectiveLyricOrder.find((type) => {
                                 if (type === "original") return true;
-                                if (type === "romanization") return showRomanization && hasRomanization;
-                                if (type === "translation") return showTranslation && hasTranslation;
+                                if (type === "romanization") return effectiveShowRomanization && hasRomanization;
+                                if (type === "translation") return effectiveShowTranslation && hasTranslation;
                                 return false;
                             });
 
-                            return lyricOrder.map((type) => {
+                            return effectiveLyricOrder.map((type) => {
                                 const isPrimary = type === firstVisibleType;
                                 const textStyle = isPrimary ? styles.lyricLine : styles.secondaryLine;
 
@@ -204,7 +226,7 @@ export default function MiniLyric(props: IMiniLyricProps) {
                                         </Text>
                                     );
                                 }
-                                if (type === "romanization" && showRomanization && hasRomanization) {
+                                if (type === "romanization" && effectiveShowRomanization && hasRomanization) {
                                     return (
                                         <Text
                                             key="romanization"
@@ -217,7 +239,7 @@ export default function MiniLyric(props: IMiniLyricProps) {
                                         </Text>
                                     );
                                 }
-                                if (type === "translation" && showTranslation && hasTranslation) {
+                                if (type === "translation" && effectiveShowTranslation && hasTranslation) {
                                     return (
                                         <Text
                                             key="translation"
@@ -242,7 +264,15 @@ export default function MiniLyric(props: IMiniLyricProps) {
 
     return (
         <GestureDetector gesture={tap}>
-            <View style={[styles.container, dynamicContainerStyle, { height: containerHeight }]}>
+            <View
+                style={[
+                    styles.container,
+                    dynamicContainerStyle,
+                    {
+                        height: containerHeight,
+                        marginTop: layout === "compact" ? COMPACT_CONTAINER_MARGIN_TOP : DEFAULT_CONTAINER_MARGIN_TOP,
+                    },
+                ]}>
                 {shouldUseMask ? (
                     <MaskedView
                         style={styles.maskedView}
@@ -267,7 +297,7 @@ const styles = StyleSheet.create({
         width: "100%",
         justifyContent: "center",
         alignItems: "center",
-        marginTop: rpx(24),
+        marginTop: DEFAULT_CONTAINER_MARGIN_TOP,
     },
     maskContainer: {
         flex: 1,
