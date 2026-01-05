@@ -11,14 +11,54 @@
  */
 function extractLyricContent(xmlString: string): string | null {
   try {
-    // Match LyricContent attribute value, allowing for any characters including newlines
-    // Use [\s\S]*? for non-greedy match of any character including newlines
-    const contentMatch = xmlString.match(/LyricContent="([\s\S]*?)"/);
-    if (!contentMatch) {
+    // Find LyricContent attribute start position
+    const startMarker = 'LyricContent="';
+    const startIndex = xmlString.indexOf(startMarker);
+    if (startIndex === -1) {
       return null;
     }
 
-    let content = contentMatch[1];
+    const contentStart = startIndex + startMarker.length;
+
+    // Find the real end quote - it should be followed by space+attribute, /> or >
+    // This handles embedded quotes like "my darling" in lyrics
+    let endIndex = -1;
+    let searchPos = contentStart;
+
+    while (searchPos < xmlString.length) {
+      const quotePos = xmlString.indexOf('"', searchPos);
+      if (quotePos === -1) {
+        break;
+      }
+
+      // Check what follows the quote
+      const afterQuote = xmlString.substring(quotePos + 1, quotePos + 20).trimStart();
+
+      // Valid endings: /> or > or space+attribute_name= or end of string
+      if (
+        afterQuote.startsWith('/>') ||
+        afterQuote.startsWith('>') ||
+        /^[a-zA-Z_][a-zA-Z0-9_]*\s*=/.test(afterQuote) ||
+        quotePos === xmlString.length - 1
+      ) {
+        endIndex = quotePos;
+        break;
+      }
+
+      // This quote is embedded in content, continue searching
+      searchPos = quotePos + 1;
+    }
+
+    if (endIndex === -1) {
+      // Fallback: use simple regex match
+      const contentMatch = xmlString.match(/LyricContent="([\s\S]*?)"/);
+      if (!contentMatch) {
+        return null;
+      }
+      return contentMatch[1];
+    }
+
+    let content = xmlString.substring(contentStart, endIndex);
 
     // Decode XML entities (both named and numeric)
     content = content

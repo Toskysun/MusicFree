@@ -21,7 +21,7 @@ import { IPluginManager } from "@/types/core/pluginManager";
 import downloadNotificationManager from "./downloadNotificationManager"; // 保留兼容性，但现在是简化版本
 import musicMetadataManager from "./musicMetadataManager";
 import type { IDownloadMetadataConfig, IDownloadTaskMetadata } from "@/types/metadata";
-import { autoDecryptLyric } from "@/utils/qqMusicDecrypter";
+import { autoDecryptLyric } from "@/utils/musicDecrypter";
 
 
 export enum DownloadStatus {

@@ -3,7 +3,7 @@
  * Test with real encrypted QRC data
  */
 
-import { decryptQRCLyric } from '../qqMusicDecrypter';
+import { decryptQRCLyric } from '../musicDecrypter';
 
 // Real QRC encrypted hex sample (truncated for brevity, but representative)
 // This is a small sample from an actual QRC file

@@ -143,7 +143,7 @@ class MusicMetadataManager {
         });
 
         // Fix: 加密歌词自动解密（QQ音乐QRC格式 - Native异步解密）
-        const { autoDecryptLyric } = require('@/utils/qqMusicDecrypter');
+        const { autoDecryptLyric } = require('@/utils/musicDecrypter');
         const enableWordByWord = config?.enableWordByWord ?? false;
         const rawLrc = lyricSource.rawLrc ? await autoDecryptLyric(lyricSource.rawLrc, enableWordByWord) : lyricSource.rawLrc;
         const translation = lyricSource.translation ? await autoDecryptLyric(lyricSource.translation, enableWordByWord) : lyricSource.translation;

@@ -17,7 +17,7 @@
  * Native Implementation Location:
  * - Kotlin: android/app/src/main/java/fun/upup/musicfree/lyricUtil/LyricUtilModule.kt
  * - TypeScript Interface: src/native/lyricUtil/index.ts::decryptQRCLyric
- * - Usage: src/utils/qqMusicDecrypter.ts::decryptQRCLyric
+ * - Usage: src/utils/musicDecrypter.ts::decryptQRCLyric
  * 
  * DO NOT USE THIS FILE IN PRODUCTION CODE!
  * Use LyricUtil.decryptQRCLyric() from @/native/lyricUtil instead.

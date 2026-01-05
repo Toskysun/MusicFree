@@ -6,9 +6,9 @@ import {
   decryptQRCLyric,
   isQRCEncrypted,
   autoDecryptLyric,
-} from '../qqMusicDecrypter';
+} from '../musicDecrypter';
 
-describe('qqMusicDecrypter', () => {
+describe('musicDecrypter', () => {
   describe('isQRCEncrypted', () => {
     it('should return false for empty string', () => {
       expect(isQRCEncrypted('')).toBe(false);

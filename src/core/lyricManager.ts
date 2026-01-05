@@ -17,7 +17,7 @@ import { unlink, writeFile } from "react-native-fs";
 import RNTrackPlayer, { Event, State } from "react-native-track-player";
 import { TrackPlayerEvents } from "@/core.defination/trackPlayer";
 import { IPluginManager } from "@/types/core/pluginManager";
-import { autoDecryptLyric } from "@/utils/qqMusicDecrypter";
+import { autoDecryptLyric } from "@/utils/musicDecrypter";
 import { devLog } from "@/utils/log";
 
 

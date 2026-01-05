@@ -27,7 +27,7 @@ import { useI18N } from "@/core/i18n";
 import PersistStatus from "@/utils/persistStatus";
 import { useCurrentMusic } from "@/core/trackPlayer";
 import PluginManager from "@/core/pluginManager";
-import { autoDecryptLyric } from "@/utils/qqMusicDecrypter";
+import { autoDecryptLyric } from "@/utils/musicDecrypter";
 import { writeFile } from "react-native-fs";
 import { escapeCharacter } from "@/utils/fileUtils";
 import pathConst from "@/constants/pathConst";
