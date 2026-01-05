@@ -17,6 +17,7 @@ import useOrientation from "@/hooks/useOrientation";
 import Theme from "@/core/theme";
 import DeviceInfo from "react-native-device-info";
 import buildInfo from "@/constants/buildInfo";
+import { showDialog } from "@/components/dialogs/useDialog";
 
 export default function AboutSetting() {
     const checkAndShowResult = useCheckUpdate();
@@ -30,10 +31,12 @@ export default function AboutSetting() {
     const fadeAnim2 = useRef(new Animated.Value(0)).current;
     const fadeAnim3 = useRef(new Animated.Value(0)).current;
     const fadeAnim4 = useRef(new Animated.Value(0)).current;
+    const fadeAnim5 = useRef(new Animated.Value(0)).current;
     const scaleAnim1 = useRef(new Animated.Value(0.8)).current;
     const scaleAnim2 = useRef(new Animated.Value(0.8)).current;
     const scaleAnim3 = useRef(new Animated.Value(0.8)).current;
     const scaleAnim4 = useRef(new Animated.Value(0.8)).current;
+    const scaleAnim5 = useRef(new Animated.Value(0.8)).current;
 
     useEffect(() => {
         // 创建动画序列
@@ -94,6 +97,20 @@ export default function AboutSetting() {
                     useNativeDriver: true,
                 }),
             ]),
+            Animated.parallel([
+                Animated.timing(fadeAnim5, {
+                    toValue: 1,
+                    duration: 600,
+                    easing: Easing.out(Easing.cubic),
+                    useNativeDriver: true,
+                }),
+                Animated.spring(scaleAnim5, {
+                    toValue: 1,
+                    friction: 4,
+                    tension: 40,
+                    useNativeDriver: true,
+                }),
+            ]),
         ]).start();
     }, []);
 
@@ -131,11 +148,10 @@ export default function AboutSetting() {
             <ScrollView
                 contentContainerStyle={style.scrollViewContainer}
                 style={style.scrollView}>
-                
+
                 <TouchableOpacity
                     activeOpacity={0.8}
                     onPress={() => {
-                        // 点击效果动画
                         Animated.sequence([
                             Animated.spring(scaleAnim1, {
                                 toValue: 0.95,
@@ -150,14 +166,48 @@ export default function AboutSetting() {
                                 useNativeDriver: true,
                             }),
                         ]).start();
+                        showDialog("PactDialog");
                     }}>
-                    <Animated.View 
+                    <Animated.View
                         style={[
-                            style.infoCard, 
+                            style.infoCard,
                             { backgroundColor: colors.card },
                             {
                                 opacity: fadeAnim1,
                                 transform: [{ scale: scaleAnim1 }],
+                            },
+                        ]}>
+                        <ThemeText fontSize="subTitle" style={style.cardTitle}>许可协议</ThemeText>
+                        <ThemeText style={style.cardContent}>点击查看许可协议与免责声明</ThemeText>
+                    </Animated.View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => {
+                        // 点击效果动画
+                        Animated.sequence([
+                            Animated.spring(scaleAnim2, {
+                                toValue: 0.95,
+                                friction: 3,
+                                tension: 100,
+                                useNativeDriver: true,
+                            }),
+                            Animated.spring(scaleAnim2, {
+                                toValue: 1,
+                                friction: 3,
+                                tension: 100,
+                                useNativeDriver: true,
+                            }),
+                        ]).start();
+                    }}>
+                    <Animated.View
+                        style={[
+                            style.infoCard,
+                            { backgroundColor: colors.card },
+                            {
+                                opacity: fadeAnim2,
+                                transform: [{ scale: scaleAnim2 }],
                             },
                         ]}>
                         <ThemeText fontSize="subTitle" style={style.cardTitle}>原作者</ThemeText>
@@ -169,13 +219,13 @@ export default function AboutSetting() {
                     activeOpacity={0.8}
                     onPress={() => {
                         Animated.sequence([
-                            Animated.spring(scaleAnim2, {
+                            Animated.spring(scaleAnim3, {
                                 toValue: 0.95,
                                 friction: 3,
                                 tension: 100,
                                 useNativeDriver: true,
                             }),
-                            Animated.spring(scaleAnim2, {
+                            Animated.spring(scaleAnim3, {
                                 toValue: 1,
                                 friction: 3,
                                 tension: 100,
@@ -183,13 +233,13 @@ export default function AboutSetting() {
                             }),
                         ]).start();
                     }}>
-                    <Animated.View 
+                    <Animated.View
                         style={[
-                            style.infoCard, 
+                            style.infoCard,
                             { backgroundColor: colors.card },
                             {
-                                opacity: fadeAnim2,
-                                transform: [{ scale: scaleAnim2 }],
+                                opacity: fadeAnim3,
+                                transform: [{ scale: scaleAnim3 }],
                             },
                         ]}>
                         <ThemeText fontSize="subTitle" style={style.cardTitle}>原仓库</ThemeText>
@@ -203,13 +253,13 @@ export default function AboutSetting() {
                     activeOpacity={0.8}
                     onPress={() => {
                         Animated.sequence([
-                            Animated.spring(scaleAnim3, {
+                            Animated.spring(scaleAnim4, {
                                 toValue: 0.95,
                                 friction: 3,
                                 tension: 100,
                                 useNativeDriver: true,
                             }),
-                            Animated.spring(scaleAnim3, {
+                            Animated.spring(scaleAnim4, {
                                 toValue: 1,
                                 friction: 3,
                                 tension: 100,
@@ -217,13 +267,13 @@ export default function AboutSetting() {
                             }),
                         ]).start();
                     }}>
-                    <Animated.View 
+                    <Animated.View
                         style={[
-                            style.infoCard, 
+                            style.infoCard,
                             { backgroundColor: colors.card },
                             {
-                                opacity: fadeAnim3,
-                                transform: [{ scale: scaleAnim3 }],
+                                opacity: fadeAnim4,
+                                transform: [{ scale: scaleAnim4 }],
                             },
                         ]}>
                         <ThemeText fontSize="subTitle" style={style.cardTitle}>本作者</ThemeText>
@@ -235,13 +285,13 @@ export default function AboutSetting() {
                     activeOpacity={0.8}
                     onPress={() => {
                         Animated.sequence([
-                            Animated.spring(scaleAnim4, {
+                            Animated.spring(scaleAnim5, {
                                 toValue: 0.95,
                                 friction: 3,
                                 tension: 100,
                                 useNativeDriver: true,
                             }),
-                            Animated.spring(scaleAnim4, {
+                            Animated.spring(scaleAnim5, {
                                 toValue: 1,
                                 friction: 3,
                                 tension: 100,
@@ -249,13 +299,13 @@ export default function AboutSetting() {
                             }),
                         ]).start();
                     }}>
-                    <Animated.View 
+                    <Animated.View
                         style={[
-                            style.infoCard, 
+                            style.infoCard,
                             { backgroundColor: colors.card },
                             {
-                                opacity: fadeAnim4,
-                                transform: [{ scale: scaleAnim4 }],
+                                opacity: fadeAnim5,
+                                transform: [{ scale: scaleAnim5 }],
                             },
                         ]}>
                         <ThemeText fontSize="subTitle" style={style.cardTitle}>本仓库</ThemeText>

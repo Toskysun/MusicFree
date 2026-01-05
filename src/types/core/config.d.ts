@@ -3,6 +3,8 @@ import type { CustomizedColors } from "@/hooks/useColors";
 
 export interface IAppConfigProperties {
     $schema: "2";
+    // Common
+    "common.isAgreePact": boolean;
     // Basic
     "basic.autoPlayWhenAppStart": boolean;
     "basic.openPlayDetailOnLaunch": boolean;

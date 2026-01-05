@@ -99,6 +99,13 @@ async function bootstrapImpl() {
     trace("配置初始化完成");
     logger.mark("配置初始化完成");
 
+    // 检查用户协议
+    if (!Config.getConfig("common.isAgreePact")) {
+        devLog('info', '📜[Bootstrap] 用户尚未同意协议，显示许可协议');
+        showDialog("PactDialog");
+    }
+    logger.mark("协议检查完成");
+
     // 加载插件
     await PluginManager.setup();
     logger.mark("插件初始化完成");
