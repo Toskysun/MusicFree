@@ -1,0 +1,99 @@
+name: Build iOS IPA
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (e.g., v0.6.2)'
+        required: true
+        default: 'v0.6.2'
+        type: string
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-ios:
+    runs-on: macos-14
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: 'package-lock.json'
+
+    - name: Cache CocoaPods
+      uses: actions/cache@v4
+      with:
+        path: |
+          ios/Pods
+          ~/Library/Caches/CocoaPods
+        key: ${{ runner.os }}-pods-${{ hashFiles('ios/Podfile.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-pods-
+
+    - name: Install dependencies
+      run: npm ci --prefer-offline --no-audit --progress=false
+
+    - name: Update version from tag
+      if: startsWith(github.ref, 'refs/tags/')
+      run: |
+        TAG_VERSION="${{ github.ref_name }}"
+        VERSION=${TAG_VERSION#v}
+        echo "Updating version to $VERSION"
+
+        node -e "
+          const fs = require('fs');
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          pkg.version = '$VERSION';
+          fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+        "
+
+    - name: Generate build info
+      run: npm run generate-build-info
+
+    - name: Install CocoaPods
+      run: |
+        cd ios
+        pod install --repo-update
+
+    - name: Build iOS (No Codesign)
+      run: |
+        cd ios
+        xcodebuild -workspace MusicFree.xcworkspace \
+          -scheme MusicFreeNew \
+          -configuration Release \
+          -sdk iphoneos \
+          -derivedDataPath build \
+          CODE_SIGN_IDENTITY="" \
+          CODE_SIGNING_REQUIRED=NO \
+          CODE_SIGNING_ALLOWED=NO \
+          -allowProvisioningUpdates
+
+    - name: Create IPA
+      run: |
+        cd ios/build/Build/Products/Release-iphoneos
+        mkdir -p Payload
+        cp -r MusicFree.app Payload/
+        zip -r MusicFree-${{ github.event.inputs.version || github.ref_name }}.ipa Payload
+
+    - name: Upload IPA artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: musicfree-ios-${{ github.event.inputs.version || github.ref_name }}
+        path: ios/build/Build/Products/Release-iphoneos/*.ipa
+        retention-days: 30
+
+    - name: Upload to Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref_name }}
+        files: ios/build/Build/Products/Release-iphoneos/*.ipa
