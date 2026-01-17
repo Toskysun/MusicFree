@@ -122,10 +122,10 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace "fun.upup.musicfree"
+    namespace "fun.xwj.musicfree"
 
     defaultConfig {
-        applicationId "fun.upup.musicfree"
+        applicationId "fun.xwj.musicfree"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode appVersionCode
