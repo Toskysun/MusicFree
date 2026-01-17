@@ -99,6 +99,7 @@ musicfree-plugins/
 # Claude project file
 CLAUDE.md
 AGENTS.md
+.claude/
 
 # Release documentation
 release/README.md

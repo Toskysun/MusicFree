@@ -1,4 +1,4 @@
-package `fun`.upup.musicfree.mp3Util
+package `fun`.xwj.musicfree.mp3Util
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -43,7 +43,7 @@ import com.facebook.react.modules.core.DeviceEventManagerModule
 class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
 
     companion object {
-        const val ACTION_CANCEL = "fun.upup.musicfree.action.CANCEL_DOWNLOAD"
+        const val ACTION_CANCEL = "fun.xwj.musicfree.action.CANCEL_DOWNLOAD"
         const val EXTRA_ID = "id"
         private val httpCalls = ConcurrentHashMap<String, okhttp3.Call>()
 
@@ -800,7 +800,7 @@ class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactCo
     // ================== Internal HTTP downloader with Notification ==================
 
     private val DOWNLOAD_CHANNEL_ID = "musicfree_downloads"
-    private val DOWNLOAD_GROUP_KEY = "fun.upup.musicfree.DOWNLOAD_GROUP"
+    private val DOWNLOAD_GROUP_KEY = "fun.xwj.musicfree.DOWNLOAD_GROUP"
     // Track active notification IDs to manage cleanup
     private val activeNotificationIds = java.util.concurrent.ConcurrentHashMap<String, Int>()
 
