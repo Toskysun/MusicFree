@@ -1,4 +1,5 @@
 import AddToMusicSheet from "./addToMusicSheet";
+import ArtistSelectPanel from "./artistSelectPanel";
 import AssociateLrc from "./associateLrc";
 import ColorPicker from "./colorPicker";
 import ImportMusicSheet from "./importMusicSheet";
@@ -26,6 +27,8 @@ import MusicMetadataSettings from "./musicMetadataSettings";
 export default {
     /** 加入歌单 */
     AddToMusicSheet,
+    /** 歌手选择 */
+    ArtistSelectPanel,
     /** 歌曲选项 */
     MusicItemOptions,
     /** 新建歌单 */

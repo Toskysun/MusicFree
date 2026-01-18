@@ -483,5 +483,10 @@
     "quality.hires": "Lossless Quality Hires",
     "quality.atmos": "Lossless Quality Atmos",
     "quality.atmos_plus": "Lossless Quality Atmos 2.0",
-    "quality.master": "Lossless Quality Master"
+    "quality.master": "Lossless Quality Master",
+
+    "panel.artistSelect.title": "Select Artist",
+    "panel.artistSelect.description": "This song has multiple artists, please select one to view",
+    "toast.artistNotSupported": "This plugin does not support artist details",
+    "toast.albumNotSupported": "This plugin does not support album details"
 }
