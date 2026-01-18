@@ -483,5 +483,10 @@
     "quality.hires": "無損音質 Hires",
     "quality.atmos": "無損音質 Atmos",
     "quality.atmos_plus": "無損音質 Atmos 2.0",
-    "quality.master": "無損音質 Master"
+    "quality.master": "無損音質 Master",
+
+    "panel.artistSelect.title": "選擇歌手",
+    "panel.artistSelect.description": "這首歌有多位歌手，請選擇要查看的歌手",
+    "toast.artistNotSupported": "當前插件不支持查看歌手詳情",
+    "toast.albumNotSupported": "當前插件不支持查看專輯詳情"
 }
