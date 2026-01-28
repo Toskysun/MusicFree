@@ -9,6 +9,14 @@ export default function (rpx: number) {
     return (rpx / 750) * minWindowEdge;
 }
 
+/**
+ * 返回取整后的 rpx 值，用于图标等需要精确像素对齐的场景
+ * 避免浮点数尺寸导致的 SVG 渲染伪影（如横线/竖线）
+ */
+export function rpxRound(rpx: number) {
+    return Math.round((rpx / 750) * minWindowEdge);
+}
+
 export function vh(pct: number) {
     return (pct / 100) * Dimensions.get("window").height;
 }

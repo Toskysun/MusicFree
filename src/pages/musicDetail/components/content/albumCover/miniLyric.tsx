@@ -158,15 +158,16 @@ export default function MiniLyric(props: IMiniLyricProps) {
 
     const fadeHeight = layout === "compact" ? COMPACT_FADE_HEIGHT : DEFAULT_FADE_HEIGHT;
 
+    // 使用 rgba 替代 transparent 避免 Android 渲染伪影
     const maskElement = useMemo(() => (
         <View style={styles.maskContainer}>
             <LinearGradient
-                colors={["transparent", "black"]}
+                colors={["rgba(0,0,0,0)", "rgba(0,0,0,1)"]}
                 style={{ height: fadeHeight }}
             />
             <View style={{ flex: 1, backgroundColor: "black" }} />
             <LinearGradient
-                colors={["black", "transparent"]}
+                colors={["rgba(0,0,0,1)", "rgba(0,0,0,0)"]}
                 style={{ height: fadeHeight }}
             />
         </View>

@@ -1,5 +1,5 @@
 import repeatModeConst from "@/constants/repeatModeConst";
-import rpx from "@/utils/rpx";
+import rpx, { rpxRound } from "@/utils/rpx";
 import React from "react";
 import { InteractionManager, StyleSheet, View } from "react-native";
 
@@ -32,7 +32,7 @@ export default function () {
                 <Icon
                     color={"white"}
                     name={repeatModeConst[repeatMode].icon}
-                    size={rpx(56)}
+                    size={rpxRound(56)}
                     onPress={async () => {
                         InteractionManager.runAfterInteractions(async () => {
                             await delay(20, false);
@@ -43,7 +43,7 @@ export default function () {
                 <Icon
                     color={"white"}
                     name={"skip-left"}
-                    size={rpx(56)}
+                    size={rpxRound(56)}
                     onPress={() => {
                         TrackPlayer.skipToPrevious();
                     }}
@@ -51,7 +51,7 @@ export default function () {
                 <Icon
                     color={"white"}
                     name={musicIsPaused(musicState) ? "play" : "pause"}
-                    size={rpx(96)}
+                    size={rpxRound(96)}
                     onPress={() => {
                         if (musicIsPaused(musicState)) {
                             TrackPlayer.play();
@@ -63,7 +63,7 @@ export default function () {
                 <Icon
                     color={"white"}
                     name={"skip-right"}
-                    size={rpx(56)}
+                    size={rpxRound(56)}
                     onPress={() => {
                         TrackPlayer.skipToNext();
                     }}
@@ -71,7 +71,7 @@ export default function () {
                 <Icon
                     color={"white"}
                     name={"playlist"}
-                    size={rpx(56)}
+                    size={rpxRound(56)}
                     onPress={() => {
                         showPanel("PlayList");
                     }}

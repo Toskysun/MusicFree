@@ -1,5 +1,5 @@
 import { CustomizedColors } from "@/hooks/useColors";
-import rpx from "@/utils/rpx";
+import rpx, { rpxRound } from "@/utils/rpx";
 
 const fontSizeConst = {
     /** 标签 */
@@ -25,11 +25,11 @@ const fontWeightConst = {
 } as const;
 
 const iconSizeConst = {
-    small: rpx(30),
-    light: rpx(36),
-    normal: rpx(42),
-    big: rpx(60),
-    large: rpx(72),
+    small: rpxRound(30),
+    light: rpxRound(36),
+    normal: rpxRound(42),
+    big: rpxRound(60),
+    large: rpxRound(72),
 };
 
 type ColorKey = "normal" | "secondary" | "highlight" | "primary";
