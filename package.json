@@ -7,7 +7,7 @@
     "name": "Toskysun"
   },
   "scripts": {
-    "android": "react-native run-android",
+    "android": "react-native run-android --appId fun.xwj.musicfree.debug",
     "ios": "react-native run-ios",
     "lint": "eslint src --fix",
     "start": "react-native start",
