@@ -1,7 +1,10 @@
 import React, { ReactNode, useEffect, useMemo, useRef } from "react";
 import {
     BackHandler,
+    Dimensions,
+    Keyboard,
     NativeEventSubscription,
+    Platform,
     StyleProp,
     StyleSheet,
     TouchableOpacity,
@@ -22,6 +25,7 @@ import Divider from "@/components/base/divider";
 import { fontSizeConst } from "@/constants/uiConst";
 import { ScrollView } from "react-native-gesture-handler";
 import useOrientation from "@/hooks/useOrientation.ts";
+import Config from "@/core/appConfig";
 
 interface IDialogProps {
     onDismiss?: () => void;
@@ -32,9 +36,11 @@ function Dialog(props: IDialogProps) {
     const { children, onDismiss } = props;
 
     const sharedShowValue = useSharedValue(0);
+    const keyboardHeight = useSharedValue(0);
     const colors = useColors();
     const backHandlerRef = useRef<NativeEventSubscription>();
     const orientation = useOrientation();
+    const keyboardAvoidMode = Config.getConfig("basic.keyboardAvoidMode") ?? "auto";
 
     // 对话框宽度
     const dialogContainerStyle: ViewStyle =
@@ -60,14 +66,46 @@ function Dialog(props: IDialogProps) {
             },
         );
 
+        // 监听键盘事件
+        const keyboardShowEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+        const keyboardHideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+        const keyboardShowListener = Keyboard.addListener(keyboardShowEvent, (e) => {
+            if (keyboardAvoidMode === "off") {
+                keyboardHeight.value = withTiming(0, {
+                    duration: Platform.OS === "ios" ? 250 : 150,
+                });
+                return;
+            }
+            const windowHeight = Dimensions.get("window").height;
+            const keyboardTopY = typeof e.endCoordinates.screenY === "number"
+                ? e.endCoordinates.screenY
+                : windowHeight - e.endCoordinates.height;
+            const effectiveKeyboardHeight = Math.max(0, windowHeight - keyboardTopY);
+            const targetHeight = keyboardAvoidMode === "manual"
+                ? e.endCoordinates.height
+                : Math.min(e.endCoordinates.height, effectiveKeyboardHeight);
+            keyboardHeight.value = withTiming(targetHeight / 2, {
+                duration: Platform.OS === "ios" ? 250 : 150,
+            });
+        });
+
+        const keyboardHideListener = Keyboard.addListener(keyboardHideEvent, () => {
+            keyboardHeight.value = withTiming(0, {
+                duration: Platform.OS === "ios" ? 250 : 150,
+            });
+        });
+
         return () => {
             sharedShowValue.value = 0;
             if (backHandlerRef.current) {
                 backHandlerRef.current?.remove();
                 backHandlerRef.current = undefined;
             }
+            keyboardShowListener.remove();
+            keyboardHideListener.remove();
         };
-    }, [onDismiss, sharedShowValue]);
+    }, [onDismiss, sharedShowValue, keyboardHeight]);
 
     const containerStyle = useAnimatedStyle(() => {
         return {
@@ -86,6 +124,9 @@ function Dialog(props: IDialogProps) {
                         0.9 + sharedShowValue.value * 0.1,
                         timingConfig.animationFast,
                     ),
+                },
+                {
+                    translateY: -keyboardHeight.value,
                 },
             ],
         };

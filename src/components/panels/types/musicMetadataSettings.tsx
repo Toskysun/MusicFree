@@ -73,7 +73,7 @@ export default function MusicMetadataSettings(_props: IMusicMetadataSettingsProp
             writeMetadataExtended: false,
             downloadLyricFile: false,
             lyricFileFormat: "lrc",
-            lyricOrder: ["original", "translation", "romanization"],
+            lyricOrder: ["original", "romanization", "translation"],
             enableWordByWord: false,
         });
         Toast.success("已重置为默认值");

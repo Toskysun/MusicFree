@@ -55,7 +55,7 @@ export default function MiniLyric(props: IMiniLyricProps) {
     );
     const lyricOrder = PersistStatus.useValue(
         "lyric.lyricOrder",
-        ["original", "translation", "romanization"],
+        ["original", "romanization", "translation"],
     );
 
     const effectiveLyricOrder = useMemo(

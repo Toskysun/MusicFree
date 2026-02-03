@@ -2,11 +2,14 @@ import useColors from "@/hooks/useColors";
 import useOrientation from "@/hooks/useOrientation";
 import rpx, { vh } from "@/utils/rpx";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Config from "@/core/appConfig";
 import {
     BackHandler,
     DeviceEventEmitter,
-    KeyboardAvoidingView,
+    Dimensions,
+    Keyboard,
     NativeEventSubscription,
+    Platform,
     Pressable,
     StyleSheet,
 } from "react-native";
@@ -40,13 +43,15 @@ interface IPanelBaseProps {
 }
 
 export default function (props: IPanelBaseProps) {
-    const {
+    const { 
         height = vh(60),
         renderBody,
         keyboardAvoidBehavior,
         positionMethod = "bottom",
     } = props;
+    const keyboardAvoidMode = Config.getConfig("basic.keyboardAvoidMode") ?? "auto";
     const snapPoint = useSharedValue(0);
+    const keyboardHeight = useSharedValue(0);
 
     const colors = useColors();
     const [loading, setLoading] = useState(true); // 是否处于弹出状态
@@ -93,6 +98,38 @@ export default function (props: IPanelBaseProps) {
             },
         );
 
+        // 监听键盘事件
+        const keyboardShowEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+        const keyboardHideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+        const keyboardShowListener = Keyboard.addListener(keyboardShowEvent, (e) => {
+            if (keyboardAvoidBehavior !== "none") {
+                if (keyboardAvoidMode === "off") {
+                    keyboardHeight.value = withTiming(0, {
+                        duration: Platform.OS === "ios" ? 250 : 150,
+                    });
+                    return;
+                }
+                const windowHeight = Dimensions.get("window").height;
+                const keyboardTopY = typeof e.endCoordinates.screenY === "number"
+                    ? e.endCoordinates.screenY
+                    : windowHeight - e.endCoordinates.height;
+                const effectiveKeyboardHeight = Math.max(0, windowHeight - keyboardTopY);
+                const targetHeight = keyboardAvoidMode === "manual"
+                    ? e.endCoordinates.height
+                    : Math.min(e.endCoordinates.height, effectiveKeyboardHeight);
+                keyboardHeight.value = withTiming(targetHeight, {
+                    duration: Platform.OS === "ios" ? 250 : 150,
+                });
+            }
+        });
+
+        const keyboardHideListener = Keyboard.addListener(keyboardHideEvent, () => {
+            keyboardHeight.value = withTiming(0, {
+                duration: Platform.OS === "ios" ? 250 : 150,
+            });
+        });
+
         return () => {
             if (timerRef.current) {
                 clearTimeout(timerRef.current);
@@ -103,6 +140,8 @@ export default function (props: IPanelBaseProps) {
                 backHandlerRef.current = undefined;
             }
             listenerSubscription.remove();
+            keyboardShowListener.remove();
+            keyboardHideListener.remove();
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -114,15 +153,14 @@ export default function (props: IPanelBaseProps) {
     });
 
     const panelAnimated = useAnimatedStyle(() => {
+        const baseTransform = orientation === "vertical"
+            ? { translateY: (1 - snapPoint.value) * useAnimatedBase }
+            : { translateX: (1 - snapPoint.value) * useAnimatedBase };
+
         return {
             transform: [
-                orientation === "vertical"
-                    ? {
-                        translateY: (1 - snapPoint.value) * useAnimatedBase,
-                    }
-                    : {
-                        translateX: (1 - snapPoint.value) * useAnimatedBase,
-                    },
+                baseTransform,
+                { translateY: -keyboardHeight.value },
             ],
         };
     }, [orientation]);
@@ -166,7 +204,7 @@ export default function (props: IPanelBaseProps) {
                     ...style.bottomPosition,
                 } : {
                     top: positionMethod === "top" ? (NativeUtils.getWindowDimensions().height + safeAreaInsets.top) - height - safeAreaInsets.bottom : undefined,
-                     
+
                     bottom: positionMethod === "bottom" ? 0 : undefined,
                     height: height,
                 },
@@ -190,15 +228,7 @@ export default function (props: IPanelBaseProps) {
                     style={[style.maskWrapper, style.mask, maskAnimated]}
                 />
             </Pressable>
-            {keyboardAvoidBehavior === "none" ? (
-                panelBody
-            ) : (
-                <KeyboardAvoidingView
-                    style={style.kbContainer}
-                    behavior={keyboardAvoidBehavior || "position"}>
-                    {panelBody}
-                </KeyboardAvoidingView>
-            )}
+            {panelBody}
         </>
     );
 }
@@ -231,8 +261,5 @@ const style = StyleSheet.create({
     },
     bottomPositionDynamic: {
         bottom: 0,
-    },
-    kbContainer: {
-        zIndex: 15010,
     },
 });

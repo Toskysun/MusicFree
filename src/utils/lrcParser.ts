@@ -188,7 +188,7 @@ export function formatLyricsByTimestamp(
     }
 ): string {
     const { enableWordByWord = false } = options || {};
-    const order = lyricOrder || ["original", "translation", "romanization"];
+    const order = lyricOrder || ["original", "romanization", "translation"];
 
     // Parse all lyrics using LyricParser
     const parser = new LyricParser(rawLrc, {

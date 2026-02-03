@@ -4,7 +4,7 @@ import rpx, { vmax } from "@/utils/rpx";
 import { fontSizeConst } from "@/constants/uiConst";
 import useColors from "@/hooks/useColors";
 import ThemeText from "@/components/base/themeText";
-import { ScrollView, TextInput } from "react-native-gesture-handler";
+import { TextInput } from "react-native-gesture-handler";
 import PanelBase from "../base/panelBase";
 import { hidePanel } from "../usePanel";
 import PanelHeader from "../base/panelHeader";
@@ -138,7 +138,7 @@ export default function PlayById() {
 
                     {allPlugins.length ? (
                         <>
-                            {/* Plugin selection - horizontal scroll */}
+                            {/* Plugin selection - wrap layout, max 4 per row */}
                             <View style={styles.pluginSection}>
                                 <ThemeText
                                     fontSize="subTitle"
@@ -146,11 +146,7 @@ export default function PlayById() {
                                     style={styles.sectionLabel}>
                                     {t("panel.playById.selectPlugin")}
                                 </ThemeText>
-                                <ScrollView
-                                    horizontal
-                                    showsHorizontalScrollIndicator={false}
-                                    style={styles.pluginScroll}
-                                    contentContainerStyle={styles.pluginScrollContent}>
+                                <View style={styles.pluginGrid}>
                                     {allPlugins.map(plugin => {
                                         const isSelected = selectedPlugin?.hash === plugin.hash;
                                         return (
@@ -170,6 +166,7 @@ export default function PlayById() {
                                                 onPress={() => setSelectedPlugin(plugin)}>
                                                 <ThemeText
                                                     fontSize="subTitle"
+                                                    numberOfLines={1}
                                                     style={{
                                                         color: isSelected
                                                             ? "#fff"
@@ -180,7 +177,7 @@ export default function PlayById() {
                                             </TouchableOpacity>
                                         );
                                     })}
-                                </ScrollView>
+                                </View>
                             </View>
 
                             {/* ID input section */}
@@ -188,7 +185,6 @@ export default function PlayById() {
                                 <TextInput
                                     value={musicId}
                                     accessible
-                                    autoFocus
                                     accessibilityLabel={t("panel.playById.inputLabel")}
                                     accessibilityHint={t("panel.playById.placeholder")}
                                     onChangeText={setMusicId}
@@ -238,18 +234,18 @@ const styles = StyleSheet.create({
     sectionLabel: {
         marginBottom: rpx(12),
     },
-    pluginScroll: {
-        maxHeight: rpx(80),
-    },
-    pluginScrollContent: {
-        paddingRight: rpx(24),
+    pluginGrid: {
+        flexDirection: "row",
+        flexWrap: "wrap",
+        gap: rpx(12),
     },
     pluginChip: {
-        paddingHorizontal: rpx(24),
+        width: "23%",
         paddingVertical: rpx(12),
         borderRadius: rpx(20),
-        marginRight: rpx(16),
         borderWidth: 1,
+        alignItems: "center",
+        justifyContent: "center",
     },
     inputSection: {
         marginTop: rpx(24),

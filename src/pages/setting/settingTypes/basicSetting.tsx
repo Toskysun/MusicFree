@@ -136,6 +136,7 @@ export default function BasicSetting() {
     const notCheckPluginVersion = useAppConfig("basic.notCheckPluginVersion");
     const lazyLoadPlugin = useAppConfig("basic.lazyLoadPlugin");
     const associateLyricType = useAppConfig("basic.associateLyricType");
+    const keyboardAvoidMode = useAppConfig("basic.keyboardAvoidMode");
     const showExitOnNotification = useAppConfig("basic.showExitOnNotification");
     const musicOrderInLocalSheet = useAppConfig("basic.musicOrderInLocalSheet");
     const tryChangeSourceWhenPlayFail = useAppConfig("basic.tryChangeSourceWhenPlayFail");
@@ -199,6 +200,17 @@ export default function BasicSetting() {
                     {
                         input: t("basicSettings.associateLyricType.input"),
                         search: t("basicSettings.associateLyricType.search"),
+                    },
+                ),
+                createRadio(
+                    t("basicSettings.keyboardAvoidMode"),
+                    "basic.keyboardAvoidMode",
+                    ["auto", "manual", "off"],
+                    keyboardAvoidMode ?? "auto",
+                    {
+                        auto: t("basicSettings.keyboardAvoidMode.auto"),
+                        manual: t("basicSettings.keyboardAvoidMode.manual"),
+                        off: t("basicSettings.keyboardAvoidMode.off"),
                     },
                 ),
                 createSwitch(

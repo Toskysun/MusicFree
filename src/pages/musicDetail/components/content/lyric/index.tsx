@@ -63,7 +63,7 @@ export default function Lyric(props: IProps) {
     );
     const lyricOrder = PersistStatus.useValue(
         "lyric.lyricOrder",
-        ["original", "translation", "romanization"],
+        ["original", "romanization", "translation"],
     );
     const fontSizeKey = useAppConfig("lyric.detailFontSize") ?? 1;
     devLog("Lyric detail page font size:", fontSizeKey);

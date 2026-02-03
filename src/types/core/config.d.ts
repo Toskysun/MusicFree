@@ -31,6 +31,7 @@ export interface IAppConfigProperties {
     "basic.notCheckPluginVersion": boolean;
     "basic.lazyLoadPlugin": boolean;
     "basic.associateLyricType": "input" | "search";
+    "basic.keyboardAvoidMode": "auto" | "manual" | "off";
     "basic.showExitOnNotification": boolean;
     "basic.musicOrderInLocalSheet": SortType;
     "basic.tryChangeSourceWhenPlayFail": boolean;
