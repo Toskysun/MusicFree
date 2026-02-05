@@ -206,7 +206,7 @@ export default function PlayById() {
                                         fontColor="textSecondary">
                                         {t("panel.playById.hint")}
                                     </ThemeText>
-                                    {selectedPlugin?.name === "QQ音乐" && (
+                                    {(selectedPlugin?.name === "QQ音乐" || selectedPlugin?.name?.startsWith("QQ音乐")) && (
                                         <ThemeText
                                             style={styles.hintLine}
                                             fontSize="description"

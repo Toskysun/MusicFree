@@ -84,19 +84,21 @@ https://musicfree-plugins.netlify.app
 
 ### Quality Keys (IQualityKey)
 
-This version supports the following **9 quality levels**:
+This version supports the following **11 quality levels**:
 
 | Quality Key | Description | Bitrate/Format |
 |------------|-------------|----------------|
+| `mgg` | Low Quality | MGG |
 | `128k` | Standard Quality | 128 kbps |
 | `192k` | Medium Quality | 192 kbps |
 | `320k` | High Quality | 320 kbps |
 | `flac` | Lossless Quality | FLAC |
 | `flac24bit` | Hi-Res Lossless | FLAC 24-bit |
 | `hires` | Hi-Res Quality | Hi-Res |
-| `atmos` | Dolby Atmos | Dolby Atmos |
-| `atmos_plus` | Dolby Atmos 2.0 | Dolby Atmos+ |
-| `master` | Master Quality | Master |
+| `dolby` | Dolby Atmos | Dolby Atmos |
+| `atmos` | Premium Quality | Atmos 2.0 |
+| `atmos_plus` | Premium Spatial | Atmos+ 2.0 |
+| `master` | Premium Master | Master 3.0 |
 
 ### Legacy Plugin Compatibility
 

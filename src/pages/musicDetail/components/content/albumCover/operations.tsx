@@ -20,12 +20,14 @@ import i18n from "@/core/i18n";
 
 // Quality abbreviation mapping
 const qualityAbbr: Record<IMusic.IQualityKey, string> = {
+    "mgg": "MG",
     "128k": "LQ",
     "192k": "MQ",
     "320k": "HQ",
     "flac": "SQ",
     "flac24bit": "HR",
     "hires": "HR",
+    "dolby": "DB",
     "atmos": "AT",
     "atmos_plus": "A+",
     "master": "MS",

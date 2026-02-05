@@ -475,12 +475,14 @@
     "repeatMode.SINGLE": "單曲循環",
     
     // 音質翻譯
+    "quality.mgg": "低音質 MGG",
     "quality.128k": "普通音質 128K",
     "quality.192k": "中等音質 192K",
     "quality.320k": "高清音質 320K",
     "quality.flac": "高清音質 FLAC",
     "quality.flac24bit": "無損音質 FLAC Hires",
     "quality.hires": "無損音質 Hires",
+    "quality.dolby": "無損音質 Dolby",
     "quality.atmos": "無損音質 Atmos",
     "quality.atmos_plus": "無損音質 Atmos 2.0",
     "quality.master": "無損音質 Master",

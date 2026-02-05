@@ -588,28 +588,156 @@ class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactCo
     }
 
     /**
-     * 为MP4/M4A文件设置封面
+     * 为MP4/M4A文件设置封面 - 暂不支持，jaudiotagger对MP4支持有问题
      */
     private fun setCoverForMp4(tag: org.jaudiotagger.tag.Tag, coverBytes: ByteArray, mimeType: String): Boolean {
-        return try {
-            // MP4使用不同的封面字段
-            tag.setField(FieldKey.COVER_ART, java.util.Base64.getEncoder().encodeToString(coverBytes))
-            android.util.Log.i("Mp3UtilModule", "Successfully set MP4 cover using base64 method")
-            true
-        } catch (e: Exception) {
-            android.util.Log.e("Mp3UtilModule", "Failed to set MP4 cover: ${e.message}", e)
-            false
-        }
+        android.util.Log.w("Mp3UtilModule", "MP4/M4A cover writing is not supported")
+        return false
     }
 
     /**
-     * 为OGG文件设置封面
+     * 为OGG文件设置封面 (Vorbis Comment使用METADATA_BLOCK_PICTURE格式)
+     * 参考: https://xiph.org/flac/format.html#metadata_block_picture
      */
     private fun setCoverForOgg(tag: org.jaudiotagger.tag.Tag, coverBytes: ByteArray, mimeType: String): Boolean {
         return try {
-            tag.setField(FieldKey.COVER_ART, java.util.Base64.getEncoder().encodeToString(coverBytes))
-            android.util.Log.i("Mp3UtilModule", "Successfully set OGG cover using base64 method")
-            true
+            when (tag) {
+                is org.jaudiotagger.tag.vorbiscomment.VorbisCommentTag -> {
+                    android.util.Log.i("Mp3UtilModule", "🎵[OGG封面] 开始设置 - 图像类型: $mimeType, 大小: ${coverBytes.size} bytes")
+
+                    // 获取图像尺寸
+                    val bitmapOptions = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    BitmapFactory.decodeByteArray(coverBytes, 0, coverBytes.size, bitmapOptions)
+                    val imageWidth = if (bitmapOptions.outWidth > 0) bitmapOptions.outWidth else 0
+                    val imageHeight = if (bitmapOptions.outHeight > 0) bitmapOptions.outHeight else 0
+                    val colourDepth = if (mimeType == "image/png") 32 else 24
+
+                    android.util.Log.i("Mp3UtilModule", "🎵[OGG封面] 图像信息 - 宽度: $imageWidth, 高度: $imageHeight, 颜色深度: $colourDepth")
+
+                    // 方法1: 使用jaudiotagger的MetadataBlockDataPicture (与FLAC相同格式)
+                    try {
+                        android.util.Log.i("Mp3UtilModule", "🎵[OGG封面] 方法1: 使用MetadataBlockDataPicture")
+
+                        val pictureBlock = org.jaudiotagger.audio.flac.metadatablock.MetadataBlockDataPicture(
+                            coverBytes,
+                            coverBytes.size,
+                            mimeType,
+                            "",
+                            imageWidth,
+                            imageHeight,
+                            colourDepth,
+                            0
+                        )
+
+                        // 设置图片类型为Front Cover
+                        try {
+                            val pictureTypeField = pictureBlock.javaClass.getDeclaredField("pictureType")
+                            pictureTypeField.isAccessible = true
+                            pictureTypeField.set(pictureBlock, 3)
+                        } catch (e: Exception) {
+                            android.util.Log.w("Mp3UtilModule", "🎵[OGG封面] 无法设置pictureType: ${e.message}")
+                        }
+
+                        // 删除现有封面
+                        tag.deleteArtworkField()
+
+                        // 直接添加MetadataBlockDataPicture作为字段
+                        tag.addField(pictureBlock)
+                        android.util.Log.i("Mp3UtilModule", "🎵[OGG封面] ✅ 方法1成功!")
+                        return true
+                    } catch (e: Exception) {
+                        android.util.Log.w("Mp3UtilModule", "🎵[OGG封面] ❌ 方法1失败: ${e.javaClass.simpleName}: ${e.message}")
+                    }
+
+                    // 方法2: 手动构建METADATA_BLOCK_PICTURE二进制并使用VorbisCommentTagField
+                    try {
+                        android.util.Log.i("Mp3UtilModule", "🎵[OGG封面] 方法2: 手动构建二进制 + VorbisCommentTagField")
+
+                        val baos = ByteArrayOutputStream()
+                        val dos = java.io.DataOutputStream(baos)
+
+                        // Picture type (4 bytes, big-endian) - 3 = Front cover
+                        dos.writeInt(3)
+                        // MIME type length (4 bytes)
+                        val mimeBytes = mimeType.toByteArray(Charsets.US_ASCII)
+                        dos.writeInt(mimeBytes.size)
+                        // MIME type
+                        dos.write(mimeBytes)
+                        // Description length (4 bytes)
+                        dos.writeInt(0)
+                        // Width (4 bytes)
+                        dos.writeInt(imageWidth)
+                        // Height (4 bytes)
+                        dos.writeInt(imageHeight)
+                        // Color depth (4 bytes)
+                        dos.writeInt(colourDepth)
+                        // Number of colors for indexed images (4 bytes)
+                        dos.writeInt(0)
+                        // Picture data length (4 bytes)
+                        dos.writeInt(coverBytes.size)
+                        // Picture data
+                        dos.write(coverBytes)
+                        dos.flush()
+
+                        val pictureBytes = baos.toByteArray()
+                        val base64Picture = java.util.Base64.getEncoder().encodeToString(pictureBytes)
+
+                        android.util.Log.i("Mp3UtilModule", "🎵[OGG封面] 二进制大小: ${pictureBytes.size}, Base64长度: ${base64Picture.length}")
+
+                        // 删除现有封面
+                        tag.deleteArtworkField()
+
+                        // 直接创建VorbisCommentTagField
+                        val field = org.jaudiotagger.tag.vorbiscomment.VorbisCommentTagField(
+                            "METADATA_BLOCK_PICTURE",
+                            base64Picture
+                        )
+                        tag.addField(field)
+
+                        android.util.Log.i("Mp3UtilModule", "🎵[OGG封面] ✅ 方法2成功!")
+                        return true
+                    } catch (e: Exception) {
+                        android.util.Log.w("Mp3UtilModule", "🎵[OGG封面] ❌ 方法2失败: ${e.javaClass.simpleName}: ${e.message}")
+                    }
+
+                    // 方法3: 使用createField
+                    try {
+                        android.util.Log.i("Mp3UtilModule", "🎵[OGG封面] 方法3: 使用createField")
+
+                        val baos = ByteArrayOutputStream()
+                        val dos = java.io.DataOutputStream(baos)
+                        dos.writeInt(3)
+                        val mimeBytes = mimeType.toByteArray(Charsets.US_ASCII)
+                        dos.writeInt(mimeBytes.size)
+                        dos.write(mimeBytes)
+                        dos.writeInt(0)
+                        dos.writeInt(imageWidth)
+                        dos.writeInt(imageHeight)
+                        dos.writeInt(colourDepth)
+                        dos.writeInt(0)
+                        dos.writeInt(coverBytes.size)
+                        dos.write(coverBytes)
+                        dos.flush()
+
+                        val base64Picture = java.util.Base64.getEncoder().encodeToString(baos.toByteArray())
+
+                        tag.deleteArtworkField()
+                        tag.setField(tag.createField(org.jaudiotagger.tag.vorbiscomment.VorbisCommentFieldKey.METADATA_BLOCK_PICTURE, base64Picture))
+
+                        android.util.Log.i("Mp3UtilModule", "🎵[OGG封面] ✅ 方法3成功!")
+                        return true
+                    } catch (e: Exception) {
+                        android.util.Log.w("Mp3UtilModule", "🎵[OGG封面] ❌ 方法3失败: ${e.javaClass.simpleName}: ${e.message}")
+                    }
+
+                    android.util.Log.e("Mp3UtilModule", "🎵[OGG封面] 所有方法都失败了")
+                    false
+                }
+                else -> {
+                    android.util.Log.w("Mp3UtilModule", "OGG tag type not supported: ${tag.javaClass.simpleName}")
+                    false
+                }
+            }
         } catch (e: Exception) {
             android.util.Log.e("Mp3UtilModule", "Failed to set OGG cover: ${e.message}", e)
             false
@@ -691,11 +819,14 @@ class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactCo
             }
             
             // 如果有封面路径，使用完全无ImageIO依赖的方法设置封面
+            android.util.Log.i("Mp3UtilModule", "🖼️[封面] 检查封面路径: coverPath=$coverPath, isNullOrEmpty=${coverPath.isNullOrEmpty()}")
             if (!coverPath.isNullOrEmpty()) {
                 try {
+                    android.util.Log.i("Mp3UtilModule", "🖼️[封面] 开始获取封面数据...")
                     val coverBytes = when {
                         // 本地文件
                         coverPath.startsWith("/") || coverPath.startsWith("file://") -> {
+                            android.util.Log.i("Mp3UtilModule", "🖼️[封面] 从本地文件读取")
                             val coverFile = File(if (coverPath.startsWith("file://")) {
                                 Uri.parse(coverPath).path ?: coverPath
                             } else {
@@ -707,29 +838,38 @@ class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactCo
                         }
                         // 网络URL - 使用Android原生网络请求
                         coverPath.startsWith("http://") || coverPath.startsWith("https://") -> {
+                            android.util.Log.i("Mp3UtilModule", "🖼️[封面] 从网络下载: $coverPath")
                             downloadImageBytes(coverPath)
                         }
-                        else -> null
+                        else -> {
+                            android.util.Log.w("Mp3UtilModule", "🖼️[封面] 未知的封面路径格式: $coverPath")
+                            null
+                        }
                     }
-                    
+
+                    android.util.Log.i("Mp3UtilModule", "🖼️[封面] 获取结果: ${if (coverBytes != null) "${coverBytes.size} bytes" else "null"}")
+
                     if (coverBytes != null && coverBytes.isNotEmpty()) {
                         // 删除现有封面
                         tag.deleteArtworkField()
-                        
+                        android.util.Log.i("Mp3UtilModule", "🖼️[封面] 已删除现有封面，开始设置新封面，文件扩展名: ${file.extension.lowercase()}")
+
                         // 使用完全无ImageIO依赖的封面设置方法
                         val success = setCoverArtImageIOFree(tag, coverBytes, file.extension.lowercase())
                         if (success) {
-                            android.util.Log.i("Mp3UtilModule", "Successfully set cover art for ${file.name}")
+                            android.util.Log.i("Mp3UtilModule", "🖼️[封面] ✅ 封面设置成功: ${file.name}")
                         } else {
-                            android.util.Log.w("Mp3UtilModule", "Failed to set cover art for ${file.name}, but continuing with other tags")
+                            android.util.Log.w("Mp3UtilModule", "🖼️[封面] ❌ 封面设置失败: ${file.name}")
                         }
                     } else {
-                        android.util.Log.w("Mp3UtilModule", "Failed to obtain cover bytes from: $coverPath")
+                        android.util.Log.w("Mp3UtilModule", "🖼️[封面] ❌ 无法获取封面数据: $coverPath")
                     }
                 } catch (e: Exception) {
                     // 封面设置失败不影响其他标签，但记录错误
-                    android.util.Log.w("Mp3UtilModule", "Failed to download/process cover: ${e.message}", e)
+                    android.util.Log.e("Mp3UtilModule", "🖼️[封面] 💥 异常: ${e.javaClass.simpleName}: ${e.message}", e)
                 }
+            } else {
+                android.util.Log.i("Mp3UtilModule", "🖼️[封面] 无封面路径，跳过封面设置")
             }
             
             audioFile.commit()
@@ -1617,7 +1757,17 @@ class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactCo
             val headers: Map<String, String> = emptyMap(),
             @Volatile var totalLength: Long? = null,
             @Volatile var supportsRange: Boolean? = null,
-        )
+        ) {
+            // 根据源URL判断MIME类型
+            fun getMimeType(): String {
+                val lowerSrc = src.split('?')[0].lowercase()
+                return when {
+                    lowerSrc.endsWith(".mgg") -> "audio/ogg"
+                    lowerSrc.endsWith(".mmp4") -> "audio/mp4"
+                    else -> "audio/flac"  // mflac 默认
+                }
+            }
+        }
 
         private class DecryptingInputStream(
             private val upstream: InputStream,
@@ -1650,7 +1800,7 @@ class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactCo
                         val t = parseToken(session.uri)
                         val s = proxy.sessions[t] ?: return newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "unknown token")
                         val total = proxy.fetchTotalLength(s) ?: -1L
-                        val resp = newFixedLengthResponse(Response.Status.OK, "audio/flac", "")
+                        val resp = newFixedLengthResponse(Response.Status.OK, s.getMimeType(), "")
                         resp.addHeader("Accept-Ranges", "bytes")
                         if (total > 0) resp.addHeader("Content-Length", total.toString())
                         return resp
@@ -1703,12 +1853,20 @@ class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactCo
                     }
 
                     val length = contentLenHdr?.toLongOrNull() ?: -1L
+                    val totalLen = s.totalLength ?: length  // 优先使用 totalLength
                     val status = if ((code == 206) || (attemptRange && effectiveStart > 0L)) Response.Status.PARTIAL_CONTENT else Response.Status.OK
-                    val response = if (length > 0 && code != 200) newFixedLengthResponse(status, "audio/flac", baseStream, length) else newChunkedResponse(status, "audio/flac", baseStream)
+                    val mimeType = s.getMimeType()
+                    // 使用 totalLen 确保响应有正确的长度，让播放器能 seek 到文件末尾获取 OGG duration
+                    val responseLen = if (totalLen > 0) totalLen else length
+                    val response = if (responseLen > 0) newFixedLengthResponse(status, mimeType, baseStream, responseLen) else newChunkedResponse(status, mimeType, baseStream)
                     response.addHeader("Accept-Ranges", "bytes")
-                    if (start != null && total != null && length > 0) {
-                        val endPos = if (end != null) end else start + length - 1
-                        response.addHeader("Content-Range", "bytes ${start}-${endPos}/${total}")
+                    // 始终添加 Content-Length 头，帮助播放器获取文件大小
+                    if (totalLen > 0) {
+                        response.addHeader("Content-Length", totalLen.toString())
+                    }
+                    if (start != null && totalLen > 0 && responseLen > 0) {
+                        val endPos = if (end != null) end else start + responseLen - 1
+                        response.addHeader("Content-Range", "bytes ${start}-${endPos}/${totalLen}")
                     }
                     return response
                 } catch (e: Exception) {

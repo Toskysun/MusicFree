@@ -7,12 +7,14 @@ import { devLog } from "@/utils/log";
 type LegacyQualityKey = "low" | "standard" | "high" | "super";
 
 export const qualityKeys: IMusic.IQualityKey[] = [
+    "mgg",
     "128k",
     "192k",
     "320k",
     "flac",
     "flac24bit",
     "hires",
+    "dolby",
     "atmos",
     "atmos_plus",
     "master",
@@ -59,17 +61,19 @@ export function normalizePluginQualities(qualities?: any): IMusic.IQuality | und
 
 // 音质尝试顺序
 export const TRY_QUALITYS_LIST: IMusic.IQualityKey[] = [
-    "master", "atmos_plus", "atmos", "hires", "flac24bit", "flac", "320k", "192k", "128k",
+    "master", "atmos_plus", "atmos", "dolby", "hires", "flac24bit", "flac", "320k", "192k", "128k", "mgg",
 ] as const;
 
 // 保留原有硬编码翻译作为后备
 export const qualityText = {
+    "mgg": "低音质 MGG",
     "128k": "普通音质 128K",
     "192k": "中等音质 192K",
     "320k": "高清音质 320K",
     flac: "高清音质 FLAC",
     flac24bit: "无损音质 FLAC Hires",
     hires: "无损音质 Hires",
+    dolby: "无损音质 Dolby",
     atmos: "无损音质 Atmos",
     atmos_plus: "无损音质 Atmos 2.0",
     master: "无损音质 Master",
@@ -80,12 +84,14 @@ export function getQualityText(i18nData: ILanguageData, customTranslations?: Rec
     // 如果有自定义翻译，优先使用自定义翻译
     if (customTranslations) {
         return {
+            "mgg": customTranslations["mgg"] || i18nData["quality.mgg"] || qualityText["mgg"],
             "128k": customTranslations["128k"] || i18nData["quality.128k"] || qualityText["128k"],
             "192k": customTranslations["192k"] || i18nData["quality.192k"] || qualityText["192k"],
             "320k": customTranslations["320k"] || i18nData["quality.320k"] || qualityText["320k"],
             flac: customTranslations.flac || i18nData["quality.flac"] || qualityText.flac,
             flac24bit: customTranslations.flac24bit || i18nData["quality.flac24bit"] || qualityText.flac24bit,
             hires: customTranslations.hires || i18nData["quality.hires"] || qualityText.hires,
+            dolby: customTranslations.dolby || i18nData["quality.dolby"] || qualityText.dolby,
             atmos: customTranslations.atmos || i18nData["quality.atmos"] || qualityText.atmos,
             atmos_plus: customTranslations.atmos_plus || i18nData["quality.atmos_plus"] || qualityText.atmos_plus,
             master: customTranslations.master || i18nData["quality.master"] || qualityText.master,
@@ -94,12 +100,14 @@ export function getQualityText(i18nData: ILanguageData, customTranslations?: Rec
 
     // 没有自定义翻译时，使用i18n数据
     return {
+        "mgg": i18nData["quality.mgg"] || qualityText["mgg"],
         "128k": i18nData["quality.128k"] || qualityText["128k"],
         "192k": i18nData["quality.192k"] || qualityText["192k"],
         "320k": i18nData["quality.320k"] || qualityText["320k"],
         flac: i18nData["quality.flac"] || qualityText.flac,
         flac24bit: i18nData["quality.flac24bit"] || qualityText.flac24bit,
         hires: i18nData["quality.hires"] || qualityText.hires,
+        dolby: i18nData["quality.dolby"] || qualityText.dolby,
         atmos: i18nData["quality.atmos"] || qualityText.atmos,
         atmos_plus: i18nData["quality.atmos_plus"] || qualityText.atmos_plus,
         master: i18nData["quality.master"] || qualityText.master,
@@ -178,7 +186,7 @@ const qualityTextToKeyMap: Record<string, IMusic.IQualityKey> = {
     "standard": "192k",
     "high": "320k",
     "super": "flac",
-    "低音质": "128k",
+    "低音质": "mgg",
     "标准音质": "192k",
     "高音质": "320k",
     "超高音质": "flac",
@@ -187,6 +195,8 @@ const qualityTextToKeyMap: Record<string, IMusic.IQualityKey> = {
     "臻品母带": "master",
     "臻品全景声2.0": "atmos_plus",
     "臻品全景声": "atmos",
+    "臻品音质2.0": "atmos",
+    "杜比全景声": "dolby",
     "Hires无损24-Bit": "hires",
     "FLAC": "flac",
     "320K": "320k",
@@ -194,12 +204,14 @@ const qualityTextToKeyMap: Record<string, IMusic.IQualityKey> = {
     "128K": "128k",
 
     // QQ音乐音质映射和标准键直接映射
+    "mgg": "mgg",
     "flac24bit": "flac24bit",
     "flac": "flac",
     "320k": "320k",
     "192k": "192k",
     "128k": "128k",
     "master": "master",
+    "dolby": "dolby",
     "atmos": "atmos",
     "atmos_plus": "atmos_plus",
     "hires": "hires",

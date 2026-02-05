@@ -1,4 +1,4 @@
-// Utilities for handling Kuwo/QQ .mflac (QMCv2) ekey quirks
+// Utilities for handling Kuwo/QQ .mflac/.mgg/.mmp4 (QMCv2) ekey quirks
 
 export function normalizeEkey(ekey?: string): string {
   const s = String(ekey ?? "").trim();
@@ -10,7 +10,7 @@ export function isMflacUrl(url?: string): boolean {
   if (!url) return false;
   try {
     const u = url.split('?')[0].toLowerCase();
-    return u.endsWith('.mflac') || u.endsWith('.mgg') || u.endsWith('.mflac0');
+    return u.endsWith('.mflac') || u.endsWith('.mgg') || u.endsWith('.mmp4') || u.endsWith('.mflac0');
   } catch {
     return false;
   }

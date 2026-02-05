@@ -479,12 +479,14 @@
     "repeatMode.SINGLE": "Repeat Single",
     
     // Quality translations
+    "quality.mgg": "Low Quality MGG",
     "quality.128k": "Standard Quality 128K",
     "quality.192k": "Medium Quality 192K",
-    "quality.320k": "High Quality 320K", 
+    "quality.320k": "High Quality 320K",
     "quality.flac": "High Quality FLAC",
     "quality.flac24bit": "Lossless Quality FLAC Hires",
     "quality.hires": "Lossless Quality Hires",
+    "quality.dolby": "Lossless Quality Dolby",
     "quality.atmos": "Lossless Quality Atmos",
     "quality.atmos_plus": "Lossless Quality Atmos 2.0",
     "quality.master": "Lossless Quality Master",

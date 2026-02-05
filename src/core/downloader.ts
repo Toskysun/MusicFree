@@ -631,6 +631,18 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
             if (!url) {
                 throw new Error(DownloadFailReason.FailToFetchSource);
             }
+
+            // 检查是否是本地文件URL（已下载的歌曲）
+            if (url.startsWith('file://') || url.startsWith('/')) {
+                devLog('warn', '⚠️[下载器] 检测到本地文件URL，歌曲可能已下载', {
+                    url,
+                    title: musicItem.title
+                });
+                // 本地文件不需要下载，标记为已完成
+                this.markTaskAsCompleted(musicItem, url.replace('file://', ''));
+                setTimeout(() => this.downloadNextPendingTask(), 0);
+                return;
+            }
         } catch (e: any) {
             /** 无法下载，跳过 */
             errorLog("下载失败-无法获取下载链接", {
@@ -702,12 +714,22 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
         }
 
         // 下载逻辑 - 使用RNFetchBlob
-        // 根据音质类型确定文件扩展名
+        // 根据URL和音质类型确定文件扩展名
         let extension = "mp3"; // 默认扩展名
-        
-        // 根据音质类型设置正确的扩展名
-        if (taskQuality === "128k" || taskQuality === "320k") {
-            // 128k 和 320k 是 MP3 格式，尝试从URL推断扩展名，默认为mp3
+
+        // 首先检查URL是否是加密格式，根据加密格式确定解密后的扩展名
+        const urlLower = url.toLowerCase().split('?')[0];
+        if (urlLower.endsWith('.mgg')) {
+            // mgg 解密后是 ogg
+            extension = "ogg";
+        } else if (urlLower.endsWith('.mmp4')) {
+            // mmp4 解密后是 mp4
+            extension = "mp4";
+        } else if (urlLower.endsWith('.mflac')) {
+            // mflac 解密后是 flac
+            extension = "flac";
+        } else if (taskQuality === "128k" || taskQuality === "320k" || taskQuality === "192k" || taskQuality === "mgg") {
+            // 128k/192k/320k/mgg 是 MP3/OGG 格式，尝试从URL推断扩展名
             const urlExtension = this.getExtensionName(url);
             if (supportLocalMediaType.some(item => item === ("." + urlExtension))) {
                 extension = urlExtension;
@@ -715,7 +737,7 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
                 extension = "mp3";
             }
         } else {
-            // 其他所有音质（flac, hires, 等）都是 FLAC 格式
+            // 其他所有音质（flac, hires, dolby, atmos 等）默认是 FLAC 格式
             extension = "flac";
         }
         
@@ -727,9 +749,17 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
 
         // 真实下载地址
         const targetDownloadPath = this.getDownloadPath(`${nextTask.filename}.${extension}`);
-        // detect encrypted mflac and route to temp file for post-decrypt
+        // detect encrypted mflac/mgg/mmp4 and route to temp file for post-decrypt
         const { isMflacUrl, normalizeEkey } = require("@/utils/mflac");
         const willDownloadEncrypted = !!mflacEkey || isMflacUrl(url);
+
+        // 根据URL确定加密文件的临时扩展名
+        let encryptedExtension = "mflac";
+        if (urlLower.endsWith('.mgg')) {
+            encryptedExtension = "mgg";
+        } else if (urlLower.endsWith('.mmp4')) {
+            encryptedExtension = "mmp4";
+        }
 
         devLog('info', '📋[下载器] 下载路径规划', {
             targetPath: targetDownloadPath,
@@ -737,11 +767,12 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
             hasMflacEkey: !!mflacEkey,
             isMflacUrl: isMflacUrl(url),
             extension,
+            encryptedExtension,
             url: url?.substring(0, 100) + '...'
         });
 
         const tempEncryptedPath = willDownloadEncrypted
-            ? this.getDownloadPath(`${nextTask.filename}.mflac`)
+            ? this.getDownloadPath(`${nextTask.filename}.${encryptedExtension}`)
             : targetDownloadPath;
 
         // 检测下载位置是否存在
@@ -923,9 +954,11 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
             if (willDownloadEncrypted) {
                 try {
                     const cleaned = normalizeEkey(mflacEkey);
-                    devLog('info', '🔐[下载器] 开始解密 mflac 文件', {
+                    devLog('info', '🔐[下载器] 开始解密加密文件', {
                         input: tempEncryptedPath,
                         output: targetDownloadPath,
+                        encryptedExtension,
+                        targetExtension: extension,
                         hasEkey: !!cleaned,
                         ekeyLength: cleaned?.length
                     });
@@ -934,7 +967,7 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
                         (require('@/utils/fileUtils').removeFileScheme(targetDownloadPath)),
                         cleaned,
                     );
-                    devLog('info', '✅[下载器] mflac 解密成功', {
+                    devLog('info', '✅[下载器] 解密成功', {
                         output: targetDownloadPath,
                         title: musicItem.title
                     });

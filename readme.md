@@ -83,19 +83,21 @@ https://musicfree-plugins.netlify.app
 
 ### 音质键值 (IQualityKey)
 
-本版本支持以下 **9 种音质等级**：
+本版本支持以下 **11 种音质等级**：
 
 | 音质键值 | 说明 | 比特率/格式 |
 |---------|------|-----------|
+| `mgg` | 低音质 | MGG |
 | `128k` | 普通音质 | 128 kbps |
 | `192k` | 中等音质 | 192 kbps |
 | `320k` | 高清音质 | 320 kbps |
 | `flac` | 高清无损 | FLAC |
 | `flac24bit` | 高解析度无损 | FLAC 24-bit |
 | `hires` | 高解析度 | Hi-Res |
-| `atmos` | 杜比全景声 | Dolby Atmos |
-| `atmos_plus` | 杜比全景声 2.0 | Dolby Atmos+ |
-| `master` | 母带音质 | Master |
+| `dolby` | 杜比全景声 | Dolby Atmos |
+| `atmos` | 臻品音质 | Atmos 2.0 |
+| `atmos_plus` | 臻品全景声 | Atmos+ 2.0 |
+| `master` | 臻品母带 | Master 3.0 |
 
 ### 原版插件兼容
 

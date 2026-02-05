@@ -5,7 +5,7 @@ declare namespace IMusic {
     }
 
     /** 音质 */
-    export type IQualityKey = "128k" | "192k" | "320k" | "flac" | "flac24bit" | "hires" | "atmos" | "atmos_plus" | "master";
+    export type IQualityKey = "mgg" | "128k" | "192k" | "320k" | "flac" | "flac24bit" | "hires" | "dolby" | "atmos" | "atmos_plus" | "master";
     export type IQuality = Record<
         IQualityKey,
         {
