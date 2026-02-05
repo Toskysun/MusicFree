@@ -1,5 +1,5 @@
 {
-  "version": "0.6.39",
+  "version": "0.6.40",
   "changeLog": [
     "【新年献礼】TSS祝大家2026新年快乐，马到成功！",
     "【交流】欢迎来Q群1064805856",
@@ -41,7 +41,7 @@
     "【优化】优化了软件启动速度 (需要在【侧边栏-基本设置-插件】中打开【启用插件懒加载】开关)"
   ],
   "download": [
-    "https://github.com/Toskysun/MusicFree/releases/download/v0.6.39/MusicFree-v0.6.39-arm64-v8a-release.apk",
-    "https://github.com/Toskysun/MusicFree/releases/download/v0.6.39/MusicFree-v0.6.39-universal-release.apk"
+    "https://github.com/Toskysun/MusicFree/releases/download/v0.6.40/MusicFree-v0.6.40-arm64-v8a-release.apk",
+    "https://github.com/Toskysun/MusicFree/releases/download/v0.6.40/MusicFree-v0.6.40-universal-release.apk"
   ]
 }
