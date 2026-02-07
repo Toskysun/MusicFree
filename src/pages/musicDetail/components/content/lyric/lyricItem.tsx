@@ -322,7 +322,7 @@ const KaraokeWordSplit = memo(({
     highlightColor,
     fontSize,
     isCurrentLine,
-    enableGlow,
+    enableFloat = true,
     isPseudo = false,
     noSpace = false,
     charFlatOffset,
@@ -334,7 +334,7 @@ const KaraokeWordSplit = memo(({
     highlightColor: string;
     fontSize: number;
     isCurrentLine: boolean;
-    enableGlow: boolean;
+    enableFloat?: boolean;
     isPseudo?: boolean;
     noSpace?: boolean;
     charFlatOffset: number;
@@ -352,7 +352,7 @@ const KaraokeWordSplit = memo(({
                 highlightColor={highlightColor}
                 fontSize={fontSize}
                 isCurrentLine={isCurrentLine}
-                enableGlow={enableGlow}
+                enableFloat={enableFloat}
                 isPseudo={isPseudo}
                 noSpace={noSpace}
                 charFlatIndex={charFlatOffset}
@@ -374,7 +374,7 @@ const KaraokeWordSplit = memo(({
                     highlightColor={highlightColor}
                     fontSize={fontSize}
                     isCurrentLine={isCurrentLine}
-                    enableGlow={enableGlow}
+                    enableFloat={enableFloat}
                     isPseudo={isPseudo}
                     noSpace={true}
                     charFlatIndex={charFlatOffset + i}
@@ -404,7 +404,7 @@ const KaraokeWord = memo(({
     highlightColor,
     fontSize,
     isCurrentLine,
-    enableGlow,
+    enableFloat = true,
     isPseudo = false,
     noSpace = false,
     charFlatIndex,
@@ -416,7 +416,7 @@ const KaraokeWord = memo(({
     highlightColor: string;
     fontSize: number;
     isCurrentLine: boolean;
-    enableGlow: boolean;
+    enableFloat?: boolean;
     isPseudo?: boolean;
     noSpace?: boolean;
     charFlatIndex: number;
@@ -468,7 +468,7 @@ const KaraokeWord = memo(({
     // wide asymmetric radius proceed to read activeCharProgress. Far chars exit early.
     const floatStyle = useAnimatedStyle(() => {
         'worklet';
-        if (isPseudo || !isCurrentLine) return {};
+        if (!enableFloat || isPseudo || !isCurrentLine) return {};
 
         const idx = activeCharIndex.value;
 
@@ -506,7 +506,7 @@ const KaraokeWord = memo(({
         return {
             transform: [{ translateY }, { scale }],
         };
-    }, [isPseudo, isCurrentLine, charFlatIndex, maxWaveTranslate]);
+    }, [enableFloat, isPseudo, isCurrentLine, charFlatIndex, maxWaveTranslate]);
 
     // Per-character color + opacity interpolation (replaces width-clip overlay)
     const charStyle = useAnimatedStyle(() => {
@@ -753,7 +753,7 @@ interface IWordByWordLyricProps {
     highlightColor: string;
     index?: number;
     onLayout?: (index: number, height: number) => void;
-    enableGlow: boolean;
+    enableFloat?: boolean;
     align?: LyricAlign;
     isCurrentLine?: boolean;
 }
@@ -770,7 +770,7 @@ function WordByWordLyricLine({
     highlightColor,
     index,
     onLayout,
-    enableGlow,
+    enableFloat = true,
     align = "center",
     isCurrentLine = true,
 }: IWordByWordLyricProps) {
@@ -855,7 +855,7 @@ function WordByWordLyricLine({
                     highlightColor={highlightColor}
                     fontSize={getLineFontSize(isFirst)}
                     isCurrentLine={isCurrentLine}
-                    enableGlow={enableGlow}
+                    enableFloat={enableFloat}
                     charFlatOffset={originalCharOffsets[wordIndex]}
                     activeCharIndex={originalActive.activeCharIndex}
                     activeCharProgress={originalActive.activeCharProgress}
@@ -875,7 +875,7 @@ function WordByWordLyricLine({
                     highlightColor={highlightColor}
                     fontSize={getLineFontSize(isFirst)}
                     isCurrentLine={isCurrentLine}
-                    enableGlow={enableGlow}
+                    enableFloat={enableFloat}
                     isPseudo={isRomanizationPseudo}
                     noSpace={true}
                     charFlatOffset={romanizationCharOffsets[wordIndex]}
@@ -899,7 +899,7 @@ function WordByWordLyricLine({
                             highlightColor={highlightColor}
                             fontSize={getLineFontSize(isFirst)}
                             isCurrentLine={isCurrentLine}
-                            enableGlow={enableGlow}
+                            enableFloat={enableFloat}
                             isPseudo={true}
                             charFlatOffset={translationCharOffsets[wordIndex]}
                             activeCharIndex={translationActive.activeCharIndex}
@@ -1216,7 +1216,7 @@ function _LyricItemComponent(props: ILyricItemComponentProps) {
 
     const colors = useColors();
     const actualFontSize = fontSize || fontSizeConst.content;
-    const enableGlow = useAppConfig("lyric.enableWordByWordGlow") ?? false;
+    const enableFloat = useAppConfig("lyric.enableWordByWordFloat") ?? true;
     const enableBreathingDots = useAppConfig("lyric.enableBreathingDots") ?? true;
 
     // Render word-by-word layout for ALL lines with word data (both playing and non-playing)
@@ -1252,7 +1252,7 @@ function _LyricItemComponent(props: ILyricItemComponentProps) {
                 highlightColor={colors.primary}
                 index={index}
                 onLayout={onLayout}
-                enableGlow={enableGlow}
+                enableFloat={enableFloat}
                 align={align}
                 isCurrentLine={true}
             />

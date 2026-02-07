@@ -895,7 +895,7 @@ function LyricSetting() {
     const enableAutoSearchLyric = useAppConfig("lyric.autoSearchLyric");
     const hideDesktopLyricWhenPaused = useAppConfig("lyric.hideDesktopLyricWhenPaused");
     const enableWordByWord = useAppConfig("lyric.enableWordByWord");
-    const enableWordByWordGlow = useAppConfig("lyric.enableWordByWordGlow");
+    const enableWordByWordFloat = useAppConfig("lyric.enableWordByWordFloat");
     const enableBreathingDots = useAppConfig("lyric.enableBreathingDots");
     const desktopShowTranslation = useAppConfig("lyric.desktopShowTranslation");
     const desktopShowRomanization = useAppConfig("lyric.desktopShowRomanization");
@@ -916,10 +916,10 @@ function LyricSetting() {
         enableWordByWord ?? true,
     );
 
-    const wordByWordGlow = createSwitch(
-        "逐字歌词光晕",
-        "lyric.enableWordByWordGlow",
-        enableWordByWordGlow ?? false,
+    const wordByWordFloat = createSwitch(
+        "逐字歌词浮动动画",
+        "lyric.enableWordByWordFloat",
+        enableWordByWordFloat ?? true,
     );
 
     const breathingDots = createSwitch(
@@ -1024,9 +1024,9 @@ function LyricSetting() {
             <ListItem
                 withHorizontalPadding
                 heightType="small"
-                onPress={wordByWordGlow.onPress}>
-                <ListItem.Content title={wordByWordGlow.title} />
-                {wordByWordGlow.right}
+                onPress={wordByWordFloat.onPress}>
+                <ListItem.Content title={wordByWordFloat.title} />
+                {wordByWordFloat.right}
             </ListItem>
             <ListItem
                 withHorizontalPadding
