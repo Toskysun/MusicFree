@@ -1,5 +1,5 @@
-import React, { memo, useState, useCallback, useEffect, useMemo } from "react";
-import { StyleSheet, Text, View, LayoutChangeEvent } from "react-native";
+import React, { memo, useEffect, useMemo } from "react";
+import { StyleSheet, Text, View } from "react-native";
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
@@ -7,6 +7,8 @@ import Animated, {
     withRepeat,
     useDerivedValue,
     Easing,
+    interpolate,
+    interpolateColor,
     type SharedValue,
 } from "react-native-reanimated";
 import rpx from "@/utils/rpx";
@@ -190,12 +192,22 @@ const SECONDARY_FONT_RATIO = 0.75;
 // Duration range for dynamic amplitude calculation (ms)
 const WAVE_DURATION_MIN = 100;
 const WAVE_DURATION_MAX = 800;
-// Max upward offset in em units — gentle but perceptible breathing
-const WAVE_MAX_TRANSLATE_EM = 0.06;
+// Max upward offset in em units — visible but not exaggerated
+const WAVE_MAX_TRANSLATE_EM = 0.14;
 
 // Wide asymmetric radii spread the motion across more chars, making it feel fluid rather than jumpy
 const WAVE_LEAD_RADIUS = 3;    // chars ahead: gentle anticipation
 const WAVE_TRAIL_RADIUS = 6;   // chars behind: long graceful settle
+
+// Active char micro-scale — subtle pop effect
+const ACTIVE_CHAR_SCALE = 1.06;
+// Scale wave radii (tighter than translate wave for focused effect)
+const SCALE_WAVE_LEAD = 2;
+const SCALE_WAVE_TRAIL = 3;
+
+// Color sweep gradient edge width (in character units).
+// Controls how many chars the color transition spans — larger = softer edge.
+const COLOR_SWEEP_EDGE = 2.5;
 
 // Normalize word space flags to prevent double spaces.
 // Handles two redundancy patterns in lyric data:
@@ -424,22 +436,33 @@ const KaraokeWord = memo(({
         return -fontSize * WAVE_MAX_TRANSLATE_EM * factor;
     }, [duration, fontSize, isPseudo]);
 
-    // Progress derived from line-level active state — INDEX COMPARISON, not time computation.
-    // Only reads activeCharProgress when this char IS the active one (1 char per frame).
+    // Smooth color sweep progress — instead of hard 0/1 per-char switching,
+    // chars near the active position get a gradient transition based on distance.
+    // This creates a smooth "light wave" sweeping across the line like the original width-clip,
+    // but rendered per-character with color interpolation.
     const animatedProgress = useDerivedValue(() => {
         'worklet';
         if (!isCurrentLine) return 0;
 
         const idx = activeCharIndex.value;
-        if (charFlatIndex < idx) return 1;  // completed
-        if (charFlatIndex > idx) return 0;  // pending
-        return activeCharProgress.value;     // active — only this one reads per frame
+        const progress = activeCharProgress.value;
+        const waveCenter = idx + progress;
+
+        // Distance from this char to the sweep front
+        const dist = charFlatIndex - waveCenter;
+
+        if (dist <= -COLOR_SWEEP_EDGE) return 1;   // fully completed (behind the edge)
+        if (dist >= 0) return 0;                     // fully pending (ahead of sweep)
+
+        // Within the gradient edge: smooth transition
+        // dist is in range [-COLOR_SWEEP_EDGE, 0), map to [1, 0]
+        const t = -dist / COLOR_SWEEP_EDGE;          // 0 at front → 1 at back
+        return t * t * (3 - 2 * t);                  // smoothstep for soft edge
     }, [isCurrentLine, charFlatIndex]);
 
-    // Wave float style — continuous asymmetric bell curve, pure translateY.
+    // Wave float style + scale wave — continuous asymmetric bell curve.
     // The wave is ONE smooth curve peaking at the active char. Asymmetry comes solely from
     // different radii (leading=shorter, trailing=longer), NOT from amplitude scaling.
-    // This ensures zero discontinuity at the wave center for perfectly fluid motion.
     //
     // PERFORMANCE: First reads activeCharIndex (changes infrequently). Only chars within the
     // wide asymmetric radius proceed to read activeCharProgress. Far chars exit early.
@@ -450,40 +473,62 @@ const KaraokeWord = memo(({
         const idx = activeCharIndex.value;
 
         // Fast exit: chars far from active index don't read activeCharProgress at all.
+        const maxRadius = Math.max(WAVE_LEAD_RADIUS, SCALE_WAVE_LEAD) + 1;
+        const maxTrail = Math.max(WAVE_TRAIL_RADIUS, SCALE_WAVE_TRAIL) + 1;
         const intDist = charFlatIndex - idx;
-        if (intDist > WAVE_LEAD_RADIUS + 1 || intDist < -(WAVE_TRAIL_RADIUS + 1)) {
-            return { transform: [{ translateY: 0 }] };
+        if (intDist > maxRadius || intDist < -maxTrail) {
+            return { transform: [{ translateY: 0 }, { scale: 1 }] };
         }
 
         const progress = activeCharProgress.value;
         const waveCenter = idx + progress;
         const dist = charFlatIndex - waveCenter;
 
-        // Unified curve: normalize by the appropriate radius, same smoothstep on both sides.
-        const radius = dist >= 0 ? WAVE_LEAD_RADIUS : WAVE_TRAIL_RADIUS;
-        const absDist = dist >= 0 ? dist : -dist;
-
-        if (absDist >= radius) {
-            return { transform: [{ translateY: 0 }] };
+        // --- translateY wave (enhanced amplitude) ---
+        let translateY = 0;
+        const tRadius = dist >= 0 ? WAVE_LEAD_RADIUS : WAVE_TRAIL_RADIUS;
+        const tAbsDist = dist >= 0 ? dist : -dist;
+        if (tAbsDist < tRadius) {
+            const t = 1 - tAbsDist / tRadius;
+            translateY = maxWaveTranslate * t * t * (3 - 2 * t);
         }
 
-        const t = 1 - absDist / radius;
-        const influence = t * t * (3 - 2 * t); // smoothstep: zero derivative at both ends
+        // --- scale wave (tighter radii for focused pop) ---
+        let scale = 1;
+        const sRadius = dist >= 0 ? SCALE_WAVE_LEAD : SCALE_WAVE_TRAIL;
+        const sAbsDist = dist >= 0 ? dist : -dist;
+        if (sAbsDist < sRadius) {
+            const s = 1 - sAbsDist / sRadius;
+            const influence = s * s * (3 - 2 * s);
+            scale = 1 + (ACTIVE_CHAR_SCALE - 1) * influence;
+        }
 
         return {
-            transform: [{ translateY: maxWaveTranslate * influence }],
+            transform: [{ translateY }, { scale }],
         };
     }, [isPseudo, isCurrentLine, charFlatIndex, maxWaveTranslate]);
 
-    // Smooth width-clip overlay — the blue highlight sweeps across each character continuously.
-    // This is much smoother than per-character color switching, especially for English text.
-    const overlayStyle = useAnimatedStyle(() => {
+    // Per-character color + opacity interpolation (replaces width-clip overlay)
+    const charStyle = useAnimatedStyle(() => {
         'worklet';
         const progress = animatedProgress.value;
-        return {
-            width: `${progress * 100}%`,
-        };
-    }, []);
+
+        // Color interpolation: base → highlight
+        const color = interpolateColor(
+            progress,
+            [0, 1],
+            [primaryColor, highlightColor],
+        );
+
+        // Opacity gradient: dim → bright
+        const opacity = interpolate(
+            progress,
+            [0, 0.3, 1],
+            [0.5, 0.75, 0.95],
+        );
+
+        return { color, opacity };
+    }, [primaryColor, highlightColor]);
 
     // For non-current lines: same View wrapper structure for consistent flex layout
     if (!isCurrentLine) {
@@ -492,7 +537,7 @@ const KaraokeWord = memo(({
                 <Text
                     style={[
                         styles.wordText,
-                        { fontSize, color: primaryColor, opacity: 0.6 },
+                        { fontSize, color: primaryColor, opacity: 0.5 },
                     ]}
                 >
                     {text}{trailingSpace}
@@ -501,31 +546,18 @@ const KaraokeWord = memo(({
         );
     }
 
-    // Single render path — base text + smooth width-clip overlay
+    // Single Animated.Text — color driven by worklet (no dual-layer overlay)
     return (
         <Animated.View style={[styles.wordWrapper, floatStyle]}>
-            {/* Base text layer — dimmed */}
-            <Text
+            <Animated.Text
                 style={[
                     styles.wordText,
-                    { fontSize, color: primaryColor, opacity: 0.5 },
+                    { fontSize },
+                    charStyle,
                 ]}
             >
                 {text}{trailingSpace}
-            </Text>
-
-            {/* Blue highlighted overlay — smooth width sweep */}
-            <Animated.View style={[styles.overlayContainer, overlayStyle]}>
-                <Text
-                    style={[
-                        styles.wordText,
-                        styles.overlayText,
-                        { fontSize, color: highlightColor },
-                    ]}
-                >
-                    {text}{trailingSpace}
-                </Text>
-            </Animated.View>
+            </Animated.Text>
         </Animated.View>
     );
 });
@@ -547,69 +579,41 @@ const FollowingTranslationLine = memo(({
     highlightColor: string;
     align?: LyricAlign;
 }) => {
-    const [textWidth, setTextWidth] = useState(0);
-
-    // Handle text size measurement
-    const handleLayout = useCallback((event: LayoutChangeEvent) => {
-        const { width } = event.nativeEvent.layout;
-        if (width > 0 && width !== textWidth) {
-            setTextWidth(width);
-        }
-    }, [textWidth]);
-
-    // Animated style for progress overlay - derived from SharedValue on UI thread
+    // Animated style for color + opacity interpolation — derived from SharedValue on UI thread
     const overlayStyle = useAnimatedStyle(() => {
         'worklet';
-        if (lineDuration <= 0) return { width: '0%', opacity: 0 };
+        if (lineDuration <= 0) return { opacity: 0 };
         const t = currentPositionMsShared.value;
         const progress = Math.min(1, Math.max(0, (t - lineStart) / lineDuration));
-        return {
-            width: `${progress * 100}%`,
-            opacity: progress < 0.1 ? progress * 10 : 1,
-        };
-    }, [lineStart, lineDuration]);
+
+        const color = interpolateColor(
+            progress,
+            [0, 1],
+            ['white', highlightColor],
+        );
+        const opacity = interpolate(
+            progress,
+            [0, 0.1, 1],
+            [0.35, 0.5, 0.95],
+        );
+
+        return { color, opacity };
+    }, [lineStart, lineDuration, highlightColor]);
 
     return (
         <View style={[
             styles.translationLineContainer,
             { alignItems: align === "left" ? "flex-start" : "center" },
         ]}>
-            {/* Base text (unhighlighted) */}
-            <Text
-                onLayout={handleLayout}
+            <Animated.Text
                 style={[
                     styles.wordText,
-                    {
-                        fontSize,
-                        color: 'white',
-                        opacity: 0.35,
-                    },
-                ]}
-            >
-                {text}
-            </Text>
-
-            {/* Highlighted overlay with clip effect */}
-            <Animated.View
-                style={[
-                    styles.overlayContainer,
+                    { fontSize },
                     overlayStyle,
                 ]}
             >
-                <Text
-                    style={[
-                        styles.wordText,
-                        styles.overlayText,
-                        {
-                            fontSize,
-                            color: highlightColor,
-                            width: textWidth || 'auto',
-                        },
-                    ]}
-                >
-                    {text}
-                </Text>
-            </Animated.View>
+                {text}
+            </Animated.Text>
         </View>
     );
 });
@@ -725,7 +729,7 @@ function StaticWordByWordLine({
             }}
             style={[
                 lyricStyles.multiLineContainer,
-                { alignItems: align === "left" ? "flex-start" : "center", opacity: 0.6 },
+                { alignItems: align === "left" ? "flex-start" : "center", opacity: 0.5 },
             ]}
         >
             {lyricOrder.map((type) => {
@@ -979,7 +983,7 @@ function RegularLyricLine({
     primaryColor: string;
     align?: LyricAlign;
 }) {
-    const textOpacity = useSharedValue(highlight ? 0.6 : 0.6);
+    const textOpacity = useSharedValue(highlight ? 0.5 : 0.5);
     const textScale = useSharedValue(highlight ? 1 : 1);
 
     useEffect(() => {
@@ -987,7 +991,7 @@ function RegularLyricLine({
             textOpacity.value = withTiming(1, { duration: 280 });
             textScale.value = withTiming(HIGHLIGHT_SCALE, SCALE_TIMING_CONFIG);
         } else {
-            textOpacity.value = withTiming(0.6, { duration: 280 });
+            textOpacity.value = withTiming(0.5, { duration: 280 });
             textScale.value = withTiming(1, SCALE_TIMING_CONFIG);
         }
     }, [highlight]);
@@ -1051,7 +1055,7 @@ function MultiLineRegularLyric({
 }) {
     // Scale animation for highlight effect
     const containerScale = useSharedValue(highlight ? 1 : 1);
-    const containerOpacity = useSharedValue(highlight ? 0.6 : 0.6);
+    const containerOpacity = useSharedValue(highlight ? 0.5 : 0.5);
 
     useEffect(() => {
         if (highlight) {
@@ -1059,7 +1063,7 @@ function MultiLineRegularLyric({
             containerOpacity.value = withTiming(1, { duration: 280 });
         } else {
             containerScale.value = withTiming(1, SCALE_TIMING_CONFIG);
-            containerOpacity.value = withTiming(0.6, { duration: 280 });
+            containerOpacity.value = withTiming(0.5, { duration: 280 });
         }
     }, [highlight]);
 
@@ -1116,7 +1120,7 @@ function MultiLineRegularLyric({
                                 {
                                     fontSize: getLineFontSize(isFirst),
                                     color: highlight ? primaryColor : 'white',
-                                    opacity: highlight ? 1 : 0.6,
+                                    opacity: highlight ? 1 : 0.5,
                                 },
                                 highlight && lyricStyles.highlightItem,
                                 light && lyricStyles.draggingItem,
@@ -1374,16 +1378,6 @@ const styles = StyleSheet.create({
     wordText: {
         fontWeight: '600',
     },
-    overlayContainer: {
-        position: 'absolute',
-        left: 0,
-        top: 0,
-        height: '100%',
-        overflow: 'hidden',
-    },
-    overlayText: {
-        // Text inside overlay container - must not wrap
-    },
     translationLineContainer: {
         position: 'relative',
         alignItems: 'center',
@@ -1399,7 +1393,7 @@ const lyricStyles = StyleSheet.create({
     },
     item: {
         color: "white",
-        opacity: 0.6,
+        opacity: 0.5,
         paddingHorizontal: rpx(64),
         paddingVertical: rpx(24),
         width: "100%",
@@ -1409,7 +1403,7 @@ const lyricStyles = StyleSheet.create({
     // Compact item for multi-line groups (no padding, container handles it)
     compactItem: {
         color: "white",
-        opacity: 0.6,
+        opacity: 0.5,
         width: "100%",
         textAlign: "center",
         textAlignVertical: "center",
