@@ -18,6 +18,26 @@ import {devLog} from '@/utils/log';
 import {convertQrcXmlToLrc, convertQrcXmlToWordByWord, isQrcXml} from '@/utils/qrcXmlToLrc';
 
 /**
+ * Normalize non-standard LRC timestamps [mm:ss:cc] -> [mm:ss.ccc]
+ * QRC decrypted lyrics may use colon instead of dot for centiseconds
+ * Example: [00:13:71] => [00:13.710], [01:02:64] => [01:02.640]
+ */
+function normalizeColonTimeTag(lrcContent: string): string {
+  if (!lrcContent) return lrcContent;
+
+  const timeTagPattern = /\[(\d+):([0-5]?\d):(\d{1,3})\]/g;
+  if (!timeTagPattern.test(lrcContent)) return lrcContent;
+
+  return lrcContent.replace(timeTagPattern, (_, min, sec, frac) => {
+    let ms = frac;
+    if (ms.length === 1) ms = `${ms}00`;
+    else if (ms.length === 2) ms = `${ms}0`;
+    else if (ms.length > 3) ms = ms.slice(0, 3);
+    return `[${min}:${sec}.${ms}]`;
+  });
+}
+
+/**
  * Decrypt QQ Music QRC encrypted lyrics using Native implementation (async)
  *
  * Performance:
@@ -66,7 +86,8 @@ export async function decryptQRCLyric(encryptedHex: string, enableWordByWord: bo
       return lrc;
     }
 
-    return decrypted;
+    // Non-XML decrypted lyrics may have non-standard [mm:ss:cc] timestamps
+    return normalizeColonTimeTag(decrypted);
   } catch (error: any) {
     devLog('error', '[QRC Native] 解密失败', {
       error: error?.message,
