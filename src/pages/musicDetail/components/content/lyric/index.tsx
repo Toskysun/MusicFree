@@ -3,13 +3,11 @@ import { LayoutRectangle, StyleSheet, Text, View } from "react-native";
 import rpx from "@/utils/rpx";
 import useDelayFalsy from "@/hooks/useDelayFalsy";
 import { FlatList, Gesture, GestureDetector, TapGestureHandler } from "react-native-gesture-handler";
-import { fontSizeConst } from "@/constants/uiConst";
 import Loading from "@/components/base/loading";
 import globalStyle from "@/constants/globalStyle";
 import { showPanel } from "@/components/panels/usePanel";
 import TrackPlayer, { useCurrentMusic, useMusicState } from "@/core/trackPlayer";
 import { musicIsPaused } from "@/utils/trackUtils";
-import delay from "@/utils/delay";
 import DraggingTime from "./draggingTime";
 import LyricItemComponent from "./lyricItem";
 import PersistStatus from "@/utils/persistStatus";
@@ -24,14 +22,100 @@ import { devLog } from "@/utils/log";
 import SongInfo from "../albumCover/songInfo";
 import useOrientation from "@/hooks/useOrientation";
 
-// Smooth scroll animation duration (ms)
-const SCROLL_ANIMATION_DURATION = 400;
-
 const ITEM_HEIGHT = rpx(92);
 
-interface IItemHeights {
-    blankHeight?: number;
-    [k: number]: number;
+/** Scroll state machine */
+const enum ScrollPhase {
+    /** Waiting for first content layout */
+    WaitingForContent,
+    /** Performing initial jump (no animation) */
+    InitialPositioning,
+    /** Normal auto-scroll following playback */
+    Tracking,
+    /** User is dragging */
+    UserDragging,
+}
+
+/**
+ * Prefix-sum cache for O(1) getItemLayout and O(log n) hit-test.
+ * prefixSums[i] = total offset from top to the START of item i (excluding header).
+ * headerHeight is stored separately and added in queries.
+ */
+class LayoutCache {
+    private heights: number[];
+    private prefixSums: number[];
+    private headerHeight = 0;
+    private dirty = false;
+
+    constructor(capacity: number) {
+        this.heights = new Array(capacity).fill(ITEM_HEIGHT);
+        this.prefixSums = new Array(capacity + 1).fill(0);
+        this.rebuild();
+    }
+
+    reset(count: number) {
+        this.heights = new Array(count).fill(ITEM_HEIGHT);
+        this.prefixSums = new Array(count + 1).fill(0);
+        this.headerHeight = 0;
+        this.rebuild();
+    }
+
+    setHeaderHeight(h: number) {
+        if (this.headerHeight !== h) {
+            this.headerHeight = h;
+        }
+    }
+
+    setItemHeight(index: number, height: number) {
+        if (index >= 0 && index < this.heights.length && this.heights[index] !== height) {
+            this.heights[index] = height;
+            this.dirty = true;
+        }
+    }
+
+    /** Rebuild prefix sums. Call before querying if dirty. */
+    private rebuild() {
+        const n = this.heights.length;
+        this.prefixSums[0] = 0;
+        for (let i = 0; i < n; i++) {
+            this.prefixSums[i + 1] = this.prefixSums[i] + this.heights[i];
+        }
+        this.dirty = false;
+    }
+
+    private ensureClean() {
+        if (this.dirty) this.rebuild();
+    }
+
+    /** For FlatList getItemLayout */
+    getItemLayout(index: number) {
+        this.ensureClean();
+        return {
+            length: this.heights[index] ?? ITEM_HEIGHT,
+            offset: this.headerHeight + (this.prefixSums[index] ?? 0),
+            index,
+        };
+    }
+
+    /** Binary search: given a scroll offset (relative to content top), find item index */
+    findIndexAtOffset(contentOffset: number): number {
+        this.ensureClean();
+        const target = contentOffset - this.headerHeight;
+        if (target <= 0) return 0;
+
+        // Binary search on prefixSums
+        let lo = 0;
+        let hi = this.heights.length - 1;
+        while (lo < hi) {
+            const mid = (lo + hi + 1) >>> 1;
+            if (this.prefixSums[mid] <= target) {
+                lo = mid;
+            } else {
+                hi = mid - 1;
+            }
+        }
+        return lo;
+    }
 }
 
 interface IProps {
@@ -87,40 +171,35 @@ export default function Lyric(props: IProps) {
     const currentMusicItem = useCurrentMusic();
     const associateMusicItem = getMediaExtraProperty(currentMusicItem, "associatedLrc");
 
-    // Dragging state
-    const dragShownRef = useRef(false);
+    // --- Scroll state machine ---
+    const scrollPhaseRef = useRef<ScrollPhase>(ScrollPhase.WaitingForContent);
+    const lastScrollIndexRef = useRef(-1);
 
-    // Component mounted state
-    const isMountedRef = useRef(true);
+    // Layout cache (prefix-sum based)
+    const layoutCacheRef = useRef(new LayoutCache(lyrics.length));
 
-    // Height cache
-    const itemHeightsRef = useRef<IItemHeights>({});
+    // Reset layout cache when lyrics change
+    useEffect(() => {
+        layoutCacheRef.current.reset(lyrics.length);
+        scrollPhaseRef.current = ScrollPhase.WaitingForContent;
+        lastScrollIndexRef.current = -1;
+        setIsListReady(false);
+    }, [lyrics]);
 
-    // Track last scroll index to avoid unnecessary scrolling
-    const lastScrollIndexRef = useRef<number>(-1);
-
-    // Whether auto-scrolling is in progress
-    const isAutoScrolling = useRef(false);
-
-    // Whether it's initial positioning (no animation needed)
-    const isInitialPositioning = useRef(true);
+    // Reset when song changes
+    useEffect(() => {
+        scrollPhaseRef.current = ScrollPhase.WaitingForContent;
+        lastScrollIndexRef.current = -1;
+    }, [currentMusicItem?.id]);
 
     // Track if list is ready to show (positioned correctly)
     const [isListReady, setIsListReady] = useState(false);
 
-    // Calculate initial content offset
+    // Approximate initial offset to prevent visible scroll-from-top flash
     const initialContentOffset = useMemo(() => {
-        const currentLyricItem = lyricManager.currentLyricItem;
-        const targetIndex = currentLyricItem?.index ?? 0;
-
-        if (targetIndex <= 0 || !lyrics.length) {
-            return undefined;
-        }
-
-        // Estimate offset based on ITEM_HEIGHT
-        // This is approximate but prevents visible scroll from top
-        const estimatedOffset = targetIndex * ITEM_HEIGHT;
-        return { x: 0, y: Math.max(0, estimatedOffset) };
+        const targetIndex = lyricManager.currentLyricItem?.index ?? 0;
+        if (targetIndex <= 0 || !lyrics.length) return undefined;
+        return { x: 0, y: Math.max(0, targetIndex * ITEM_HEIGHT) };
     }, [lyrics]);
 
     // 设置空白组件，获取组件高度
@@ -129,8 +208,9 @@ export default function Lyric(props: IProps) {
             <View
                 style={[styles.empty, isHorizontal ? styles.emptyHorizontal : null]}
                 onLayout={evt => {
-                    itemHeightsRef.current.blankHeight =
-                        evt.nativeEvent.layout.height;
+                    layoutCacheRef.current.setHeaderHeight(
+                        evt.nativeEvent.layout.height,
+                    );
                 }}
             />
         );
@@ -138,66 +218,64 @@ export default function Lyric(props: IProps) {
 
     const handleLyricItemLayout = useCallback(
         (index: number, height: number) => {
-            itemHeightsRef.current[index] = height;
+            layoutCacheRef.current.setItemHeight(index, height);
         },
         [],
     );
 
-    // Smooth scroll to current lyric item
-    const scrollToCurrentLrcItem = useCallback((animated: boolean = true) => {
-        if (!listRef.current || !layout?.height) {
-            return;
-        }
-        const currentLyricItem = lyricManager.currentLyricItem;
-        const currentLyrics = lyricManager.lyricState?.lyrics;
+    // O(1) getItemLayout via prefix-sum cache
+    const getItemLayout = useCallback((_data: any, index: number) => {
+        return layoutCacheRef.current.getItemLayout(index);
+    }, []);
 
-        let targetIndex = 0;
-        if (currentLyricItem?.index !== -1 && currentLyricItem) {
-            targetIndex = Math.min(currentLyricItem.index ?? 0, (currentLyrics?.length ?? 1) - 1);
-        }
-
-        // Avoid scrolling to same position
-        if (lastScrollIndexRef.current === targetIndex) {
-            return;
-        }
-        lastScrollIndexRef.current = targetIndex;
-
-        // Use scrollToIndex
-        isAutoScrolling.current = true;
-        listRef.current?.scrollToIndex({
-            index: targetIndex,
+    /** Scroll list to a given lyric index */
+    const scrollToIndex = useCallback((index: number, animated: boolean) => {
+        if (!listRef.current) return;
+        const safeIndex = Math.max(0, Math.min(index, lyrics.length - 1));
+        listRef.current.scrollToIndex({
+            index: safeIndex,
             viewPosition: 0.5,
             animated,
         });
+        lastScrollIndexRef.current = safeIndex;
+    }, [lyrics.length]);
 
-        // Reset auto-scrolling flag after animation
-        setTimeout(() => {
-            isAutoScrolling.current = false;
-        }, animated ? SCROLL_ANIMATION_DURATION : 50);
-    }, [layout?.height]);
+    /** Called by LyricOperations to re-center on current line */
+    const scrollToCurrentLrcItem = useCallback(() => {
+        if (!listRef.current || !layout?.height) return;
+        const idx = lyricManager.currentLyricItem?.index ?? 0;
+        const safeIndex = Math.max(0, Math.min(idx, lyrics.length - 1));
+        lastScrollIndexRef.current = -1; // force re-scroll
+        scrollToIndex(safeIndex, true);
+        scrollPhaseRef.current = ScrollPhase.Tracking;
+    }, [layout?.height, lyrics.length, scrollToIndex]);
 
-    const delayedScrollToCurrentLrcItem = useMemo(() => {
-        let sto: ReturnType<typeof setTimeout>;
+    // Handle content ready — initial positioning without animation
+    const onContentSizeChange = useCallback(() => {
+        if (scrollPhaseRef.current !== ScrollPhase.WaitingForContent || !listRef.current) {
+            return;
+        }
+        scrollPhaseRef.current = ScrollPhase.InitialPositioning;
 
-        return () => {
-            if (sto) {
-                clearTimeout(sto);
-            }
-            sto = setTimeout(() => {
-                if (isMountedRef.current) {
-                    scrollToCurrentLrcItem();
-                }
-            }, 150);
-        };
-    }, [scrollToCurrentLrcItem]);
+        const targetIndex = lyricManager.currentLyricItem?.index ?? -1;
+        if (targetIndex > 0 && targetIndex < lyrics.length) {
+            scrollToIndex(targetIndex, false);
+        }
 
-    // Main scroll effect - only triggers when lyric line changes
+        setIsListReady(true);
+        scrollPhaseRef.current = ScrollPhase.Tracking;
+    }, [lyrics.length, scrollToIndex]);
+
+    // Main scroll effect — triggers when current lyric line changes
     useEffect(() => {
-        // Skip if no lyrics or dragging or paused
+        // Only scroll in Tracking phase
+        if (scrollPhaseRef.current !== ScrollPhase.Tracking) return;
+
+        // Skip if no lyrics, or paused, or all-zero timestamps
         if (
             lyrics.length === 0 ||
             draggingIndex !== undefined ||
-            (draggingIndex === undefined && musicIsPaused(musicState)) ||
+            musicIsPaused(musicState) ||
             lyrics[lyrics.length - 1].time < 1
         ) {
             return;
@@ -205,101 +283,36 @@ export default function Lyric(props: IProps) {
 
         const targetIndex = currentLrcItem?.index ?? -1;
 
-        // Only scroll when line actually changes (not during word-by-word updates)
-        if (targetIndex === lastScrollIndexRef.current) {
-            return;
-        }
+        // Deduplicate: don't scroll if already at this line
+        if (targetIndex === lastScrollIndexRef.current) return;
 
-        if (targetIndex === -1 || !currentLrcItem) {
-            lastScrollIndexRef.current = 0;
-            listRef.current?.scrollToIndex({
-                index: 0,
-                viewPosition: 0.5,
-                animated: true,
-            });
-        } else {
-            lastScrollIndexRef.current = targetIndex;
-            listRef.current?.scrollToIndex({
-                index: Math.min(targetIndex, lyrics.length - 1),
-                viewPosition: 0.5,
-                animated: true,
-            });
-        }
-    }, [currentLrcItem?.index, lyrics.length, draggingIndex]);
+        scrollToIndex(targetIndex === -1 ? 0 : targetIndex, true);
+    }, [currentLrcItem?.index, lyrics.length, draggingIndex, musicState, scrollToIndex]);
 
-    useEffect(() => {
-        // Reset last scroll index when lyrics change
-        lastScrollIndexRef.current = -1;
-        isInitialPositioning.current = true;
-        setIsListReady(false);
-        return () => {
-            isMountedRef.current = false;
-        };
-    }, [lyrics]);
+    // --- Drag handlers ---
+    const onScrollBeginDrag = useCallback(() => {
+        scrollPhaseRef.current = ScrollPhase.UserDragging;
+    }, []);
 
-    // Handle content ready - scroll to current position without animation
-    const onContentSizeChange = useCallback(() => {
-        if (isInitialPositioning.current && listRef.current) {
-            const currentLyricItem = lyricManager.currentLyricItem;
-            const targetIndex = currentLyricItem?.index ?? -1;
-
-            if (targetIndex > 0 && targetIndex < lyrics.length) {
-                lastScrollIndexRef.current = targetIndex;
-                listRef.current.scrollToIndex({
-                    index: targetIndex,
-                    viewPosition: 0.5,
-                    animated: false,
-                });
-            }
-
-            // Mark as ready and initial positioning done
-            setIsListReady(true);
-            isInitialPositioning.current = false;
-        }
-    }, [lyrics.length]);
-
-    // Reset scroll index when song changes
-    useEffect(() => {
-        lastScrollIndexRef.current = -1;
-        isInitialPositioning.current = true;
-    }, [currentMusicItem?.id]);
-
-    // Scroll handlers
-    const onScrollBeginDrag = () => {
-        dragShownRef.current = true;
-        // Interrupt auto-scrolling when user starts dragging
-        isAutoScrolling.current = false;
-    };
-
-    const onScrollEndDrag = async () => {
+    const onScrollEndDrag = useCallback(() => {
         if (draggingIndex !== undefined) {
             setDraggingIndex(undefined);
         }
-        dragShownRef.current = false;
-        // Reset last scroll index to allow re-scrolling to current position
+        // Allow re-scroll to current line after user releases
         lastScrollIndexRef.current = -1;
-    };
+        scrollPhaseRef.current = ScrollPhase.Tracking;
+    }, [draggingIndex, setDraggingIndex]);
 
+    // O(log n) drag index lookup via binary search
     const onScroll = useCallback((e: any) => {
-        if (dragShownRef.current && !isAutoScrolling.current) {
-            const offset =
-                e.nativeEvent.contentOffset.y +
-                e.nativeEvent.layoutMeasurement.height / 2;
+        if (scrollPhaseRef.current !== ScrollPhase.UserDragging) return;
 
-            const itemHeights = itemHeightsRef.current;
-            let height = itemHeights.blankHeight || 0;
-            if (offset <= height) {
-                setDraggingIndex(0);
-                return;
-            }
-            for (let i = 0; i < lyrics.length; ++i) {
-                height += itemHeights[i] || ITEM_HEIGHT;
-                if (height > offset) {
-                    setDraggingIndex(i);
-                    return;
-                }
-            }
-        }
+        const centerOffset =
+            e.nativeEvent.contentOffset.y +
+            e.nativeEvent.layoutMeasurement.height / 2;
+
+        const index = layoutCacheRef.current.findIndexAtOffset(centerOffset);
+        setDraggingIndex(Math.min(index, lyrics.length - 1));
     }, [lyrics.length, setDraggingIndex]);
 
     const onLyricSeekPress = async () => {
@@ -352,27 +365,21 @@ export default function Lyric(props: IProps) {
                                 itemVisiblePercentThreshold: 100,
                             }}
                             onScrollToIndexFailed={({ index }) => {
-                                delay(120).then(() => {
-                                    listRef.current?.scrollToIndex({
-                                        index: Math.min(
-                                            index ?? 0,
-                                            lyrics.length - 1,
-                                        ),
-                                        viewPosition: 0.5,
-                                        animated: false,
-                                    });
+                                requestAnimationFrame(() => {
+                                    scrollToIndex(index, false);
                                     setIsListReady(true);
                                 });
                             }}
                             fadingEdgeLength={isHorizontal ? 80 : 120}
                             // Initial position without animation
                             onContentSizeChange={onContentSizeChange}
-                            // Load all lyrics at once for instant positioning
-                            initialNumToRender={lyrics.length}
-                            windowSize={21}
-                            maxToRenderPerBatch={lyrics.length}
+                            // Virtualization: only render nearby items, not all lyrics
+                            initialNumToRender={30}
+                            windowSize={7}
+                            maxToRenderPerBatch={10}
                             updateCellsBatchingPeriod={50}
                             removeClippedSubviews={false}
+                            getItemLayout={getItemLayout}
                             maintainVisibleContentPosition={{
                                 minIndexForVisible: 0,
                             }}
@@ -526,7 +533,7 @@ export default function Lyric(props: IProps) {
                 </View>
             </GestureDetector>
             <LyricOperations
-                scrollToCurrentLrcItem={delayedScrollToCurrentLrcItem}
+                scrollToCurrentLrcItem={scrollToCurrentLrcItem}
             />
         </>
     );
@@ -592,11 +599,6 @@ const styles = StyleSheet.create({
     },
     draggingTimeHorizontal: {
         marginTop: rpx(18),
-    },
-    draggingTimeText: {
-        color: "#dddddd",
-        fontSize: fontSizeConst.description,
-        width: rpx(90),
     },
     singleLine: {
         width: "67%",

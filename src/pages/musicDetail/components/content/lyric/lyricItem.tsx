@@ -1,22 +1,18 @@
-import React, { memo, useState, useCallback, useEffect, useMemo, useRef } from "react";
+import React, { memo, useState, useCallback, useEffect, useMemo } from "react";
 import { StyleSheet, Text, View, LayoutChangeEvent } from "react-native";
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
     withTiming,
     withRepeat,
-    withSpring,
     useDerivedValue,
-    interpolate,
-    Extrapolation,
     Easing,
-    runOnJS,
-    cancelAnimation,
+    type SharedValue,
 } from "react-native-reanimated";
 import rpx from "@/utils/rpx";
 import useColors from "@/hooks/useColors";
 import { fontSizeConst } from "@/constants/uiConst";
-import { useCurrentPositionMs } from "@/core/lyricManager";
+import { currentPositionMsShared } from "@/core/lyricManager";
 import { useAppConfig } from "@/core/appConfig";
 
 type LyricAlign = "left" | "center";
@@ -178,11 +174,8 @@ const SCALE_TIMING_CONFIG = {
     easing: Easing.bezier(0.25, 0.1, 0.25, 1),
 };
 
-// Scale factor for highlighted line
-const HIGHLIGHT_SCALE = 1.05;
-
-// Scale factor for word-by-word lyrics (larger for better visibility)
-const WORD_BY_WORD_SCALE = 1.12;
+// Scale factor for highlighted line (1 = no scale)
+const HIGHLIGHT_SCALE = 1;
 
 // Gradient edge width for smooth transition (percentage)
 const GRADIENT_EDGE_WIDTH = 0.12;
@@ -190,29 +183,129 @@ const GRADIENT_EDGE_WIDTH = 0.12;
 // Font size ratio for secondary lines (smaller than primary/first line)
 const SECONDARY_FONT_RATIO = 0.75;
 
-// Float animation config - Apple Music style smooth rise
-const FLOAT_OFFSET_EM = 0.06; // em units relative to font size
+// Wave animation config — Apple Music-style progressive wave float
+// Subtle breathing motion: chars gently rise and settle like a soft wave washing over text.
+// The effect should be barely perceptible — felt more than seen.
 
-// Smooth easing function for natural float animation
-// Based on Apple Music lyrics style - gentle rise as word is sung
-function smoothRise(t: number): number {
-    // Use smooth cubic easing for natural feel
-    // Starts slow, accelerates in middle, slows at end
-    return t * t * (3 - 2 * t);
+// Duration range for dynamic amplitude calculation (ms)
+const WAVE_DURATION_MIN = 100;
+const WAVE_DURATION_MAX = 800;
+// Max upward offset in em units — gentle but perceptible breathing
+const WAVE_MAX_TRANSLATE_EM = 0.06;
+
+// Wide asymmetric radii spread the motion across more chars, making it feel fluid rather than jumpy
+const WAVE_LEAD_RADIUS = 3;    // chars ahead: gentle anticipation
+const WAVE_TRAIL_RADIUS = 6;   // chars behind: long graceful settle
+
+// Normalize word space flags to prevent double spaces.
+// Handles two redundancy patterns in lyric data:
+// 1. word.text ends with ' ' AND word.space=true → clear space flag
+// 2. word.space=true AND next word.text starts with ' ' → clear space flag
+function normalizeWordSpaces(words: ILyric.IWordData[]): ILyric.IWordData[] {
+    return words.map((word, i) => {
+        if (!word.space) return word;
+        const nextWord = words[i + 1];
+        if (word.text.endsWith(' ') || (nextWord && nextWord.text.startsWith(' '))) {
+            return { ...word, space: false };
+        }
+        return word;
+    });
 }
 
-// Smooth animation configs for native driver
-const WORD_SPRING_CONFIG = {
-    damping: 20,
-    stiffness: 300,
-    mass: 0.5,
-};
+// Split a multi-character word into per-character sub-words with evenly distributed timing.
+// Chinese/Japanese single chars pass through unchanged. English words like "Hello" (500ms)
+// become H(100ms) e(100ms) l(100ms) l(100ms) o(100ms) — each letter animates independently.
+function splitWordToChars(word: ILyric.IWordData): ILyric.IWordData[] {
+    const { text, startTime, duration, space } = word;
+    // Single char or empty: no split needed
+    if (text.length <= 1) return [word];
 
-// Individual word component with smooth native-driven animation
-// Uses Reanimated shared values for 60fps animation on UI thread
-const KaraokeWord = memo(({
+    const chars = [...text]; // handle unicode properly
+    const charCount = chars.length;
+    const durationPerChar = duration / charCount;
+
+    return chars.map((char, i) => ({
+        text: char,
+        startTime: startTime + i * durationPerChar,
+        duration: durationPerChar,
+        // Only the last char inherits the trailing space
+        space: i === charCount - 1 ? space : false,
+    }));
+}
+
+// Line-level active state tracking hook.
+// Computes activeCharIndex + activeCharProgress from a flat timing array using ONE useDerivedValue.
+// Each KaraokeWord compares its flat index to activeCharIndex — only the active char reads activeCharProgress.
+// Reanimated's dependency tracking ensures completed/pending chars' worklets DON'T re-evaluate per frame.
+// Result: ~400 worklet evals/frame → ~5 worklet evals/frame (80x improvement).
+function useLineActiveState(flatTimings: { startTime: number; endTime: number }[]) {
+    const activeCharIndex = useSharedValue(-1);
+    const activeCharProgress = useSharedValue(0);
+
+    useDerivedValue(() => {
+        'worklet';
+        const t = currentPositionMsShared.value;
+        const len = flatTimings.length;
+
+        // Fast path: before first char
+        if (len === 0 || t <= flatTimings[0].startTime) {
+            activeCharIndex.value = -1;
+            activeCharProgress.value = 0;
+            return;
+        }
+
+        // Fast path: after last char
+        const last = flatTimings[len - 1];
+        if (t >= last.endTime) {
+            activeCharIndex.value = len;
+            activeCharProgress.value = 1;
+            return;
+        }
+
+        // Binary search for active char
+        let lo = 0, hi = len - 1;
+        while (lo <= hi) {
+            const mid = (lo + hi) >>> 1;
+            if (t < flatTimings[mid].startTime) {
+                hi = mid - 1;
+            } else if (t >= flatTimings[mid].endTime) {
+                lo = mid + 1;
+            } else {
+                // Found active char
+                const timing = flatTimings[mid];
+                const dur = timing.endTime - timing.startTime;
+                activeCharIndex.value = mid;
+                activeCharProgress.value = dur > 0
+                    ? Math.min(1, Math.max(0, (t - timing.startTime) / dur))
+                    : 1;
+                return;
+            }
+        }
+
+        // Between chars (gap) — snap to the completed side
+        activeCharIndex.value = lo;
+        activeCharProgress.value = 0;
+    }, [flatTimings]);
+
+    return { activeCharIndex, activeCharProgress };
+}
+
+// Build flat timing array from normalized words (after splitWordToChars).
+// Returns a stable array of {startTime, endTime} for each character in order.
+function buildFlatTimings(words: ILyric.IWordData[]): { startTime: number; endTime: number }[] {
+    const result: { startTime: number; endTime: number }[] = [];
+    for (const word of words) {
+        const chars = splitWordToChars(word);
+        for (const c of chars) {
+            result.push({ startTime: c.startTime, endTime: c.startTime + c.duration });
+        }
+    }
+    return result;
+}
+
+// Wrapper: renders a word as multiple per-character KaraokeWords for true per-letter animation
+const KaraokeWordSplit = memo(({
     word,
-    currentTimeMs,
     primaryColor,
     highlightColor,
     fontSize,
@@ -220,9 +313,11 @@ const KaraokeWord = memo(({
     enableGlow,
     isPseudo = false,
     noSpace = false,
+    charFlatOffset,
+    activeCharIndex,
+    activeCharProgress,
 }: {
     word: ILyric.IWordData;
-    currentTimeMs: number;
     primaryColor: string;
     highlightColor: string;
     fontSize: number;
@@ -230,254 +325,229 @@ const KaraokeWord = memo(({
     enableGlow: boolean;
     isPseudo?: boolean;
     noSpace?: boolean;
+    charFlatOffset: number;
+    activeCharIndex: SharedValue<number>;
+    activeCharProgress: SharedValue<number>;
 }) => {
-    const { startTime, duration, text, space } = word;
-    const endTime = startTime + duration;
-    const [wordWidth, setWordWidth] = useState(0);
+    const subWords = useMemo(() => splitWordToChars(word), [word]);
 
-    // Shared value for current position (synced from JS thread at 60fps)
-    const currentTimeMsShared = useSharedValue(currentTimeMs);
+    // Single char (Chinese etc.) — render directly, no extra wrapper
+    if (subWords.length === 1) {
+        return (
+            <KaraokeWord
+                word={subWords[0]}
+                primaryColor={primaryColor}
+                highlightColor={highlightColor}
+                fontSize={fontSize}
+                isCurrentLine={isCurrentLine}
+                enableGlow={enableGlow}
+                isPseudo={isPseudo}
+                noSpace={noSpace}
+                charFlatIndex={charFlatOffset}
+                activeCharIndex={activeCharIndex}
+                activeCharProgress={activeCharProgress}
+            />
+        );
+    }
 
-    // Sync currentTimeMs to SharedValue with spring animation for smoothness
-    // Spring animation interpolates between updates for buttery smooth motion
-    useEffect(() => {
-        if (isCurrentLine) {
-            // Use spring for ultra-smooth animation between 16ms updates
-            currentTimeMsShared.value = withSpring(currentTimeMs, {
-                damping: 35,
-                stiffness: 500,
-                mass: 0.2,
-            });
-        } else {
-            // Direct set for non-current lines (no animation needed)
-            currentTimeMsShared.value = currentTimeMs;
-        }
-    }, [currentTimeMs, isCurrentLine]);
+    // Multi-char: render each letter as independent KaraokeWord in a row
+    const groupTrailingSpace = !noSpace && word.space ? ' ' : '';
+    return (
+        <View style={lyricStyles.charGroupRow}>
+            {subWords.map((charWord, i) => (
+                <KaraokeWord
+                    key={i}
+                    word={charWord}
+                    primaryColor={primaryColor}
+                    highlightColor={highlightColor}
+                    fontSize={fontSize}
+                    isCurrentLine={isCurrentLine}
+                    enableGlow={enableGlow}
+                    isPseudo={isPseudo}
+                    noSpace={true}
+                    charFlatIndex={charFlatOffset + i}
+                    activeCharIndex={activeCharIndex}
+                    activeCharProgress={activeCharProgress}
+                />
+            ))}
+            {groupTrailingSpace ? (
+                <Text style={{ fontSize, color: 'transparent' }}>{' '}</Text>
+            ) : null}
+        </View>
+    );
+});
 
-    // Calculate progress on UI thread using derivedValue
-    // Runs at native 60fps without blocking JS thread
+// Individual word component with smooth native-driven animation.
+// PERFORMANCE: Uses line-level activeCharIndex/activeCharProgress instead of reading currentPositionMsShared directly.
+// Only the ACTIVE character's worklets read activeCharProgress (changes every frame).
+// Completed/pending characters use index comparison only (changes infrequently) — their worklets skip re-evaluation.
+//
+// WAVE ANIMATION (Apple Music-style):
+// Instead of only the active char rising, we compute a "wave influence" based on distance to the active char.
+// Chars within WAVE_RADIUS of the active index are pulled up proportionally (cosine falloff),
+// creating a smooth traveling wave that propagates across the line as playback advances.
+const KaraokeWord = memo(({
+    word,
+    primaryColor,
+    highlightColor,
+    fontSize,
+    isCurrentLine,
+    enableGlow,
+    isPseudo = false,
+    noSpace = false,
+    charFlatIndex,
+    activeCharIndex,
+    activeCharProgress,
+}: {
+    word: ILyric.IWordData;
+    primaryColor: string;
+    highlightColor: string;
+    fontSize: number;
+    isCurrentLine: boolean;
+    enableGlow: boolean;
+    isPseudo?: boolean;
+    noSpace?: boolean;
+    charFlatIndex: number;
+    activeCharIndex: SharedValue<number>;
+    activeCharProgress: SharedValue<number>;
+}) => {
+    const { duration, text, space } = word;
+
+    // Trailing space as text (matches non-playing line text wrapping)
+    const trailingSpace = !noSpace && space ? ' ' : '';
+
+    // Wave amplitude pre-computed once (based on char duration)
+    const maxWaveTranslate = useMemo(() => {
+        if (isPseudo) return 0;
+        const clamped = Math.max(WAVE_DURATION_MIN, Math.min(duration, WAVE_DURATION_MAX));
+        const factor = (clamped - WAVE_DURATION_MIN) / (WAVE_DURATION_MAX - WAVE_DURATION_MIN);
+        return -fontSize * WAVE_MAX_TRANSLATE_EM * factor;
+    }, [duration, fontSize, isPseudo]);
+
+    // Progress derived from line-level active state — INDEX COMPARISON, not time computation.
+    // Only reads activeCharProgress when this char IS the active one (1 char per frame).
     const animatedProgress = useDerivedValue(() => {
         'worklet';
         if (!isCurrentLine) return 0;
 
-        const currentTime = currentTimeMsShared.value;
-        if (currentTime >= endTime) return 1;
-        if (currentTime <= startTime) return 0;
+        const idx = activeCharIndex.value;
+        if (charFlatIndex < idx) return 1;  // completed
+        if (charFlatIndex > idx) return 0;  // pending
+        return activeCharProgress.value;     // active — only this one reads per frame
+    }, [isCurrentLine, charFlatIndex]);
 
-        // Calculate and clamp progress - all in UI thread
-        const rawProgress = (currentTime - startTime) / duration;
-        return Math.min(1, Math.max(0, rawProgress));
-    }, [isCurrentLine, startTime, endTime, duration]);
+    // Wave float style — continuous asymmetric bell curve, pure translateY.
+    // The wave is ONE smooth curve peaking at the active char. Asymmetry comes solely from
+    // different radii (leading=shorter, trailing=longer), NOT from amplitude scaling.
+    // This ensures zero discontinuity at the wave center for perfectly fluid motion.
+    //
+    // PERFORMANCE: First reads activeCharIndex (changes infrequently). Only chars within the
+    // wide asymmetric radius proceed to read activeCharProgress. Far chars exit early.
+    const floatStyle = useAnimatedStyle(() => {
+        'worklet';
+        if (isPseudo || !isCurrentLine) return {};
 
-    // Animation states (computed from shared value in JS thread)
-    const isCompleted = useMemo(() => {
-        if (!isCurrentLine) return false;
-        return currentTimeMs >= endTime;
-    }, [isCurrentLine, currentTimeMs, endTime]);
+        const idx = activeCharIndex.value;
 
-    const isPending = useMemo(() => {
-        if (!isCurrentLine) return false;
-        return currentTimeMs <= startTime;
-    }, [isCurrentLine, currentTimeMs, startTime]);
-
-    // Handle text size measurement
-    const handleLayout = useCallback((event: LayoutChangeEvent) => {
-        const { width } = event.nativeEvent.layout;
-        if (width > 0 && width !== wordWidth) {
-            setWordWidth(width);
+        // Fast exit: chars far from active index don't read activeCharProgress at all.
+        const intDist = charFlatIndex - idx;
+        if (intDist > WAVE_LEAD_RADIUS + 1 || intDist < -(WAVE_TRAIL_RADIUS + 1)) {
+            return { transform: [{ translateY: 0 }] };
         }
-    }, [wordWidth]);
 
-    // Animated style for progress overlay (clip effect)
+        const progress = activeCharProgress.value;
+        const waveCenter = idx + progress;
+        const dist = charFlatIndex - waveCenter;
+
+        // Unified curve: normalize by the appropriate radius, same smoothstep on both sides.
+        const radius = dist >= 0 ? WAVE_LEAD_RADIUS : WAVE_TRAIL_RADIUS;
+        const absDist = dist >= 0 ? dist : -dist;
+
+        if (absDist >= radius) {
+            return { transform: [{ translateY: 0 }] };
+        }
+
+        const t = 1 - absDist / radius;
+        const influence = t * t * (3 - 2 * t); // smoothstep: zero derivative at both ends
+
+        return {
+            transform: [{ translateY: maxWaveTranslate * influence }],
+        };
+    }, [isPseudo, isCurrentLine, charFlatIndex, maxWaveTranslate]);
+
+    // Smooth width-clip overlay — the blue highlight sweeps across each character continuously.
+    // This is much smoother than per-character color switching, especially for English text.
     const overlayStyle = useAnimatedStyle(() => {
+        'worklet';
         const progress = animatedProgress.value;
         return {
             width: `${progress * 100}%`,
-            opacity: interpolate(progress, [0, 0.1], [0, 1], Extrapolation.CLAMP),
         };
     }, []);
 
-    // Animated style for float effect
-    const floatStyle = useAnimatedStyle(() => {
-        if (isPseudo) return {};
-        const progress = animatedProgress.value;
-        // Smooth cubic easing for natural float
-        const smoothProgress = progress * progress * (3 - 2 * progress);
-        const floatOffset = -fontSize * FLOAT_OFFSET_EM * smoothProgress;
-        return {
-            transform: [{ translateY: floatOffset }],
-        };
-    }, [isPseudo, fontSize]);
-
-    // Animated style for glow effect
-    const glowStyle = useAnimatedStyle(() => {
-        if (!enableGlow || duration < LONG_DURATION_MS) return { opacity: 0 };
-        const progress = animatedProgress.value;
-        return {
-            opacity: interpolate(progress, [0.2, 1], [0, 0.5], Extrapolation.CLAMP),
-        };
-    }, [enableGlow, duration]);
-
-    // For non-current lines: simple text with better visibility
+    // For non-current lines: same View wrapper structure for consistent flex layout
     if (!isCurrentLine) {
         return (
-            <Text
-                style={[
-                    styles.wordText,
-                    {
-                        fontSize,
-                        color: primaryColor,
-                        opacity: 0.6,
-                    },
-                ]}
-            >
-                {text}
-                {!noSpace && space ? ' ' : ''}
-            </Text>
-        );
-    }
-
-    // For pending words (not yet started)
-    if (isPending) {
-        return (
-            <Text
-                onLayout={handleLayout}
-                style={[
-                    styles.wordText,
-                    {
-                        fontSize,
-                        color: primaryColor,
-                        opacity: 0.5,
-                    },
-                ]}
-            >
-                {text}
-                {!noSpace && space ? ' ' : ''}
-            </Text>
-        );
-    }
-
-    // For completed words - full highlight with float effect
-    if (isCompleted) {
-        const floatOffset = isPseudo ? 0 : -fontSize * FLOAT_OFFSET_EM;
-        return (
-            <View style={[styles.wordWrapper, { transform: [{ translateY: floatOffset }] }]}>
+            <View style={styles.wordWrapper}>
                 <Text
-                    onLayout={handleLayout}
                     style={[
                         styles.wordText,
-                        {
-                            fontSize,
-                            color: highlightColor,
-                            opacity: 1,
-                            ...(enableGlow ? {
-                                textShadowColor: highlightColor,
-                                textShadowOffset: { width: 0, height: 0 },
-                                textShadowRadius: 6,
-                            } : {}),
-                        },
+                        { fontSize, color: primaryColor, opacity: 0.6 },
                     ]}
                 >
-                    {text}
-                    {!noSpace && space ? ' ' : ''}
+                    {text}{trailingSpace}
                 </Text>
             </View>
         );
     }
 
-    // Active word: Use efficient overlay-based animation (native driven)
+    // Single render path — base text + smooth width-clip overlay
     return (
         <Animated.View style={[styles.wordWrapper, floatStyle]}>
-            {/* Base text (unhighlighted) */}
+            {/* Base text layer — dimmed */}
             <Text
-                onLayout={handleLayout}
                 style={[
                     styles.wordText,
-                    {
-                        fontSize,
-                        color: primaryColor,
-                        opacity: 0.5,
-                    },
+                    { fontSize, color: primaryColor, opacity: 0.5 },
                 ]}
             >
-                {text}
-                {!noSpace && space ? ' ' : ''}
+                {text}{trailingSpace}
             </Text>
 
-            {/* Highlighted overlay with clip effect */}
-            <Animated.View
-                style={[
-                    styles.overlayContainer,
-                    overlayStyle,
-                ]}
-            >
+            {/* Blue highlighted overlay — smooth width sweep */}
+            <Animated.View style={[styles.overlayContainer, overlayStyle]}>
                 <Text
                     style={[
                         styles.wordText,
                         styles.overlayText,
-                        {
-                            fontSize,
-                            color: highlightColor,
-                            width: wordWidth || 'auto',
-                        },
+                        { fontSize, color: highlightColor },
                     ]}
                 >
-                    {text}
-                    {!noSpace && space ? ' ' : ''}
+                    {text}{trailingSpace}
                 </Text>
             </Animated.View>
-
-            {/* Glow effect for long duration words */}
-            {enableGlow && duration >= LONG_DURATION_MS && (
-                <Animated.Text
-                    style={[
-                        styles.wordText,
-                        styles.glowText,
-                        glowStyle,
-                        {
-                            fontSize,
-                            color: highlightColor,
-                            textShadowColor: highlightColor,
-                            textShadowOffset: { width: 0, height: 0 },
-                            textShadowRadius: 18,
-                        },
-                    ]}
-                >
-                    {text}
-                    {!noSpace && space ? ' ' : ''}
-                </Animated.Text>
-            )}
         </Animated.View>
     );
 });
 
 // Translation line with smooth native-driven animation
+// Reads currentPositionMsShared directly for zero-JS-overhead progress tracking
 const FollowingTranslationLine = memo(({
     text,
-    progress,
+    lineStart,
+    lineDuration,
     fontSize,
     highlightColor,
     align = "center",
 }: {
     text: string;
-    progress: number;
+    lineStart: number;
+    lineDuration: number;
     fontSize: number;
     highlightColor: string;
     align?: LyricAlign;
 }) => {
     const [textWidth, setTextWidth] = useState(0);
-
-    // Sync progress to SharedValue with spring for ultra-smooth animation
-    const progressShared = useSharedValue(progress);
-
-    useEffect(() => {
-        // Use spring animation for smooth interpolation between updates
-        progressShared.value = withSpring(progress, {
-            damping: 35,
-            stiffness: 500,
-            mass: 0.2,
-        });
-    }, [progress]);
 
     // Handle text size measurement
     const handleLayout = useCallback((event: LayoutChangeEvent) => {
@@ -487,14 +557,17 @@ const FollowingTranslationLine = memo(({
         }
     }, [textWidth]);
 
-    // Animated style for progress overlay - computed on UI thread
+    // Animated style for progress overlay - derived from SharedValue on UI thread
     const overlayStyle = useAnimatedStyle(() => {
         'worklet';
+        if (lineDuration <= 0) return { width: '0%', opacity: 0 };
+        const t = currentPositionMsShared.value;
+        const progress = Math.min(1, Math.max(0, (t - lineStart) / lineDuration));
         return {
-            width: `${progressShared.value * 100}%`,
-            opacity: interpolate(progressShared.value, [0, 0.1], [0, 1], Extrapolation.CLAMP),
+            width: `${progress * 100}%`,
+            opacity: progress < 0.1 ? progress * 10 : 1,
         };
-    }, []);
+    }, [lineStart, lineDuration]);
 
     return (
         <View style={[
@@ -541,6 +614,128 @@ const FollowingTranslationLine = memo(({
     );
 });
 
+// Static word-by-word layout for non-current lines.
+// Uses identical View + flexWrap structure as WordByWordLyricLine
+// but does NOT subscribe to useCurrentPositionMs() — zero per-frame cost.
+function StaticWordByWordLine({
+    words,
+    romanizationWords,
+    isRomanizationPseudo,
+    translation,
+    lyricOrder = ["original", "romanization", "translation"],
+    fontSize,
+    index,
+    onLayout,
+    align = "center",
+}: {
+    words: ILyric.IWordData[];
+    romanizationWords?: ILyric.IWordData[];
+    isRomanizationPseudo?: boolean;
+    translation?: string;
+    lyricOrder?: ("original" | "translation" | "romanization")[];
+    fontSize: number;
+    index?: number;
+    onLayout?: (index: number, height: number) => void;
+    align?: LyricAlign;
+}) {
+    const getLineFontSize = (isFirst: boolean) => isFirst ? fontSize : fontSize * SECONDARY_FONT_RATIO;
+    const justifyContent = align === "left" ? "flex-start" as const : "center" as const;
+
+    // Render a static word row using IDENTICAL View structure as the playing line
+    // (View + flexWrap with per-word/per-char Views) to guarantee identical line-breaking.
+    // Only difference: no animated wrappers, static opacity.
+    const renderWordRow = (wordList: ILyric.IWordData[], lineFontSize: number, isFirst: boolean, key: string, noSpace?: boolean) => {
+        const normalized = normalizeWordSpaces(wordList);
+        return (
+            <View style={[lyricStyles.wordByWordLine, { justifyContent }, !isFirst && lyricStyles.secondaryLine]} key={key}>
+                {normalized.map((word, i) => {
+                    const subWords = splitWordToChars(word);
+                    // Single char — same as KaraokeWord non-current path
+                    if (subWords.length === 1) {
+                        const sw = subWords[0];
+                        const trailing = !noSpace && sw.space ? ' ' : '';
+                        return (
+                            <View style={styles.wordWrapper} key={i}>
+                                <Text style={[styles.wordText, { fontSize: lineFontSize, color: 'white' }]}>
+                                    {sw.text}{trailing}
+                                </Text>
+                            </View>
+                        );
+                    }
+                    // Multi-char — same charGroupRow + per-char Views as KaraokeWordSplit
+                    const groupTrailingSpace = !noSpace && word.space ? ' ' : '';
+                    return (
+                        <View style={lyricStyles.charGroupRow} key={i}>
+                            {subWords.map((sw, ci) => (
+                                <View style={styles.wordWrapper} key={ci}>
+                                    <Text style={[styles.wordText, { fontSize: lineFontSize, color: 'white' }]}>
+                                        {sw.text}
+                                    </Text>
+                                </View>
+                            ))}
+                            {groupTrailingSpace ? (
+                                <Text style={{ fontSize: lineFontSize, color: 'transparent' }}>{' '}</Text>
+                            ) : null}
+                        </View>
+                    );
+                })}
+            </View>
+        );
+    };
+
+    const existingLines = lyricOrder.filter(type => {
+        if (type === "original") return true;
+        if (type === "romanization") return romanizationWords && romanizationWords.length > 0;
+        if (type === "translation") return !!translation;
+        return false;
+    });
+
+    const renderLine = (type: string, isFirst: boolean) => {
+        switch (type) {
+            case "original":
+                return renderWordRow(words, getLineFontSize(isFirst), isFirst, "original");
+            case "romanization":
+                return romanizationWords && romanizationWords.length > 0
+                    ? renderWordRow(romanizationWords, getLineFontSize(isFirst), isFirst, "romanization", isRomanizationPseudo)
+                    : null;
+            case "translation":
+                return translation ? (
+                    <Text
+                        key="translation"
+                        style={[
+                            lyricStyles.compactItem,
+                            { fontSize: getLineFontSize(isFirst), textAlign: align },
+                            !isFirst && lyricStyles.secondaryLine,
+                        ]}
+                    >
+                        {translation}
+                    </Text>
+                ) : null;
+            default:
+                return null;
+        }
+    };
+
+    return (
+        <View
+            onLayout={({ nativeEvent }) => {
+                if (index !== undefined) {
+                    onLayout?.(index, nativeEvent.layout.height);
+                }
+            }}
+            style={[
+                lyricStyles.multiLineContainer,
+                { alignItems: align === "left" ? "flex-start" : "center", opacity: 0.6 },
+            ]}
+        >
+            {lyricOrder.map((type) => {
+                const isFirstExisting = existingLines.indexOf(type) === 0;
+                return renderLine(type, isFirstExisting);
+            })}
+        </View>
+    );
+}
+
 // Word-by-word lyric line with scale animation - supports 3 lines
 interface IWordByWordLyricProps {
     words: ILyric.IWordData[];
@@ -556,6 +751,7 @@ interface IWordByWordLyricProps {
     onLayout?: (index: number, height: number) => void;
     enableGlow: boolean;
     align?: LyricAlign;
+    isCurrentLine?: boolean;
 }
 
 function WordByWordLyricLine({
@@ -572,98 +768,146 @@ function WordByWordLyricLine({
     onLayout,
     enableGlow,
     align = "center",
+    isCurrentLine = true,
 }: IWordByWordLyricProps) {
-    const currentPositionMs = useCurrentPositionMs();
+    // Normalize space flags to prevent double spaces in all word lists
+    const normalizedWords = useMemo(() => normalizeWordSpaces(words), [words]);
+    const normalizedRomanizationWords = useMemo(
+        () => romanizationWords ? normalizeWordSpaces(romanizationWords) : undefined,
+        [romanizationWords],
+    );
+    const normalizedTranslationWords = useMemo(
+        () => translationWords ? normalizeWordSpaces(translationWords) : undefined,
+        [translationWords],
+    );
 
-    // Start with highlight scale (no animation needed since this component only renders when highlighted)
-    const opacity = useSharedValue(1);
-    const scale = useSharedValue(HIGHLIGHT_SCALE);
+    // Build flat timing arrays and char offset maps for each word list
+    const originalFlatTimings = useMemo(() => buildFlatTimings(normalizedWords), [normalizedWords]);
+    const romanizationFlatTimings = useMemo(
+        () => normalizedRomanizationWords ? buildFlatTimings(normalizedRomanizationWords) : [],
+        [normalizedRomanizationWords],
+    );
+    const translationFlatTimings = useMemo(
+        () => normalizedTranslationWords ? buildFlatTimings(normalizedTranslationWords) : [],
+        [normalizedTranslationWords],
+    );
 
-    const animatedContainerStyle = useAnimatedStyle(() => ({
-        opacity: opacity.value,
-        transform: [{ scale: scale.value }],
-    }));
+    // Compute per-word char offsets (cumulative char count before each word)
+    const originalCharOffsets = useMemo(() => {
+        const offsets: number[] = [];
+        let acc = 0;
+        for (const w of normalizedWords) {
+            offsets.push(acc);
+            acc += splitWordToChars(w).length;
+        }
+        return offsets;
+    }, [normalizedWords]);
 
-    // Transform origin based on alignment
-    const transformOriginStyle = align === "left" ? { transformOrigin: 'left center' as const } : {};
+    const romanizationCharOffsets = useMemo(() => {
+        if (!normalizedRomanizationWords) return [];
+        const offsets: number[] = [];
+        let acc = 0;
+        for (const w of normalizedRomanizationWords) {
+            offsets.push(acc);
+            acc += splitWordToChars(w).length;
+        }
+        return offsets;
+    }, [normalizedRomanizationWords]);
 
-    // Calculate overall progress for translation following
-    const overallProgress = useMemo(() => {
-        if (!words?.length) return 0;
-        const lineStart = words[0].startTime;
-        const lastWord = words[words.length - 1];
-        const lineEnd = lastWord.startTime + lastWord.duration;
-        if (lineEnd <= lineStart) return 0;
-        return Math.min(1, Math.max(0, (currentPositionMs - lineStart) / (lineEnd - lineStart)));
-    }, [currentPositionMs, words]);
+    const translationCharOffsets = useMemo(() => {
+        if (!normalizedTranslationWords) return [];
+        const offsets: number[] = [];
+        let acc = 0;
+        for (const w of normalizedTranslationWords) {
+            offsets.push(acc);
+            acc += splitWordToChars(w).length;
+        }
+        return offsets;
+    }, [normalizedTranslationWords]);
+
+    // Line-level active state tracking — ONE useDerivedValue per word list reads currentPositionMsShared
+    const originalActive = useLineActiveState(originalFlatTimings);
+    const romanizationActive = useLineActiveState(romanizationFlatTimings);
+    const translationActive = useLineActiveState(translationFlatTimings);
+
+    // Line timing for translation progress (passed to FollowingTranslationLine)
+    const lineStart = normalizedWords?.[0]?.startTime ?? 0;
+    const lastWord = normalizedWords?.[normalizedWords.length - 1];
+    const lineEnd = lastWord ? lastWord.startTime + lastWord.duration : 0;
+    const lineDuration = lineEnd - lineStart;
 
     // Font size based on order: first line uses full fontSize, others use smaller
     const getLineFontSize = (isFirst: boolean) => isFirst ? fontSize : fontSize * SECONDARY_FONT_RATIO;
-
-    const justifyContent = align === "left" ? "flex-start" : "center";
+    const justifyContent = align === "left" ? "flex-start" as const : "center" as const;
 
     // Original line component (word-by-word)
     const originalLine = (isFirst: boolean) => (
         <View style={[lyricStyles.wordByWordLine, { justifyContent }, !isFirst && lyricStyles.secondaryLine]} key="original">
-            {words.map((word, wordIndex) => (
-                <KaraokeWord
+            {normalizedWords.map((word, wordIndex) => (
+                <KaraokeWordSplit
                     key={wordIndex}
                     word={word}
-                    currentTimeMs={currentPositionMs}
                     primaryColor="white"
                     highlightColor={highlightColor}
                     fontSize={getLineFontSize(isFirst)}
-                    isCurrentLine={true}
+                    isCurrentLine={isCurrentLine}
                     enableGlow={enableGlow}
+                    charFlatOffset={originalCharOffsets[wordIndex]}
+                    activeCharIndex={originalActive.activeCharIndex}
+                    activeCharProgress={originalActive.activeCharProgress}
                 />
             ))}
         </View>
     );
 
     // Romanization line component
-    const romanizationLine = (isFirst: boolean) => romanizationWords && romanizationWords.length > 0 && (
+    const romanizationLine = (isFirst: boolean) => normalizedRomanizationWords && normalizedRomanizationWords.length > 0 && (
         <View style={[lyricStyles.wordByWordLine, { justifyContent }, !isFirst && lyricStyles.secondaryLine]} key="romanization">
-            {romanizationWords.map((word, wordIndex) => (
-                <KaraokeWord
+            {normalizedRomanizationWords.map((word, wordIndex) => (
+                <KaraokeWordSplit
                     key={wordIndex}
                     word={word}
-                    currentTimeMs={currentPositionMs}
                     primaryColor="white"
                     highlightColor={highlightColor}
                     fontSize={getLineFontSize(isFirst)}
-                    isCurrentLine={true}
+                    isCurrentLine={isCurrentLine}
                     enableGlow={enableGlow}
                     isPseudo={isRomanizationPseudo}
                     noSpace={true}
+                    charFlatOffset={romanizationCharOffsets[wordIndex]}
+                    activeCharIndex={romanizationActive.activeCharIndex}
+                    activeCharProgress={romanizationActive.activeCharProgress}
                 />
             ))}
         </View>
     );
 
-    // Translation line component - use KaraokeWord when translationWords available
-    // Translations always use pseudo word-by-word, so isPseudo is always true
+    // Translation line component
     const translationLine = (isFirst: boolean) => translation && (
         <View style={[!isFirst && lyricStyles.secondaryLine]} key="translation">
-            {hasTranslationWordByWord && translationWords && translationWords.length > 0 ? (
+            {hasTranslationWordByWord && normalizedTranslationWords && normalizedTranslationWords.length > 0 ? (
                 <View style={[lyricStyles.wordByWordLine, { justifyContent }]}>
-                    {translationWords.map((word, wordIndex) => (
-                        <KaraokeWord
+                    {normalizedTranslationWords.map((word, wordIndex) => (
+                        <KaraokeWordSplit
                             key={wordIndex}
                             word={word}
-                            currentTimeMs={currentPositionMs}
                             primaryColor="white"
                             highlightColor={highlightColor}
                             fontSize={getLineFontSize(isFirst)}
-                            isCurrentLine={true}
+                            isCurrentLine={isCurrentLine}
                             enableGlow={enableGlow}
                             isPseudo={true}
+                            charFlatOffset={translationCharOffsets[wordIndex]}
+                            activeCharIndex={translationActive.activeCharIndex}
+                            activeCharProgress={translationActive.activeCharProgress}
                         />
                     ))}
                 </View>
             ) : (
                 <FollowingTranslationLine
                     text={translation}
-                    progress={overallProgress}
+                    lineStart={lineStart}
+                    lineDuration={lineDuration}
                     fontSize={getLineFontSize(isFirst)}
                     highlightColor={highlightColor}
                     align={align}
@@ -695,7 +939,7 @@ function WordByWordLyricLine({
     });
 
     return (
-        <Animated.View
+        <View
             onLayout={({ nativeEvent }) => {
                 if (index !== undefined) {
                     onLayout?.(index, nativeEvent.layout.height);
@@ -704,8 +948,6 @@ function WordByWordLyricLine({
             style={[
                 lyricStyles.multiLineContainer,
                 { alignItems: align === "left" ? "flex-start" : "center" },
-                transformOriginStyle,
-                animatedContainerStyle,
             ]}
         >
             {/* Render lines in configured order, first existing line gets large font */}
@@ -713,7 +955,7 @@ function WordByWordLyricLine({
                 const isFirstExisting = existingLines.indexOf(type) === 0;
                 return renderLine(type, isFirstExisting);
             })}
-        </Animated.View>
+        </View>
     );
 }
 
@@ -973,8 +1215,26 @@ function _LyricItemComponent(props: ILyricItemComponentProps) {
     const enableGlow = useAppConfig("lyric.enableWordByWordGlow") ?? false;
     const enableBreathingDots = useAppConfig("lyric.enableBreathingDots") ?? true;
 
-    // Render karaoke-style word-by-word lyrics for highlighted lines (priority over empty check)
-    if (highlight && hasWordByWord && words && words.length > 0) {
+    // Render word-by-word layout for ALL lines with word data (both playing and non-playing)
+    // This ensures identical flex-wrap line-breaking behavior
+    // Non-current lines use StaticWordByWordLine (no useCurrentPositionMs subscription)
+    if (hasWordByWord && words && words.length > 0) {
+        if (!highlight) {
+            // Static layout: same View + flexWrap structure, zero per-frame cost
+            return (
+                <StaticWordByWordLine
+                    words={words}
+                    romanizationWords={hasRomanizationWordByWord ? romanizationWords : undefined}
+                    isRomanizationPseudo={isRomanizationPseudo}
+                    translation={translation}
+                    lyricOrder={lyricOrder}
+                    fontSize={actualFontSize}
+                    index={index}
+                    onLayout={onLayout}
+                    align={align}
+                />
+            );
+        }
         return (
             <WordByWordLyricLine
                 words={words}
@@ -990,6 +1250,7 @@ function _LyricItemComponent(props: ILyricItemComponentProps) {
                 onLayout={onLayout}
                 enableGlow={enableGlow}
                 align={align}
+                isCurrentLine={true}
             />
         );
     }
@@ -1113,9 +1374,6 @@ const styles = StyleSheet.create({
     wordText: {
         fontWeight: '600',
     },
-    measureText: {
-        opacity: 0,
-    },
     overlayContainer: {
         position: 'absolute',
         left: 0,
@@ -1125,11 +1383,6 @@ const styles = StyleSheet.create({
     },
     overlayText: {
         // Text inside overlay container - must not wrap
-    },
-    glowText: {
-        position: 'absolute',
-        left: 0,
-        top: 0,
     },
     translationLineContainer: {
         position: 'relative',
@@ -1172,7 +1425,12 @@ const lyricStyles = StyleSheet.create({
         flexDirection: "row",
         flexWrap: "wrap",
         justifyContent: "center",
-        alignItems: "center",
+        alignItems: "baseline",
+        width: "100%",
+    },
+    charGroupRow: {
+        flexDirection: "row",
+        alignItems: "baseline",
     },
     secondaryLine: {
         marginTop: rpx(8),

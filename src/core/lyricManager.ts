@@ -19,6 +19,10 @@ import { TrackPlayerEvents } from "@/core.defination/trackPlayer";
 import { IPluginManager } from "@/types/core/pluginManager";
 import { autoDecryptLyric } from "@/utils/musicDecrypter";
 import { devLog } from "@/utils/log";
+import { makeMutable } from "react-native-reanimated";
+
+// Reanimated SharedValue for position — UI thread reads this directly, zero React re-renders
+export const currentPositionMsShared = makeMutable(0);
 
 
 interface ILyricState {
@@ -117,6 +121,7 @@ class LyricManager implements IInjectable {
                 // Enough time has passed, update immediately
                 this.lastPositionUpdateTime = now;
                 getDefaultStore().set(currentPositionMsAtom, positionMs);
+                currentPositionMsShared.value = positionMs;
 
                 // Clear any pending timer
                 if (this.positionUpdateTimer) {
@@ -129,6 +134,7 @@ class LyricManager implements IInjectable {
                 this.positionUpdateTimer = setTimeout(() => {
                     this.lastPositionUpdateTime = Date.now();
                     getDefaultStore().set(currentPositionMsAtom, this.pendingPositionMs);
+                    currentPositionMsShared.value = this.pendingPositionMs;
                     this.positionUpdateTimer = null;
                 }, delay);
             }
