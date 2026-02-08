@@ -67,6 +67,7 @@ export interface IAppConfigProperties {
     "lyric.hideDesktopLyricWhenPaused": boolean;
     "lyric.enableWordByWord": boolean;
     "lyric.enableWordByWordFloat": boolean;
+    "lyric.pureWhiteMode": boolean;
     "lyric.enableBreathingDots": boolean;
     "lyric.detailAlign": "left" | "center";
     "lyric.desktopShowTranslation": boolean;

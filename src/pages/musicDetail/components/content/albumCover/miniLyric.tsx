@@ -44,6 +44,9 @@ export default function MiniLyric(props: IMiniLyricProps) {
     const orientation = useOrientation();
     const coverStyle = useAppConfig("theme.coverStyle") ?? "square";
     const enableBreathingDots = useAppConfig("lyric.enableBreathingDots") ?? true;
+    const pureWhiteMode = useAppConfig("lyric.pureWhiteMode") ?? true;
+
+    const activeColor = pureWhiteMode ? "white" : colors.primary;
 
     const showTranslation = PersistStatus.useValue(
         "lyric.showTranslation",
@@ -220,7 +223,7 @@ export default function MiniLyric(props: IMiniLyricProps) {
                                 return (
                                     <View key="original" style={styles.dotsContainer}>
                                         <BreathingDots
-                                            color={colors.primary}
+                                            color={activeColor}
                                             align="left"
                                             highlight={true}
                                         />
@@ -238,7 +241,7 @@ export default function MiniLyric(props: IMiniLyricProps) {
                                             key="original"
                                             style={[
                                                 textStyle,
-                                                { color: isActive ? colors.primary : "white" },
+                                                { color: isActive ? activeColor : "white" },
                                             ]}
                                             numberOfLines={1}>
                                             {lyric.lrc}
@@ -251,7 +254,7 @@ export default function MiniLyric(props: IMiniLyricProps) {
                                             key="romanization"
                                             style={[
                                                 textStyle,
-                                                { color: isActive ? colors.primary : "white" },
+                                                { color: isActive ? activeColor : "white" },
                                             ]}
                                             numberOfLines={1}>
                                             {lyric.romanization || " "}
@@ -264,7 +267,7 @@ export default function MiniLyric(props: IMiniLyricProps) {
                                             key="translation"
                                             style={[
                                                 textStyle,
-                                                { color: isActive ? colors.primary : "white" },
+                                                { color: isActive ? activeColor : "white" },
                                             ]}
                                             numberOfLines={1}>
                                             {lyric.translation || " "}

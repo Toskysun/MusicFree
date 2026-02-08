@@ -353,6 +353,7 @@ const KaraokeWordSplit = memo(({
                 fontSize={fontSize}
                 isCurrentLine={isCurrentLine}
                 enableFloat={enableFloat}
+
                 isPseudo={isPseudo}
                 noSpace={noSpace}
                 charFlatIndex={charFlatOffset}
@@ -375,6 +376,7 @@ const KaraokeWordSplit = memo(({
                     fontSize={fontSize}
                     isCurrentLine={isCurrentLine}
                     enableFloat={enableFloat}
+    
                     isPseudo={isPseudo}
                     noSpace={true}
                     charFlatIndex={charFlatOffset + i}
@@ -856,6 +858,7 @@ function WordByWordLyricLine({
                     fontSize={getLineFontSize(isFirst)}
                     isCurrentLine={isCurrentLine}
                     enableFloat={enableFloat}
+    
                     charFlatOffset={originalCharOffsets[wordIndex]}
                     activeCharIndex={originalActive.activeCharIndex}
                     activeCharProgress={originalActive.activeCharProgress}
@@ -876,6 +879,7 @@ function WordByWordLyricLine({
                     fontSize={getLineFontSize(isFirst)}
                     isCurrentLine={isCurrentLine}
                     enableFloat={enableFloat}
+    
                     isPseudo={isRomanizationPseudo}
                     noSpace={true}
                     charFlatOffset={romanizationCharOffsets[wordIndex]}
@@ -900,6 +904,7 @@ function WordByWordLyricLine({
                             fontSize={getLineFontSize(isFirst)}
                             isCurrentLine={isCurrentLine}
                             enableFloat={enableFloat}
+            
                             isPseudo={true}
                             charFlatOffset={translationCharOffsets[wordIndex]}
                             activeCharIndex={translationActive.activeCharIndex}
@@ -914,6 +919,7 @@ function WordByWordLyricLine({
                     lineDuration={lineDuration}
                     fontSize={getLineFontSize(isFirst)}
                     highlightColor={highlightColor}
+    
                     align={align}
                 />
             )}
@@ -1217,7 +1223,10 @@ function _LyricItemComponent(props: ILyricItemComponentProps) {
     const colors = useColors();
     const actualFontSize = fontSize || fontSizeConst.content;
     const enableFloat = useAppConfig("lyric.enableWordByWordFloat") ?? true;
+    const pureWhiteMode = useAppConfig("lyric.pureWhiteMode") ?? true;
     const enableBreathingDots = useAppConfig("lyric.enableBreathingDots") ?? true;
+
+    const effectiveHighlightColor = pureWhiteMode ? 'white' : colors.primary;
 
     // Render word-by-word layout for ALL lines with word data (both playing and non-playing)
     // This ensures identical flex-wrap line-breaking behavior
@@ -1249,7 +1258,7 @@ function _LyricItemComponent(props: ILyricItemComponentProps) {
                 hasTranslationWordByWord={hasTranslationWordByWord}
                 lyricOrder={lyricOrder}
                 fontSize={actualFontSize}
-                highlightColor={colors.primary}
+                highlightColor={effectiveHighlightColor}
                 index={index}
                 onLayout={onLayout}
                 enableFloat={enableFloat}
@@ -1277,7 +1286,7 @@ function _LyricItemComponent(props: ILyricItemComponentProps) {
                 ]}
             >
                 <BreathingDots
-                    color={colors.primary}
+                    color={effectiveHighlightColor}
                     align={align}
                     highlight={true}
                 />
@@ -1317,7 +1326,7 @@ function _LyricItemComponent(props: ILyricItemComponentProps) {
                 fontSize={actualFontSize}
                 highlight={!!highlight}
                 light={!!light}
-                primaryColor={colors.primary}
+                primaryColor={effectiveHighlightColor}
                 index={index}
                 onLayout={onLayout}
                 align={align}
@@ -1334,7 +1343,7 @@ function _LyricItemComponent(props: ILyricItemComponentProps) {
             light={!!light}
             index={index}
             onLayout={onLayout}
-            primaryColor={colors.primary}
+            primaryColor={effectiveHighlightColor}
             align={align}
         />
     );

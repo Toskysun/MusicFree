@@ -896,6 +896,7 @@ function LyricSetting() {
     const hideDesktopLyricWhenPaused = useAppConfig("lyric.hideDesktopLyricWhenPaused");
     const enableWordByWord = useAppConfig("lyric.enableWordByWord");
     const enableWordByWordFloat = useAppConfig("lyric.enableWordByWordFloat");
+    const pureWhiteMode = useAppConfig("lyric.pureWhiteMode");
     const enableBreathingDots = useAppConfig("lyric.enableBreathingDots");
     const desktopShowTranslation = useAppConfig("lyric.desktopShowTranslation");
     const desktopShowRomanization = useAppConfig("lyric.desktopShowRomanization");
@@ -920,6 +921,12 @@ function LyricSetting() {
         "逐字歌词浮动动画",
         "lyric.enableWordByWordFloat",
         enableWordByWordFloat ?? true,
+    );
+
+    const highlightColor = createSwitch(
+        "纯白模式",
+        "lyric.pureWhiteMode",
+        pureWhiteMode ?? true,
     );
 
     const breathingDots = createSwitch(
@@ -1027,6 +1034,13 @@ function LyricSetting() {
                 onPress={wordByWordFloat.onPress}>
                 <ListItem.Content title={wordByWordFloat.title} />
                 {wordByWordFloat.right}
+            </ListItem>
+            <ListItem
+                withHorizontalPadding
+                heightType="small"
+                onPress={highlightColor.onPress}>
+                <ListItem.Content title={highlightColor.title} />
+                {highlightColor.right}
             </ListItem>
             <ListItem
                 withHorizontalPadding

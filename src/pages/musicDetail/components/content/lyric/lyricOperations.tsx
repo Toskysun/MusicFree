@@ -34,6 +34,7 @@ export default function LyricOperations(props: ILyricOperationsProps) {
         false,
     );
     const colors = useColors();
+    const pureWhiteMode = useAppConfig("lyric.pureWhiteMode") ?? true;
 
     return (
         <View style={styles.container}>
@@ -101,7 +102,7 @@ export default function LyricOperations(props: ILyricOperationsProps) {
                     height={iconSizeConst.normal}
                     opacity={!hasTranslation ? 0.2 : showTranslation ? 1 : 0.5}
                     color={
-                        showTranslation && hasTranslation ? colors.primary : "white"
+                        showTranslation && hasTranslation && !pureWhiteMode ? colors.primary : "white"
                     }
                     onPress={() => {
                         if (!hasTranslation) {
@@ -123,7 +124,7 @@ export default function LyricOperations(props: ILyricOperationsProps) {
                     height={iconSizeConst.normal}
                     opacity={showRomanization ? 1 : 0.5}
                     color={
-                        showRomanization ? colors.primary : "white"
+                        showRomanization && !pureWhiteMode ? colors.primary : "white"
                     }
                     onPress={() => {
                         PersistStatus.set(
