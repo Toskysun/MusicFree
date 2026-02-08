@@ -888,7 +888,7 @@ function WordByWordLyricLine({
 
     // Translation line component
     const translationLine = (isFirst: boolean) => translation && (
-        <View style={[!isFirst && lyricStyles.secondaryLine]} key="translation">
+        <View style={[{ width: '100%' }, !isFirst && lyricStyles.secondaryLine]} key="translation">
             {hasTranslationWordByWord && normalizedTranslationWords && normalizedTranslationWords.length > 0 ? (
                 <View style={[lyricStyles.wordByWordLine, { justifyContent }]}>
                     {normalizedTranslationWords.map((word, wordIndex) => (
@@ -1380,6 +1380,7 @@ const styles = StyleSheet.create({
     },
     translationLineContainer: {
         position: 'relative',
+        width: '100%',
         alignItems: 'center',
         justifyContent: 'center',
     },
