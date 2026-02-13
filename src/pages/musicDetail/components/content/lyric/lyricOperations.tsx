@@ -27,11 +27,11 @@ export default function LyricOperations(props: ILyricOperationsProps) {
     const { hasTranslation, hasRomanization } = useLyricState();
     const showTranslation = PersistStatus.useValue(
         "lyric.showTranslation",
-        false,
+        true,
     );
     const showRomanization = PersistStatus.useValue(
         "lyric.showRomanization",
-        false,
+        true,
     );
     const colors = useColors();
     const pureWhiteMode = useAppConfig("lyric.pureWhiteMode") ?? true;

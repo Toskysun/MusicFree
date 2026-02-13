@@ -139,15 +139,15 @@ export default function Lyric(props: IProps) {
     const currentLrcItem = useCurrentLyricItem();
     const showTranslation = PersistStatus.useValue(
         "lyric.showTranslation",
-        false,
+        true,
     );
     const showRomanization = PersistStatus.useValue(
         "lyric.showRomanization",
-        false,
+        true,
     );
     const lyricOrder = PersistStatus.useValue(
         "lyric.lyricOrder",
-        ["original", "romanization", "translation"],
+        ["romanization", "original", "translation"],
     );
     const fontSizeKey = useAppConfig("lyric.detailFontSize") ?? 1;
     devLog("Lyric detail page font size:", fontSizeKey);
@@ -438,7 +438,7 @@ export default function Lyric(props: IProps) {
                             renderItem={({ item, index }) => {
                                 const isHighlighted = currentLrcItem?.index === index;
 
-                                const order = lyricOrder ?? ["original", "romanization", "translation"];
+                                const order = lyricOrder ?? ["romanization", "original", "translation"];
 
                                 // Get romanization text for multi-line display
                                 const romanizationText = showRomanization && hasRomanization ? item.romanization : undefined;

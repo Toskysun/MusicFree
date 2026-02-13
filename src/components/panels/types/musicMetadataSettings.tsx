@@ -47,7 +47,7 @@ export default function MusicMetadataSettings(_props: IMusicMetadataSettingsProp
         writeMetadataExtended: currentWriteMetadataExtended ?? false,
         downloadLyricFile: currentDownloadLyricFile ?? false,
         lyricFileFormat: currentLyricFileFormat ?? "lrc" as "lrc" | "txt",
-        lyricOrder: currentLyricOrder ?? ["original", "romanization", "translation"] as LyricOrderItem[],
+        lyricOrder: currentLyricOrder ?? ["romanization", "original", "translation"] as LyricOrderItem[],
         enableWordByWord: currentEnableWordByWord ?? false,
     });
 
@@ -73,7 +73,7 @@ export default function MusicMetadataSettings(_props: IMusicMetadataSettingsProp
             writeMetadataExtended: false,
             downloadLyricFile: false,
             lyricFileFormat: "lrc",
-            lyricOrder: ["original", "romanization", "translation"],
+            lyricOrder: ["romanization", "original", "translation"],
             enableWordByWord: false,
         });
         Toast.success("已重置为默认值");

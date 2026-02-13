@@ -216,7 +216,7 @@ class LyricManager implements IInjectable {
     private updateDesktopLyricDisplay(lyricItem: IParsedLrcItem | null) {
         const desktopShowTranslation = this.appConfig.getConfig("lyric.desktopShowTranslation") ?? false;
         const desktopShowRomanization = this.appConfig.getConfig("lyric.desktopShowRomanization") ?? false;
-        const lyricOrder = PersistStatus.get("lyric.lyricOrder") ?? ["original", "romanization", "translation"];
+        const lyricOrder = PersistStatus.get("lyric.lyricOrder") ?? ["romanization", "original", "translation"];
 
         const original = lyricItem?.lrc ?? "";
         const translation = desktopShowTranslation ? (lyricItem?.translation ?? "") : "";

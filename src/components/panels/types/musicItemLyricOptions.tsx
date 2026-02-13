@@ -239,7 +239,7 @@ export default function MusicItemLyricOptions(
 
                     // Get config from settings
                     const lyricFileFormat = Config.getConfig("basic.lyricFileFormat") ?? "lrc";
-                    const lyricOrder = Config.getConfig("basic.lyricOrder") ?? ["original", "romanization", "translation"];
+                    const lyricOrder = Config.getConfig("basic.lyricOrder") ?? ["romanization", "original", "translation"];
                     const enableWordByWord = Config.getConfig("lyric.enableWordByWord") ?? false;
                     const downloadPath = Config.getConfig("basic.downloadPath") ?? pathConst.downloadMusicPath;
 
@@ -378,7 +378,7 @@ export default function MusicItemLyricOptions(
         {
             icon: "arrows-left-right",
             title: (() => {
-                const order = PersistStatus.get("lyric.lyricOrder") ?? ["original", "romanization", "translation"];
+                const order = PersistStatus.get("lyric.lyricOrder") ?? ["romanization", "original", "translation"];
                 const orderLabels: Record<string, string> = {
                     original: "原",
                     translation: "译",
@@ -399,7 +399,7 @@ export default function MusicItemLyricOptions(
                     translation: "翻译",
                     romanization: "罗马音",
                 };
-                const currentOrder = PersistStatus.get("lyric.lyricOrder") ?? ["original", "romanization", "translation"];
+                const currentOrder = PersistStatus.get("lyric.lyricOrder") ?? ["romanization", "original", "translation"];
                 const currentIndex = allOrders.findIndex(
                     o => o[0] === currentOrder[0] && o[1] === currentOrder[1] && o[2] === currentOrder[2]
                 );
