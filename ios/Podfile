@@ -9,6 +9,12 @@ require Pod::Executable.execute_command('node', ['-p',
 platform :ios, min_ios_version_supported
 prepare_react_native_project!
 
+# Permission setup
+$RNPermissionsUseAppTrackingTransparency = true
+$RNPermissionsUseBluetooth = true
+$RNPermissionsUseMediaLibrary = true
+$RNPermissionsUsePhotoLibrary = true
+
 linkage = ENV['USE_FRAMEWORKS']
 if linkage != nil
   Pod::UI.puts "Configuring Pod with #{linkage}ally linked Frameworks".green
@@ -17,6 +23,11 @@ end
 
 target 'MusicFree' do
   use_expo_modules!
+
+  # Privacy file aggregation
+  pod 'React-Core', :path => '../node_modules/react-native/', :modular_headers => true
+  $privacy_file_aggregation_enabled = true
+
   post_integrate do |installer|
     begin
       expo_patch_react_imports!(installer)
@@ -60,5 +71,14 @@ target 'MusicFree' do
       :mac_catalyst_enabled => false,
       # :ccache_enabled => true
     )
+
+    # Fix for "app is in an invalid format" error
+    installer.pods_project.targets.each do |target|
+      if target.respond_to?(:product_type) and target.product_type == "com.apple.product-type.bundle"
+        target.build_configurations.each do |config|
+            config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
+        end
+      end
+    end
   end
 end
