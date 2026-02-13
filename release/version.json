@@ -1,8 +1,17 @@
 {
-  "version": "0.6.41",
+  "version": "0.6.42",
   "changeLog": [
-    "【新年献礼】TSS祝大家2026新年快乐，马到成功！",
-    "【交流】欢迎来Q群1064805856",
+    "🐴【新春献礼】TSS祝大家2026马年春节快乐，万事如意，马到成功！",
+    "【交流】欢迎加入Q群1064805856",
+    "【歌词】全新逐字歌词动画设计",
+    "【歌词】全新歌词滚动设计",
+    "【歌词】卡拉OK式逐字歌词，英文逐字",
+    "【歌词】新增纯白模式，默认启用，沉浸感更强",
+    "【歌词】默认显示顺序调整为罗马音优先，默认启用翻译和罗马音",
+    "【歌词】逐字歌词光晕设置替换为浮动动画开关，新增波浪浮动效果",
+    "【修复】修复歌词过长时播放行换行问题",
+    "【修复】修复翻译行居中对齐问题",
+    "--------以上为v0.6.42新特性--------",
     "【修复】修复了QQ新曲歌词无法解析的bug",
     "--------以上为v0.6.41新特性--------",
     "【注意】设置新增“输入法避让模式”，遇到异常请开启“关闭避让”",
@@ -43,7 +52,7 @@
     "【优化】优化了软件启动速度 (需要在【侧边栏-基本设置-插件】中打开【启用插件懒加载】开关)"
   ],
   "download": [
-    "https://github.com/Toskysun/MusicFree/releases/download/v0.6.41/MusicFree-v0.6.41-arm64-v8a-release.apk",
-    "https://github.com/Toskysun/MusicFree/releases/download/v0.6.41/MusicFree-v0.6.41-universal-release.apk"
+    "https://github.com/Toskysun/MusicFree/releases/download/v0.6.42/MusicFree-v0.6.42-arm64-v8a-release.apk",
+    "https://github.com/Toskysun/MusicFree/releases/download/v0.6.42/MusicFree-v0.6.42-universal-release.apk"
   ]
 }
