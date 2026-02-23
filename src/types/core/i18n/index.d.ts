@@ -539,13 +539,14 @@ export interface ILanguageData {
     "repeatMode.SINGLE": string; // 单曲循环
     
     // 音质翻译
-    "quality.mgg": string; // 低音质 MGG
+    "quality.mgg": string; // 低清音质 96K
     "quality.128k": string; // 普通音质 128K
     "quality.192k": string; // 中等音质 192K
     "quality.320k": string; // 高清音质 320K
     "quality.flac": string; // 高清音质 FLAC
     "quality.flac24bit": string; // 无损音质 FLAC Hires
     "quality.hires": string; // 无损音质 Hires
+    "quality.vinyl": string; // 无损音质 Vinyl
     "quality.dolby": string; // 无损音质 Dolby
     "quality.atmos": string; // 无损音质 Atmos
     "quality.atmos_plus": string; // 无损音质 Atmos 2.0
