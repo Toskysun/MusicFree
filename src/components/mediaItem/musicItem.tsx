@@ -14,12 +14,15 @@ import Badge, { BadgeType } from "../base/badge";
 
 import { getQualityKeys } from "@/utils/qualities";
 
-// 内置音质键的预设 badge 映射
-const builtinBadgeMap: Record<string, { type: BadgeType; text: string }> = {
-    hires: { type: "hires", text: "HR" },
+// master/atmos_plus/atmos/dolby/vinyl 不计入显示，只认以下五级
+const qualityBadgeDisplayMap: Record<string, { type: BadgeType; text: string }> = {
+    hires:     { type: "hires",     text: "HR"  },
     flac24bit: { type: "flac24bit", text: "SQ+" },
-    flac: { type: "flac24bit", text: "SQ" },
-    "320k": { type: "quality", text: "HQ" },
+    flac:      { type: "flac24bit", text: "SQ"  },
+    "320k":    { type: "quality",   text: "HQ"  },
+    "192k":    { type: "quality",   text: "LQ"  },
+    "128k":    { type: "quality",   text: "LQ"  },
+    "96k":     { type: "quality",   text: "LQ"  },
 };
 
 // 获取音质标志信息
@@ -27,17 +30,12 @@ function getQualityBadge(musicItem: IMusic.IMusicItem): { type: BadgeType; text:
     const qualities = musicItem.qualities;
     if (!qualities) return null;
 
-    // 按音质键逆序遍历（从高到低），找到第一个可用的
+    // 按音质键逆序遍历（从高到低），跳过不计入显示的键
     const keys = getQualityKeys();
     for (let i = keys.length - 1; i >= 0; i--) {
         const key = keys[i];
-        if (qualities[key]) {
-            // 内置键有预设 badge
-            if (builtinBadgeMap[key]) {
-                return builtinBadgeMap[key];
-            }
-            // 自定义键用通用 badge，取前 2 字符
-            return { type: "quality", text: key.slice(0, 2).toUpperCase() };
+        if (qualities[key] && qualityBadgeDisplayMap[key]) {
+            return qualityBadgeDisplayMap[key];
         }
     }
     return null;
