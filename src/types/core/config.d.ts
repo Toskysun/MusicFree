@@ -39,7 +39,9 @@ export interface IAppConfigProperties {
     "basic.fileNamingPreset": IFileNaming.IPresetTemplate;
     "basic.fileNamingCustom": string;
     "basic.fileNamingMaxLength": number;
-    "basic.qualityTranslations": Record<IMusic.IQualityKey, string>;
+    "basic.qualityKeysList": string[];
+    "basic.qualityTranslations": Record<string, string>;
+    "basic.qualityAbbreviations": Record<string, string>;
     // 音乐标签写入相关配置
     "basic.writeMetadata": boolean;
     "basic.writeMetadataCover": boolean;

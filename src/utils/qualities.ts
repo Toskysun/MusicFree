@@ -6,8 +6,9 @@ import { devLog } from "@/utils/log";
 
 type LegacyQualityKey = "low" | "standard" | "high" | "super";
 
-export const qualityKeys: IMusic.IQualityKey[] = [
-    "mgg",
+/** 内置音质键列表（作为默认值） */
+export const BUILTIN_QUALITY_KEYS: string[] = [
+    "96k",
     "128k",
     "192k",
     "320k",
@@ -20,6 +21,27 @@ export const qualityKeys: IMusic.IQualityKey[] = [
     "atmos_plus",
     "master",
 ];
+
+/** @deprecated 使用 getQualityKeys() 代替 */
+export const qualityKeys = BUILTIN_QUALITY_KEYS;
+
+/** 获取当前生效的音质键列表（配置优先，回退到内置列表） */
+export function getQualityKeys(): string[] {
+    try {
+        // 延迟引入避免循环依赖
+        const Config = require("@/core/appConfig").default;
+        const list = Config.getConfig("basic.qualityKeysList");
+        if (Array.isArray(list) && list.length > 0) {
+            return list;
+        }
+    } catch {}
+    return BUILTIN_QUALITY_KEYS;
+}
+
+/** 获取音质尝试顺序（从高到低） */
+export function getTryQualityList(): string[] {
+    return [...getQualityKeys()].reverse();
+}
 
 // 原版音质到新版音质的映射
 const legacyQualityMap: Record<LegacyQualityKey, IMusic.IQualityKey> = {
@@ -60,14 +82,14 @@ export function normalizePluginQualities(qualities?: any): IMusic.IQuality | und
     return Object.keys(normalized).length > 0 ? normalized as IMusic.IQuality : undefined;
 }
 
-// 音质尝试顺序
+// 音质尝试顺序（保留作为静态后备）
 export const TRY_QUALITYS_LIST: IMusic.IQualityKey[] = [
-    "master", "atmos_plus", "atmos", "dolby", "vinyl", "hires", "flac24bit", "flac", "320k", "192k", "128k", "mgg",
+    "master", "atmos_plus", "atmos", "dolby", "vinyl", "hires", "flac24bit", "flac", "320k", "192k", "128k", "96k",
 ] as const;
 
 // 保留原有硬编码翻译作为后备
-export const qualityText = {
-    "mgg": "低清音质 96K",
+export const qualityText: Record<string, string> = {
+    "96k": "低清音质 96K",
     "128k": "普通音质 128K",
     "192k": "中等音质 192K",
     "320k": "高清音质 320K",
@@ -82,40 +104,48 @@ export const qualityText = {
 };
 
 /** 获取国际化的音质文本映射 */
-export function getQualityText(i18nData: ILanguageData, customTranslations?: Record<IMusic.IQualityKey, string>): Record<IMusic.IQualityKey, string> {
-    // 如果有自定义翻译，优先使用自定义翻译
-    if (customTranslations) {
-        return {
-            "mgg": customTranslations["mgg"] || i18nData["quality.mgg"] || qualityText["mgg"],
-            "128k": customTranslations["128k"] || i18nData["quality.128k"] || qualityText["128k"],
-            "192k": customTranslations["192k"] || i18nData["quality.192k"] || qualityText["192k"],
-            "320k": customTranslations["320k"] || i18nData["quality.320k"] || qualityText["320k"],
-            flac: customTranslations.flac || i18nData["quality.flac"] || qualityText.flac,
-            flac24bit: customTranslations.flac24bit || i18nData["quality.flac24bit"] || qualityText.flac24bit,
-            hires: customTranslations.hires || i18nData["quality.hires"] || qualityText.hires,
-            vinyl: customTranslations.vinyl || i18nData["quality.vinyl"] || qualityText.vinyl,
-            dolby: customTranslations.dolby || i18nData["quality.dolby"] || qualityText.dolby,
-            atmos: customTranslations.atmos || i18nData["quality.atmos"] || qualityText.atmos,
-            atmos_plus: customTranslations.atmos_plus || i18nData["quality.atmos_plus"] || qualityText.atmos_plus,
-            master: customTranslations.master || i18nData["quality.master"] || qualityText.master,
-        };
+export function getQualityText(i18nData: ILanguageData, customTranslations?: Record<string, string>): Record<string, string> {
+    const keys = getQualityKeys();
+    const result: Record<string, string> = {};
+    for (const key of keys) {
+        result[key] =
+            customTranslations?.[key] ||
+            (i18nData as any)[`quality.${key}`] ||
+            qualityText[key] ||
+            key.toUpperCase();
     }
+    return result;
+}
 
-    // 没有自定义翻译时，使用i18n数据
-    return {
-        "mgg": i18nData["quality.mgg"] || qualityText["mgg"],
-        "128k": i18nData["quality.128k"] || qualityText["128k"],
-        "192k": i18nData["quality.192k"] || qualityText["192k"],
-        "320k": i18nData["quality.320k"] || qualityText["320k"],
-        flac: i18nData["quality.flac"] || qualityText.flac,
-        flac24bit: i18nData["quality.flac24bit"] || qualityText.flac24bit,
-        hires: i18nData["quality.hires"] || qualityText.hires,
-        vinyl: i18nData["quality.vinyl"] || qualityText.vinyl,
-        dolby: i18nData["quality.dolby"] || qualityText.dolby,
-        atmos: i18nData["quality.atmos"] || qualityText.atmos,
-        atmos_plus: i18nData["quality.atmos_plus"] || qualityText.atmos_plus,
-        master: i18nData["quality.master"] || qualityText.master,
-    };
+/** 内置音质缩写映射（导出供重置使用） */
+export const builtinQualityAbbr: Record<string, string> = {
+    "96k": "LQ",
+    "128k": "LQ",
+    "192k": "MQ",
+    "320k": "HQ",
+    "flac": "SQ",
+    "flac24bit": "HR",
+    "hires": "HR",
+    "vinyl": "VN",
+    "dolby": "DB",
+    "atmos": "AT",
+    "atmos_plus": "A+",
+    "master": "MS",
+};
+
+/** 获取音质缩写（配置优先，回退到内置映射，再回退到前2字符大写） */
+export function getQualityAbbr(key: string, customAbbreviations?: Record<string, string>): string {
+    if (customAbbreviations?.[key]) {
+        return customAbbreviations[key];
+    }
+    try {
+        const Config = require("@/core/appConfig").default;
+        const saved = Config.getConfig("basic.qualityAbbreviations");
+        if (saved?.[key]) {
+            return saved[key];
+        }
+    } catch {}
+    return builtinQualityAbbr[key] || key.slice(0, 2).toUpperCase();
 }
 
 /** 智能音质选择 */
@@ -126,42 +156,43 @@ export function getSmartQuality(
 ): IMusic.IQualityKey {
     // 如果没有音质信息，返回偏好音质
     if (!availableQualities) return preferredQuality;
-    
+
+    const tryList = getTryQualityList();
     // 从偏好音质开始，向下搜索可用音质
-    const preferredIndex = TRY_QUALITYS_LIST.indexOf(preferredQuality);
+    const preferredIndex = tryList.indexOf(preferredQuality);
     if (preferredIndex === -1) return "master"; // 如果偏好音质不在列表中，返回master
-    
+
     // 从偏好音质开始向下搜索
-    for (let i = preferredIndex; i < TRY_QUALITYS_LIST.length; i++) {
-        const quality = TRY_QUALITYS_LIST[i];
+    for (let i = preferredIndex; i < tryList.length; i++) {
+        const quality = tryList[i];
         // 修复：只要存在该音质的键，就认为可用（不管是否有url）
-        const hasQuality = availableQualities[quality] !== undefined && 
+        const hasQuality = availableQualities[quality] !== undefined &&
                           availableQualities[quality] !== null;
-        
+
         // 检查平台是否支持该音质
-        const platformSupported = !platformSupportedQualities || 
+        const platformSupported = !platformSupportedQualities ||
                                  platformSupportedQualities.includes(quality);
-        
+
         if (hasQuality && platformSupported) {
             return quality;
         }
     }
-    
+
     // 如果向下没找到，向上搜索
     for (let i = preferredIndex - 1; i >= 0; i--) {
-        const quality = TRY_QUALITYS_LIST[i];
+        const quality = tryList[i];
         // 修复：只要存在该音质的键，就认为可用（不管是否有url）
-        const hasQuality = availableQualities[quality] !== undefined && 
+        const hasQuality = availableQualities[quality] !== undefined &&
                           availableQualities[quality] !== null;
-        
-        const platformSupported = !platformSupportedQualities || 
+
+        const platformSupported = !platformSupportedQualities ||
                                  platformSupportedQualities.includes(quality);
-        
+
         if (hasQuality && platformSupported) {
             return quality;
         }
     }
-    
+
     // 最后回退到128k
     return "128k";
 }
@@ -171,9 +202,10 @@ export function getQualityOrder(
     qualityKey: IMusic.IQualityKey,
     sort: "asc" | "desc",
 ) {
-    const idx = qualityKeys.indexOf(qualityKey);
-    const left = qualityKeys.slice(0, idx);
-    const right = qualityKeys.slice(idx + 1);
+    const keys = getQualityKeys();
+    const idx = keys.indexOf(qualityKey);
+    const left = keys.slice(0, idx);
+    const right = keys.slice(idx + 1);
     if (sort === "asc") {
         /** 优先高音质 */
         return [qualityKey, ...right, ...left.reverse()];
@@ -190,7 +222,7 @@ const qualityTextToKeyMap: Record<string, IMusic.IQualityKey> = {
     "standard": "192k",
     "high": "320k",
     "super": "flac",
-    "低音质": "mgg",
+    "低音质": "96k",
     "标准音质": "192k",
     "高音质": "320k",
     "超高音质": "flac",
@@ -208,7 +240,7 @@ const qualityTextToKeyMap: Record<string, IMusic.IQualityKey> = {
     "128K": "128k",
 
     // QQ音乐音质映射和标准键直接映射
-    "mgg": "mgg",
+    "mgg": "96k",
     "flac24bit": "flac24bit",
     "flac": "flac",
     "320k": "320k",
@@ -329,17 +361,19 @@ export function getAvailableQualities(
             }
         } else {
             // 如果没有插件信息，按照标准顺序检查
-            for (const quality of qualityKeys) {
+            const keys = getQualityKeys();
+            for (const quality of keys) {
                 if (musicItem.qualities[quality] !== undefined) {
                     availableQualities.push(quality);
                 }
             }
         }
     }
-    
+
     // 第二优先级：从歌曲的source字段获取
     if (availableQualities.length === 0 && musicItem.source) {
-        for (const quality of qualityKeys) {
+        const keys = getQualityKeys();
+        for (const quality of keys) {
             if (musicItem.source[quality] && 
                 (musicItem.source[quality]!.url || 
                  musicItem.source[quality]!.size !== undefined)) {

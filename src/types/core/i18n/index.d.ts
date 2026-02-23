@@ -539,7 +539,7 @@ export interface ILanguageData {
     "repeatMode.SINGLE": string; // 单曲循环
     
     // 音质翻译
-    "quality.mgg": string; // 低清音质 96K
+    "quality.96k": string; // 低清音质 96K
     "quality.128k": string; // 普通音质 128K
     "quality.192k": string; // 中等音质 192K
     "quality.320k": string; // 高清音质 320K

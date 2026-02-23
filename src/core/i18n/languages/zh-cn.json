@@ -479,7 +479,7 @@
     "repeatMode.SINGLE": "单曲循环",
     
     // 音质翻译
-    "quality.mgg": "低清音质 96K",
+    "quality.96k": "低清音质 96K",
     "quality.128k": "普通音质 128K",
     "quality.192k": "中等音质 192K",
     "quality.320k": "高清音质 320K",

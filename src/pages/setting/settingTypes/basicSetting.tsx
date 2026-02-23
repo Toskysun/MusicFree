@@ -15,7 +15,7 @@ import LyricUtil, { NativeTextAlignment } from "@/native/lyricUtil";
 import { AppConfigPropertyKey } from "@/types/core/config";
 import { clearCache, getCacheSize, sizeFormatter } from "@/utils/fileUtils";
 import { clearLog, getErrorLogContent } from "@/utils/log";
-import { qualityKeys, getQualityText } from "@/utils/qualities";
+import { getQualityKeys, getQualityText } from "@/utils/qualities";
 import rpx from "@/utils/rpx";
 import Toast from "@/utils/toast";
 import announcementService from "@/services/announcementService";
@@ -219,7 +219,7 @@ export default function BasicSetting() {
                     showExitOnNotification ?? false,
                 ),
                 {
-                    title: "音质标签",
+                    title: "音质管理",
                     right: (
                         <ThemeText fontSize="subTitle" style={styles.centerText}>
                             自定义
@@ -359,7 +359,7 @@ export default function BasicSetting() {
                 createRadio(
                     t("basicSettings.defaultPlayQuality"),
                     "basic.defaultPlayQuality",
-                    qualityKeys,
+                    getQualityKeys(),
                     defaultPlayQuality ?? "master",
                     qualityTextI18n,
                 ),
@@ -468,7 +468,7 @@ export default function BasicSetting() {
                 createRadio(
                     t("basicSettings.defaultDownloadQuality"),
                     "basic.defaultDownloadQuality",
-                    qualityKeys,
+                    getQualityKeys(),
                     defaultDownloadQuality ?? "master",
                     qualityTextI18n,
                 ),

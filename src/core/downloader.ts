@@ -728,8 +728,8 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
         } else if (urlLower.endsWith('.mflac')) {
             // mflac 解密后是 flac
             extension = "flac";
-        } else if (taskQuality === "128k" || taskQuality === "320k" || taskQuality === "192k" || taskQuality === "mgg") {
-            // 128k/192k/320k/mgg 是 MP3/OGG 格式，尝试从URL推断扩展名
+        } else if (taskQuality === "128k" || taskQuality === "320k" || taskQuality === "192k" || taskQuality === "96k") {
+            // 128k/192k/320k/96k 是 MP3/OGG 格式，尝试从URL推断扩展名
             const urlExtension = this.getExtensionName(url);
             if (supportLocalMediaType.some(item => item === ("." + urlExtension))) {
                 extension = urlExtension;

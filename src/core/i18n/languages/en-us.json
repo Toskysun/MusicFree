@@ -479,7 +479,7 @@
     "repeatMode.SINGLE": "Repeat Single",
     
     // Quality translations
-    "quality.mgg": "Low Quality 96K",
+    "quality.96k": "Low Quality 96K",
     "quality.128k": "Standard Quality 128K",
     "quality.192k": "Medium Quality 192K",
     "quality.320k": "High Quality 320K",
