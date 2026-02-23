@@ -104,7 +104,8 @@ class LyricManager implements IInjectable {
                     LyricUtil.setStatusBarLyricText(
                         `${musicItem.title} - ${musicItem.artist}`,);
                 } else {
-                    LyricUtil.setStatusBarLyricText("MusicFree");
+                    // No music playing (e.g. playlist cleared) - hide desktop lyric
+                    LyricUtil.hideStatusBarLyric();
                 }
             }
         });
@@ -198,6 +199,10 @@ class LyricManager implements IInjectable {
                 // Hide desktop lyric when paused (only if hideWhenPaused is explicitly enabled)
                 LyricUtil.hideStatusBarLyric();
                 devLog('info', '[LyricManager] Desktop lyric hidden due to pause');
+            } else if (state.state === State.None || state.state === State.Stopped) {
+                // Hide desktop lyric when playback is stopped (e.g. playlist cleared)
+                LyricUtil.hideStatusBarLyric();
+                devLog('info', '[LyricManager] Desktop lyric hidden due to stop/reset');
             }
         });
 
