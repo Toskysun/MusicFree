@@ -61,6 +61,7 @@ export interface IAppConfigProperties {
     "lyric.leftPercent": number;
     "lyric.align": number;
     "lyric.color": string;
+    "lyric.sungColor": string;
     "lyric.backgroundColor": string;
     "lyric.widthPercent": number;
     "lyric.fontSize": number;
@@ -74,6 +75,8 @@ export interface IAppConfigProperties {
     "lyric.detailAlign": "left" | "center";
     "lyric.desktopShowTranslation": boolean;
     "lyric.desktopShowRomanization": boolean;
+    "lyric.presetIndex": number;
+    "lyric.isLocked": boolean;
 
     // Theme
     "theme.background": string;

@@ -11,7 +11,7 @@ import Config, { useAppConfig } from "@/core/appConfig";
 import { useI18N } from "@/core/i18n";
 import { ROUTE_PATH, useNavigate } from "@/core/router";
 import useColors from "@/hooks/useColors";
-import LyricUtil, { NativeTextAlignment } from "@/native/lyricUtil";
+import LyricUtil, { NativeTextAlignment, LYRIC_COLOR_PRESETS } from "@/native/lyricUtil";
 import { AppConfigPropertyKey } from "@/types/core/config";
 import { clearCache, getCacheSize, sizeFormatter } from "@/utils/fileUtils";
 import { clearLog, getErrorLogContent } from "@/utils/log";
@@ -871,27 +871,9 @@ const styles = StyleSheet.create({
 });
 
 function LyricSetting() {
-    /**
-     * // Lyric
-     *     "lyric.showStatusBarLyric": boolean;
-     *     "lyric.topPercent": number;
-     *     "lyric.leftPercent": number;
-     *     "lyric.align": number;
-     *     "lyric.color": string;
-     *     "lyric.backgroundColor": string;
-     *     "lyric.widthPercent": number;
-     *     "lyric.fontSize": number;
-     *     "lyric.detailFontSize": number;
-     *     "lyric.autoSearchLyric": boolean;
-     */
     const showStatusBarLyric = useAppConfig("lyric.showStatusBarLyric");
-    const topPercent = useAppConfig("lyric.topPercent");
-    const leftPercent = useAppConfig("lyric.leftPercent");
-    const align = useAppConfig("lyric.align");
-    const color = useAppConfig("lyric.color");
-    const backgroundColor = useAppConfig("lyric.backgroundColor");
-    const widthPercent = useAppConfig("lyric.widthPercent");
-    const fontSize = useAppConfig("lyric.fontSize");
+    const isLocked = useAppConfig("lyric.isLocked");
+    const presetIndex = useAppConfig("lyric.presetIndex");
     const enableAutoSearchLyric = useAppConfig("lyric.autoSearchLyric");
     const hideDesktopLyricWhenPaused = useAppConfig("lyric.hideDesktopLyricWhenPaused");
     const enableWordByWord = useAppConfig("lyric.enableWordByWord");
@@ -901,57 +883,16 @@ function LyricSetting() {
     const desktopShowTranslation = useAppConfig("lyric.desktopShowTranslation");
     const desktopShowRomanization = useAppConfig("lyric.desktopShowRomanization");
 
-    const colors = useColors();
-
     const { t } = useI18N();
 
-    const autoSearchLyric = createSwitch(
-        t("basicSettings.lyric.autoSearchLyric"),
-        "lyric.autoSearchLyric",
-        enableAutoSearchLyric ?? false,
-    );
-
-    const wordByWordLyric = createSwitch(
-        "逐字歌词",
-        "lyric.enableWordByWord",
-        enableWordByWord ?? true,
-    );
-
-    const wordByWordFloat = createSwitch(
-        "逐字歌词浮动动画",
-        "lyric.enableWordByWordFloat",
-        enableWordByWordFloat ?? true,
-    );
-
-    const highlightColor = createSwitch(
-        "纯白模式",
-        "lyric.pureWhiteMode",
-        pureWhiteMode ?? true,
-    );
-
-    const breathingDots = createSwitch(
-        "空歌词行呼吸灯特效",
-        "lyric.enableBreathingDots",
-        enableBreathingDots ?? true,
-    );
-
-    const hideWhenPaused = createSwitch(
-        t("basicSettings.lyric.hideDesktopLyricWhenPaused"),
-        "lyric.hideDesktopLyricWhenPaused",
-        hideDesktopLyricWhenPaused ?? true,
-    );
-
-    const desktopTranslation = createSwitch(
-        "桌面歌词显示翻译",
-        "lyric.desktopShowTranslation",
-        desktopShowTranslation ?? false,
-    );
-
-    const desktopRomanization = createSwitch(
-        "桌面歌词显示罗马音",
-        "lyric.desktopShowRomanization",
-        desktopShowRomanization ?? false,
-    );
+    const autoSearchLyric = createSwitch(t("basicSettings.lyric.autoSearchLyric"), "lyric.autoSearchLyric", enableAutoSearchLyric ?? false);
+    const wordByWordLyric = createSwitch("逐字歌词", "lyric.enableWordByWord", enableWordByWord ?? true);
+    const wordByWordFloat = createSwitch("逐字歌词浮动动画", "lyric.enableWordByWordFloat", enableWordByWordFloat ?? true);
+    const highlightColor = createSwitch("纯白模式", "lyric.pureWhiteMode", pureWhiteMode ?? true);
+    const breathingDots = createSwitch("空歌词行呼吸灯特效", "lyric.enableBreathingDots", enableBreathingDots ?? true);
+    const hideWhenPaused = createSwitch(t("basicSettings.lyric.hideDesktopLyricWhenPaused"), "lyric.hideDesktopLyricWhenPaused", hideDesktopLyricWhenPaused ?? true);
+    const desktopTranslation = createSwitch("桌面歌词显示翻译", "lyric.desktopShowTranslation", desktopShowTranslation ?? false);
+    const desktopRomanization = createSwitch("桌面歌词显示罗马音", "lyric.desktopShowRomanization", desktopShowRomanization ?? false);
 
     const openStatusBarLyric = createSwitch(
         t("basicSettings.lyric.showStatusBarLyric"),
@@ -960,23 +901,20 @@ function LyricSetting() {
         async newValue => {
             try {
                 if (newValue) {
-                    const hasPermission =
-                        await LyricUtil.checkSystemAlertPermission();
-
+                    const hasPermission = await LyricUtil.checkSystemAlertPermission();
                     if (hasPermission) {
-                        const statusBarLyricConfig = {
+                        LyricUtil.showStatusBarLyric("MusicFree", {
                             topPercent: Config.getConfig("lyric.topPercent"),
                             leftPercent: Config.getConfig("lyric.leftPercent"),
                             align: Config.getConfig("lyric.align"),
                             color: Config.getConfig("lyric.color"),
+                            sungColor: Config.getConfig("lyric.sungColor"),
                             backgroundColor: Config.getConfig("lyric.backgroundColor"),
                             widthPercent: Config.getConfig("lyric.widthPercent"),
                             fontSize: Config.getConfig("lyric.fontSize"),
-                        };
-                        LyricUtil.showStatusBarLyric(
-                            "MusicFree",
-                            statusBarLyricConfig ?? {}
-                        );
+                            presetIndex: Config.getConfig("lyric.presetIndex") ?? 0,
+                            presets: LYRIC_COLOR_PRESETS,
+                        });
                         Config.setConfig("lyric.showStatusBarLyric", true);
                     } else {
                         LyricUtil.requestSystemAlertPermission().finally(() => {
@@ -991,227 +929,86 @@ function LyricSetting() {
         },
     );
 
-    const alignStatusBarLyric = createRadio(
-        t("basicSettings.lyric.align"),
-        "lyric.align",
-        [
-            NativeTextAlignment.LEFT,
-            NativeTextAlignment.CENTER,
-            NativeTextAlignment.RIGHT,
-        ],
-        align ?? NativeTextAlignment.CENTER,
-        {
-            [NativeTextAlignment.LEFT]: t("basicSettings.lyric.align.left"),
-            [NativeTextAlignment.CENTER]: t("basicSettings.lyric.align.center"),
-            [NativeTextAlignment.RIGHT]: t("basicSettings.lyric.align.right"),
-        },
-        newVal => {
-            if (showStatusBarLyric) {
-                LyricUtil.setStatusBarLyricAlign(newVal as any);
-            }
-        },
-    );
-
     return (
         <View>
-            <ListItem
-                withHorizontalPadding
-                heightType="small"
-                onPress={autoSearchLyric.onPress}>
+            {/* 详情页歌词设置 */}
+            <ListItem withHorizontalPadding heightType="small" onPress={autoSearchLyric.onPress}>
                 <ListItem.Content title={autoSearchLyric.title} />
                 {autoSearchLyric.right}
             </ListItem>
-            <ListItem
-                withHorizontalPadding
-                heightType="small"
-                onPress={wordByWordLyric.onPress}>
+            <ListItem withHorizontalPadding heightType="small" onPress={wordByWordLyric.onPress}>
                 <ListItem.Content title={wordByWordLyric.title} />
                 {wordByWordLyric.right}
             </ListItem>
-            <ListItem
-                withHorizontalPadding
-                heightType="small"
-                onPress={wordByWordFloat.onPress}>
+            <ListItem withHorizontalPadding heightType="small" onPress={wordByWordFloat.onPress}>
                 <ListItem.Content title={wordByWordFloat.title} />
                 {wordByWordFloat.right}
             </ListItem>
-            <ListItem
-                withHorizontalPadding
-                heightType="small"
-                onPress={highlightColor.onPress}>
+            <ListItem withHorizontalPadding heightType="small" onPress={highlightColor.onPress}>
                 <ListItem.Content title={highlightColor.title} />
                 {highlightColor.right}
             </ListItem>
-            <ListItem
-                withHorizontalPadding
-                heightType="small"
-                onPress={breathingDots.onPress}>
+            <ListItem withHorizontalPadding heightType="small" onPress={breathingDots.onPress}>
                 <ListItem.Content title={breathingDots.title} />
                 {breathingDots.right}
             </ListItem>
-            <ListItem
-                withHorizontalPadding
-                heightType="small"
-                onPress={openStatusBarLyric.onPress}>
+
+            {/* 桌面歌词设置 */}
+            <ListItem withHorizontalPadding heightType="small" onPress={openStatusBarLyric.onPress}>
                 <ListItem.Content title={openStatusBarLyric.title} />
                 {openStatusBarLyric.right}
             </ListItem>
-            <ListItem
-                withHorizontalPadding
-                heightType="small"
-                onPress={hideWhenPaused.onPress}>
+            <ListItem withHorizontalPadding heightType="small" onPress={hideWhenPaused.onPress}>
                 <ListItem.Content title={hideWhenPaused.title} />
                 {hideWhenPaused.right}
             </ListItem>
-            <ListItem
-                withHorizontalPadding
-                heightType="small"
-                onPress={desktopTranslation.onPress}>
+            <ListItem withHorizontalPadding heightType="small" onPress={desktopTranslation.onPress}>
                 <ListItem.Content title={desktopTranslation.title} />
                 {desktopTranslation.right}
             </ListItem>
-            <ListItem
-                withHorizontalPadding
-                heightType="small"
-                onPress={desktopRomanization.onPress}>
+            <ListItem withHorizontalPadding heightType="small" onPress={desktopRomanization.onPress}>
                 <ListItem.Content title={desktopRomanization.title} />
                 {desktopRomanization.right}
             </ListItem>
-            <View style={lyricStyles.sliderContainer}>
-                <ThemeText>{t("basicSettings.lyric.leftRightDistance")}</ThemeText>
-                <Slider
-                    style={lyricStyles.slider}
-                    minimumTrackTintColor={colors.primary}
-                    maximumTrackTintColor={colors.text ?? "#999999"}
-                    thumbTintColor={colors.primary}
-                    minimumValue={0}
-                    step={0.01}
-                    value={leftPercent ?? 0.5}
-                    maximumValue={1}
-                    onValueChange={val => {
-                        if (showStatusBarLyric) {
-                            LyricUtil.setStatusBarLyricLeft(val);
-                        }
-                    }}
-                    onSlidingComplete={val => {
-                        Config.setConfig("lyric.leftPercent", val);
-                    }}
-                />
-            </View>
-            <View style={lyricStyles.sliderContainer}>
-                <ThemeText>{t("basicSettings.lyric.topBottomDistance")}</ThemeText>
-                <Slider
-                    style={lyricStyles.slider}
-                    minimumTrackTintColor={colors.primary}
-                    maximumTrackTintColor={colors.text ?? "#999999"}
-                    thumbTintColor={colors.primary}
-                    minimumValue={0}
-                    value={topPercent ?? 0}
-                    step={0.01}
-                    maximumValue={1}
-                    onValueChange={val => {
-                        if (showStatusBarLyric) {
-                            LyricUtil.setStatusBarLyricTop(val);
-                        }
-                    }}
-                    onSlidingComplete={val => {
-                        Config.setConfig("lyric.topPercent", val);
-                    }}
-                />
-            </View>
-            <View style={lyricStyles.sliderContainer}>
-                <ThemeText>{t("basicSettings.lyric.width")}</ThemeText>
-                <Slider
-                    style={lyricStyles.slider}
-                    minimumTrackTintColor={colors.primary}
-                    maximumTrackTintColor={colors.text ?? "#999999"}
-                    thumbTintColor={colors.primary}
-                    minimumValue={0}
-                    step={0.01}
-                    value={widthPercent ?? 0.5}
-                    maximumValue={1}
-                    onValueChange={val => {
-                        if (showStatusBarLyric) {
-                            LyricUtil.setStatusBarLyricWidth(val);
-                        }
-                    }}
-                    onSlidingComplete={val => {
-                        Config.setConfig("lyric.widthPercent", val);
-                    }}
-                />
-            </View>
-            <View style={lyricStyles.sliderContainer}>
-                <ThemeText>{t("basicSettings.lyric.fontSize")}</ThemeText>
-                <Slider
-                    style={lyricStyles.slider}
-                    minimumTrackTintColor={colors.primary}
-                    maximumTrackTintColor={colors.text ?? "#999999"}
-                    thumbTintColor={colors.primary}
-                    minimumValue={Math.round(rpx(18))}
-                    step={0.5}
-                    maximumValue={Math.round(rpx(56))}
-                    value={fontSize ?? Math.round(rpx(24))}
-                    onValueChange={val => {
-                        if (showStatusBarLyric) {
-                            LyricUtil.setStatusBarLyricFontSize(val);
-                        }
-                    }}
-                    onSlidingComplete={val => {
-                        Config.setConfig("lyric.fontSize", val);
-                    }}
-                />
-            </View>
-            <ListItem
-                withHorizontalPadding
-                heightType="small"
-                onPress={alignStatusBarLyric.onPress}>
-                <ListItem.Content title={alignStatusBarLyric.title} />
-                {alignStatusBarLyric.right}
+
+            {/* 预设颜色方案 */}
+            <ListItem withHorizontalPadding heightType="small">
+                <ListItem.Content title={t("basicSettings.lyric.colorPreset")} />
             </ListItem>
-            <ListItem
-                withHorizontalPadding
-                heightType="small"
-                onPress={() => {
-                    showPanel("ColorPicker", {
-                        closePanelWhenSelected: true,
-                        defaultColor: color ?? "transparent",
-                        onSelected(selectedColor) {
+            <View style={lyricStyles.presetRow}>
+                {LYRIC_COLOR_PRESETS.map((preset, idx) => (
+                    <TouchableOpacity
+                        key={idx}
+                        style={[
+                            lyricStyles.presetBlock,
+                            (presetIndex ?? 0) === idx && lyricStyles.presetBlockActive,
+                        ]}
+                        onPress={() => {
+                            Config.setConfig("lyric.presetIndex", idx);
                             if (showStatusBarLyric) {
-                                const colorStr = selectedColor.hexa();
-                                LyricUtil.setStatusBarColors(colorStr, null);
-                                Config.setConfig("lyric.color", colorStr);
+                                LyricUtil.setColorPreset(idx);
                             }
-                        },
-                    });
-                }}>
-                <ListItem.Content title={t("basicSettings.lyric.textColor")} />
-                <ColorBlock color={color ?? "#FFE9D2FF"} />
-            </ListItem>
-            <ListItem
-                withHorizontalPadding
-                heightType="small"
-                onPress={() => {
-                    showPanel("ColorPicker", {
-                        closePanelWhenSelected: true,
-                        defaultColor:
-                            backgroundColor ?? "transparent",
-                        onSelected(selectedBgColor) {
-                            if (showStatusBarLyric) {
-                                const colorStr = selectedBgColor.hexa();
-                                LyricUtil.setStatusBarColors(null, colorStr);
-                                Config.setConfig(
-                                    "lyric.backgroundColor",
-                                    colorStr,
-                                );
-                            }
-                        },
-                    });
-                }}>
-                <ListItem.Content title={t("basicSettings.lyric.backgroundColor")} />
-                <ColorBlock
-                    color={backgroundColor ?? "#84888153"}
-                />
-            </ListItem>
+                        }}>
+                        <View style={[lyricStyles.presetSwatch, { backgroundColor: preset.sungColor.slice(0, 7) }]} />
+                        <ThemeText fontSize="description" numberOfLines={1} style={lyricStyles.presetName}>
+                            {preset.name}
+                        </ThemeText>
+                    </TouchableOpacity>
+                ))}
+            </View>
+
+            {/* 锁定时显示解锁按钮 */}
+            {isLocked && showStatusBarLyric && (
+                <ListItem
+                    withHorizontalPadding
+                    heightType="small"
+                    onPress={() => {
+                        LyricUtil.unlockDesktopLyric();
+                        Config.setConfig("lyric.isLocked", false);
+                    }}>
+                    <ListItem.Content title={t("basicSettings.lyric.unlock")} />
+                </ListItem>
+            )}
         </View>
     );
 }
@@ -1227,5 +1024,34 @@ const lyricStyles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         paddingHorizontal: rpx(24),
+    },
+    presetRow: {
+        flexDirection: "row",
+        flexWrap: "wrap",
+        paddingHorizontal: rpx(24),
+        paddingBottom: rpx(16),
+        gap: rpx(16),
+    },
+    presetBlock: {
+        alignItems: "center",
+        width: rpx(96),
+        padding: rpx(8),
+        borderRadius: rpx(8),
+        borderWidth: 1,
+        borderColor: "transparent",
+    },
+    presetBlockActive: {
+        borderColor: "#4CAF50",
+    },
+    presetSwatch: {
+        width: rpx(48),
+        height: rpx(48),
+        borderRadius: rpx(24),
+        marginBottom: rpx(4),
+        borderWidth: 1,
+        borderColor: "rgba(128,128,128,0.3)",
+    },
+    presetName: {
+        textAlign: "center",
     },
 });

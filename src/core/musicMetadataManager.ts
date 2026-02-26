@@ -64,7 +64,7 @@ class MusicMetadataManager {
   private async getCoverUrl(musicItem: IMusic.IMusicItem): Promise<string | undefined> {
     try {
       // 策略1：如果音乐项目已经有封面URL，直接返回
-      if (musicItem.artwork && musicItem.artwork.trim()) {
+      if (typeof musicItem.artwork === 'string' && musicItem.artwork.trim()) {
         devLog('info', '🖼️[元数据管理器] 使用现有封面URL', { url: musicItem.artwork });
         return musicItem.artwork;
       }

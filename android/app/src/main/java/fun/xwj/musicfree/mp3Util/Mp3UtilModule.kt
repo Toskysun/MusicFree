@@ -1056,7 +1056,7 @@ class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactCo
                 val titleStr = options.getString("title") ?: "MusicFree"
                 val description = options.getString("description") ?: "正在下载音乐文件..."
                 showNotificationFlag = if (options.hasKey("showNotification")) options.getBoolean("showNotification") else true
-                val coverUrl = if (options.hasKey("coverUrl")) options.getString("coverUrl") else null
+                val coverUrl = if (options.hasKey("coverUrl") && options.getType("coverUrl") == ReadableType.String) options.getString("coverUrl") else null
                 val headers = if (options.hasKey("headers")) options.getMap("headers") else null
 
                 val hBuilder = Headers.Builder()

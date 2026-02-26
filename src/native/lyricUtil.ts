@@ -1,44 +1,71 @@
-import { NativeModules } from 'react-native';
+import { NativeEventEmitter, NativeModules } from 'react-native';
 
 /**
  * 文本对齐方式枚举
  */
 export enum NativeTextAlignment {
-  // 左对齐
   LEFT = 3,
-  // 右对齐
   RIGHT = 5,
-  // 居中
   CENTER = 17,
 }
 
-// 获取原生LyricUtil模块
+/** 桌面歌词预设颜色方案 */
+export interface ILyricColorPreset {
+  name: string;
+  unsungColor: string;
+  sungColor: string;
+  backgroundColor: string;
+}
+
+export const LYRIC_COLOR_PRESETS: ILyricColorPreset[] = [
+  { name: '默认透明', unsungColor: '#E0E0E0FF', sungColor: '#FFFFFFFF', backgroundColor: '#00000000' },
+  { name: '纯暗',     unsungColor: '#FFFFFF80', sungColor: '#FFFFFFFF', backgroundColor: '#00000099' },
+  { name: '纯亮',     unsungColor: '#00000080', sungColor: '#000000FF', backgroundColor: '#FFFFFF99' },
+  { name: '护眼绿',   unsungColor: '#A5D6A7FF', sungColor: '#4CAF50FF', backgroundColor: '#000000CC' },
+  { name: '卡拉OK金', unsungColor: '#FFE082FF', sungColor: '#FFD54FFF', backgroundColor: '#00000000' },
+  { name: '赛博蓝',   unsungColor: '#80DEAEFF', sungColor: '#00BCD4FF', backgroundColor: '#001020CC' },
+];
+
+/** 桌面逐字歌词行数据 */
+export interface IDesktopLyricLineData {
+  lineId: string;
+  primaryText: string;
+  primaryWords?: Array<{
+    text: string;
+    startTime: number;
+    duration: number;
+    space?: boolean;
+  }> | null;
+  secondaryLines?: Array<{
+    type: 'translation' | 'romanization';
+    text: string;
+  }>;
+  lineStartMs: number;
+  lineDurationMs?: number | null;
+}
+
+/** 播放状态同步数据 */
+export interface IPlaybackSyncData {
+  status: 'playing' | 'paused' | 'stopped';
+  positionMs: number;
+  speed?: number;
+  isSeek?: boolean;
+}
+
 const { LyricUtil: NativeLyricUtil } = NativeModules;
 
-/**
- * LyricUtil工具类
- * 提供歌词解密和桌面歌词显示功能
- */
 class LyricUtilManager {
   private nativeModule = NativeLyricUtil;
+  private emitter = NativeLyricUtil ? new NativeEventEmitter(NativeLyricUtil) : null;
 
-  /**
-   * 检查系统悬浮窗权限
-   */
   async checkSystemAlertPermission(): Promise<boolean> {
     return this.nativeModule.checkSystemAlertPermission();
   }
 
-  /**
-   * 请求系统悬浮窗权限
-   */
   async requestSystemAlertPermission(): Promise<boolean> {
     return this.nativeModule.requestSystemAlertPermission();
   }
 
-  /**
-   * 显示桌面歌词
-   */
   async showStatusBarLyric(
     initLyric?: string | null,
     options?: {
@@ -47,75 +74,84 @@ class LyricUtilManager {
       align?: number;
       color?: string;
       backgroundColor?: string;
+      sungColor?: string;
       widthPercent?: number;
       fontSize?: number;
+      presetIndex?: number;
+      presets?: ILyricColorPreset[];
     }
   ): Promise<boolean> {
     return this.nativeModule.showStatusBarLyric(initLyric || null, options || null);
   }
 
-  /**
-   * 隐藏桌面歌词
-   */
   async hideStatusBarLyric(): Promise<boolean> {
     return this.nativeModule.hideStatusBarLyric();
   }
 
-  /**
-   * 设置桌面歌词文本
-   */
   async setStatusBarLyricText(lyric: string): Promise<boolean> {
     return this.nativeModule.setStatusBarLyricText(lyric);
   }
 
-  /**
-   * 设置桌面歌词对齐方式
-   */
+  async setDesktopLyricLine(data: IDesktopLyricLineData): Promise<boolean> {
+    return this.nativeModule.setDesktopLyricLine(data);
+  }
+
+  async syncPlaybackState(state: IPlaybackSyncData): Promise<boolean> {
+    return this.nativeModule.syncPlaybackState(state);
+  }
+
+  async setSungColor(color: string): Promise<boolean> {
+    return this.nativeModule.setSungColor(color);
+  }
+
   async setStatusBarLyricAlign(alignment: number): Promise<boolean> {
     return this.nativeModule.setStatusBarLyricAlign(alignment);
   }
 
-  /**
-   * 设置桌面歌词顶部位置
-   */
   async setStatusBarLyricTop(pct: number): Promise<boolean> {
     return this.nativeModule.setStatusBarLyricTop(pct);
   }
 
-  /**
-   * 设置桌面歌词左侧位置
-   */
   async setStatusBarLyricLeft(pct: number): Promise<boolean> {
     return this.nativeModule.setStatusBarLyricLeft(pct);
   }
 
-  /**
-   * 设置桌面歌词宽度
-   */
   async setStatusBarLyricWidth(pct: number): Promise<boolean> {
     return this.nativeModule.setStatusBarLyricWidth(pct);
   }
 
-  /**
-   * 设置桌面歌词字体大小
-   */
   async setStatusBarLyricFontSize(fontSize: number): Promise<boolean> {
     return this.nativeModule.setStatusBarLyricFontSize(fontSize);
   }
 
-  /**
-   * 设置桌面歌词颜色
-   */
   async setStatusBarColors(textColor?: string | null, backgroundColor?: string | null): Promise<boolean> {
     return this.nativeModule.setStatusBarColors(textColor || null, backgroundColor || null);
   }
 
-  /**
-   * 解密酷我音乐歌词
-   * @param lrcBase64 - Base64编码的加密歌词数据
-   * @param isGetLyricx - 是否获取逐字歌词（需要额外XOR解密）
-   * @returns 解密后的歌词文本
-   */
+  /** 锁定桌面歌词（触摸穿透） */
+  async lockDesktopLyric(): Promise<boolean> {
+    return this.nativeModule.lockDesktopLyric();
+  }
+
+  /** 解锁桌面歌词（可拖拽/点击） */
+  async unlockDesktopLyric(): Promise<boolean> {
+    return this.nativeModule.unlockDesktopLyric();
+  }
+
+  /** 切换预设颜色方案 */
+  async setColorPreset(index: number): Promise<boolean> {
+    return this.nativeModule.setColorPreset(index);
+  }
+
+  /** 监听原生事件（锁定状态/预设/字号/位置变化） */
+  addListener(
+    event: 'LyricUtil:onLockStateChanged' | 'LyricUtil:onPresetChanged' | 'LyricUtil:onFontSizeChanged' | 'LyricUtil:onPositionChanged' | 'LyricUtil:onClose',
+    handler: (payload: any) => void,
+  ): { remove: () => void } {
+    const sub = this.emitter?.addListener(event, handler);
+    return sub ?? { remove: () => {} };
+  }
+
   async decryptKuwoLyric(lrcBase64: string, isGetLyricx: boolean = true): Promise<string> {
     if (!this.nativeModule?.decryptKuwoLyric) {
       throw new Error('decryptKuwoLyric not available in native module');
@@ -123,11 +159,6 @@ class LyricUtilManager {
     return this.nativeModule.decryptKuwoLyric(lrcBase64, isGetLyricx);
   }
 
-  /**
-   * 解密QQ音乐QRC歌词
-   * @param encryptedHex - 十六进制编码的加密歌词数据
-   * @returns 解密后的歌词文本
-   */
   async decryptQRCLyric(encryptedHex: string): Promise<string> {
     if (!this.nativeModule?.decryptQRCLyric) {
       throw new Error('decryptQRCLyric not available in native module');
@@ -135,39 +166,10 @@ class LyricUtilManager {
     return this.nativeModule.decryptQRCLyric(encryptedHex);
   }
 
-  /**
-   * 解密酷我音乐歌词
-   * @param lrcBase64 - Base64编码的加密歌词数据
-   * @param isGetLyricx - 是否获取逐字歌词（需要额外XOR解密）
-   * @returns 解密后的歌词文本
-   */
-  async decryptKuwoLyric(lrcBase64: string, isGetLyricx: boolean = true): Promise<string> {
-    if (!this.nativeModule?.decryptKuwoLyric) {
-      throw new Error('decryptKuwoLyric not available in native module');
-    }
-    return this.nativeModule.decryptKuwoLyric(lrcBase64, isGetLyricx);
-  }
-
-  /**
-   * 解密QQ音乐QRC歌词
-   * @param encryptedHex - 十六进制编码的加密歌词数据
-   * @returns 解密后的歌词文本
-   */
-  async decryptQRCLyric(encryptedHex: string): Promise<string> {
-    if (!this.nativeModule?.decryptQRCLyric) {
-      throw new Error('decryptQRCLyric not available in native module');
-    }
-    return this.nativeModule.decryptQRCLyric(encryptedHex);
-  }
-
-  /**
-   * 检查原生模块是否可用
-   */
   isAvailable(): boolean {
     return !!this.nativeModule;
   }
 }
 
-// 导出单例实例
 export const LyricUtil = new LyricUtilManager();
 export default LyricUtil;

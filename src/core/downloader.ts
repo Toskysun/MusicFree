@@ -357,7 +357,7 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
             const taskMetadata: IDownloadTaskMetadata = {
                 musicItem,
                 filePath,
-                coverUrl: musicItem.artwork?.toString(),
+                coverUrl: typeof musicItem.artwork === 'string' ? musicItem.artwork : undefined,
             };
 
             const success = await musicMetadataManager.writeMetadataForDownloadTask(taskMetadata, config);
@@ -808,7 +808,7 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
                     description: '正在下载音乐文件...',
                     headers,
                     showNotification: true,
-                    coverUrl: (musicItem as any)?.artwork ?? null,
+                    coverUrl: typeof (musicItem as any)?.artwork === 'string' ? (musicItem as any).artwork : null,
                   })
                 : await Mp3Util.downloadWithSystemManager(
                     url,

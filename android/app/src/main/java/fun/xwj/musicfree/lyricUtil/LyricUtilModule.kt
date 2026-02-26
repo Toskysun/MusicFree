@@ -4,10 +4,12 @@ import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
 import androidx.annotation.RequiresApi
 import com.facebook.react.bridge.*
+import com.facebook.react.modules.core.DeviceEventManagerModule
 import java.util.*
 import java.util.zip.Inflater
 import java.io.ByteArrayOutputStream
@@ -44,33 +46,59 @@ class LyricUtilModule(private val reactContext: ReactApplicationContext): ReactC
         try {
             UiThreadUtil.runOnUiThread {
                 if (lyricView == null) {
-                    lyricView = LyricView(reactContext)
+                    lyricView = LyricView(reactContext).also { lv ->
+                        lv.onLockStateChanged = { locked ->
+                            val payload = Arguments.createMap().apply { putBoolean("locked", locked) }
+                            emitEvent("LyricUtil:onLockStateChanged", payload)
+                        }
+                        lv.onPresetChanged = { index ->
+                            val payload = Arguments.createMap().apply { putInt("index", index) }
+                            emitEvent("LyricUtil:onPresetChanged", payload)
+                        }
+                        lv.onFontSizeChanged = { fontSize ->
+                            val payload = Arguments.createMap().apply { putDouble("fontSize", fontSize.toDouble()) }
+                            emitEvent("LyricUtil:onFontSizeChanged", payload)
+                        }
+                        lv.onPositionChanged = { leftPercent, topPercent ->
+                            val payload = Arguments.createMap().apply {
+                                putDouble("leftPercent", leftPercent)
+                                putDouble("topPercent", topPercent)
+                            }
+                            emitEvent("LyricUtil:onPositionChanged", payload)
+                        }
+                        lv.onClose = {
+                            val payload = Arguments.createMap()
+                            emitEvent("LyricUtil:onClose", payload)
+                        }
+                    }
                 }
 
                 val mapOptions = mutableMapOf<String, Any>().apply {
-                    if (options == null) {
-                        return@apply
-                    }
-                    if (options.hasKey("topPercent")) {
-                        put("topPercent", options.getDouble("topPercent"))
-                    }
-                    if (options.hasKey("leftPercent")) {
-                        put("leftPercent", options.getDouble("leftPercent"))
-                    }
-                    if (options.hasKey("align")) {
-                        put("align", options.getInt("align"))
-                    }
-                    if (options.hasKey("color")) {
-                        options.getString("color")?.let { put("color", it) }
-                    }
-                    if (options.hasKey("backgroundColor")) {
-                        options.getString("backgroundColor")?.let { put("backgroundColor", it) }
-                    }
-                    if (options.hasKey("widthPercent")) {
-                        put("widthPercent", options.getDouble("widthPercent"))
-                    }
-                    if (options.hasKey("fontSize")) {
-                        put("fontSize", options.getDouble("fontSize"))
+                    if (options == null) return@apply
+                    if (options.hasKey("topPercent")) put("topPercent", options.getDouble("topPercent"))
+                    if (options.hasKey("leftPercent")) put("leftPercent", options.getDouble("leftPercent"))
+                    if (options.hasKey("align")) put("align", options.getInt("align"))
+                    options.getString("color")?.let { put("color", it) }
+                    options.getString("backgroundColor")?.let { put("backgroundColor", it) }
+                    if (options.hasKey("widthPercent")) put("widthPercent", options.getDouble("widthPercent"))
+                    if (options.hasKey("fontSize")) put("fontSize", options.getDouble("fontSize"))
+                    options.getString("sungColor")?.let { put("sungColor", it) }
+                    if (options.hasKey("presetIndex")) put("presetIndex", options.getInt("presetIndex"))
+                    // Parse presets array
+                    if (options.hasKey("presets") && !options.isNull("presets")) {
+                        val presetsArr = options.getArray("presets")
+                        if (presetsArr != null) {
+                            val presetList = (0 until presetsArr.size()).mapNotNull { i ->
+                                presetsArr.getMap(i)?.let { m ->
+                                    mapOf(
+                                        "unsungColor" to (m.getString("unsungColor") ?: "#FFE9D2FF"),
+                                        "sungColor" to (m.getString("sungColor") ?: "#FFFFFFFF"),
+                                        "backgroundColor" to (m.getString("backgroundColor") ?: "#84888153"),
+                                    )
+                                }
+                            }
+                            put("presets", presetList)
+                        }
                     }
                 }
 
@@ -181,6 +209,158 @@ class LyricUtilModule(private val reactContext: ReactApplicationContext): ReactC
             promise.reject("Exception", e.message)
         }
     }
+
+    // ==================== Desktop Word-by-Word Lyric ====================
+
+    @ReactMethod
+    fun setDesktopLyricLine(data: ReadableMap, promise: Promise) {
+        try {
+            val lineId = data.getString("lineId") ?: ""
+            val primaryText = data.getString("primaryText") ?: ""
+            val lineStartMs = if (data.hasKey("lineStartMs") && !data.isNull("lineStartMs")) data.getDouble("lineStartMs").toLong() else 0L
+            val lineDurationMs = if (data.hasKey("lineDurationMs") && !data.isNull("lineDurationMs")) data.getDouble("lineDurationMs").toLong() else null
+
+            // Parse primaryWords
+            val primaryWords: List<DesktopLyricView.WordData>? = if (data.hasKey("primaryWords") && !data.isNull("primaryWords")) {
+                val arr = data.getArray("primaryWords")
+                if (arr != null && arr.size() > 0) {
+                    (0 until arr.size()).mapNotNull { i ->
+                        val wordMap = arr.getMap(i) ?: return@mapNotNull null
+                        DesktopLyricView.WordData(
+                            text = wordMap.getString("text") ?: "",
+                            startTime = if (wordMap.hasKey("startTime")) wordMap.getDouble("startTime").toLong() else 0L,
+                            duration = if (wordMap.hasKey("duration")) wordMap.getDouble("duration").toLong().coerceAtLeast(0) else 0L,
+                            space = if (wordMap.hasKey("space")) wordMap.getBoolean("space") else false,
+                        )
+                    }
+                } else null
+            } else null
+
+            // Parse secondaryLines
+            val secondaryLines: List<DesktopLyricView.SecondaryLine> = if (data.hasKey("secondaryLines") && !data.isNull("secondaryLines")) {
+                val arr = data.getArray("secondaryLines")
+                if (arr != null) {
+                    (0 until arr.size()).mapNotNull { i ->
+                        val lineMap = arr.getMap(i) ?: return@mapNotNull null
+                        DesktopLyricView.SecondaryLine(
+                            type = lineMap.getString("type") ?: "translation",
+                            text = lineMap.getString("text") ?: "",
+                        )
+                    }
+                } else emptyList()
+            } else emptyList()
+
+            val line = DesktopLyricView.LyricLine(
+                lineId = lineId,
+                primaryText = primaryText,
+                primaryWords = primaryWords,
+                secondaryLines = secondaryLines,
+                lineStartMs = lineStartMs,
+                lineDurationMs = lineDurationMs,
+            )
+
+            UiThreadUtil.runOnUiThread {
+                lyricView?.setDesktopLyricLine(line)
+            }
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("Exception", e.message)
+        }
+    }
+
+    @ReactMethod
+    fun syncPlaybackState(state: ReadableMap, promise: Promise) {
+        try {
+            val statusStr = state.getString("status") ?: "stopped"
+            val positionMs = if (state.hasKey("positionMs")) state.getDouble("positionMs").toLong() else 0L
+            val speed = if (state.hasKey("speed")) state.getDouble("speed").toFloat() else 1f
+            val isSeek = if (state.hasKey("isSeek")) state.getBoolean("isSeek") else false
+
+            val status = when (statusStr) {
+                "playing" -> DesktopLyricView.PlaybackStatus.PLAYING
+                "paused" -> DesktopLyricView.PlaybackStatus.PAUSED
+                else -> DesktopLyricView.PlaybackStatus.STOPPED
+            }
+
+            val snapshot = DesktopLyricView.PlaybackSnapshot(
+                status = status,
+                positionMs = positionMs,
+                speed = speed,
+                updatedAtElapsed = SystemClock.elapsedRealtime(),
+                isSeek = isSeek,
+            )
+
+            UiThreadUtil.runOnUiThread {
+                lyricView?.syncPlaybackState(snapshot)
+            }
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("Exception", e.message)
+        }
+    }
+
+    @ReactMethod
+    fun setSungColor(color: String?, promise: Promise) {
+        try {
+            UiThreadUtil.runOnUiThread {
+                lyricView?.setSungColor(color)
+            }
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("Exception", e.message)
+        }
+    }
+
+    @ReactMethod
+    fun lockDesktopLyric(promise: Promise) {
+        try {
+            UiThreadUtil.runOnUiThread {
+                lyricView?.lockDesktopLyric()
+            }
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("Exception", e.message)
+        }
+    }
+
+    @ReactMethod
+    fun unlockDesktopLyric(promise: Promise) {
+        try {
+            UiThreadUtil.runOnUiThread {
+                lyricView?.unlockDesktopLyric()
+            }
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("Exception", e.message)
+        }
+    }
+
+    @ReactMethod
+    fun setColorPreset(index: Int, promise: Promise) {
+        try {
+            UiThreadUtil.runOnUiThread {
+                lyricView?.setColorPreset(index)
+            }
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("Exception", e.message)
+        }
+    }
+
+    private fun emitEvent(eventName: String, payload: WritableMap) {
+        try {
+            reactContext
+                .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+                .emit(eventName, payload)
+        } catch (_: Exception) {}
+    }
+
+    // Required by NativeEventEmitter on JS side
+    @ReactMethod
+    fun addListener(eventName: String) { /* no-op, listener count tracked by JS */ }
+
+    @ReactMethod
+    fun removeListeners(count: Int) { /* no-op */ }
 
     // ==================== Kuwo Lyric Decryption ====================
 

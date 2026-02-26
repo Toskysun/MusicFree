@@ -350,7 +350,11 @@ export interface ILanguageData {
     "basicSettings.lyric.width": string; // 歌词宽度
     "basicSettings.lyric.fontSize": string; // 字体大小
     "basicSettings.lyric.textColor": string; // 文本颜色
-    "basicSettings.lyric.backgroundColor": string; // 文本背景色
+    "basicSettings.lyric.sungColor": string;
+    "basicSettings.lyric.backgroundColor": string;
+    "basicSettings.lyric.colorPreset": string;
+    "basicSettings.lyric.unlock": string;
+    "basicSettings.lyric.lock": string;
     
     "basicSettings.cache": string; // 缓存
     "basicSettings.cache.musicCacheLimit": string; // 音乐缓存上限

@@ -17,7 +17,7 @@ import { iconSizeConst } from "@/constants/uiConst";
 import Config, { useAppConfig } from "@/core/appConfig";
 import lyricManager from "@/core/lyricManager";
 import mediaCache from "@/core/mediaCache";
-import LyricUtil from "@/native/lyricUtil";
+import LyricUtil, { LYRIC_COLOR_PRESETS } from "@/native/lyricUtil";
 import { getDocumentAsync } from "expo-document-picker";
 import { readAsStringAsync } from "expo-file-system";
 import { FlatList } from "react-native-gesture-handler";
@@ -169,9 +169,12 @@ export default function MusicItemLyricOptions(
                             leftPercent: Config.getConfig("lyric.leftPercent"),
                             align: Config.getConfig("lyric.align"),
                             color: Config.getConfig("lyric.color"),
+                            sungColor: Config.getConfig("lyric.sungColor"),
                             backgroundColor: Config.getConfig("lyric.backgroundColor"),
                             widthPercent: Config.getConfig("lyric.widthPercent"),
                             fontSize: Config.getConfig("lyric.fontSize"),
+                            presetIndex: Config.getConfig("lyric.presetIndex") ?? 0,
+                            presets: LYRIC_COLOR_PRESETS,
                         };
                         LyricUtil.showStatusBarLyric(
                             "MusicFree",
@@ -186,6 +189,26 @@ export default function MusicItemLyricOptions(
                 } else {
                     LyricUtil.hideStatusBarLyric();
                     Config.setConfig("lyric.showStatusBarLyric", false);
+                }
+                hidePanel();
+            },
+        },
+        {
+            icon: "shield-keyhole-outline",
+            title: Config.getConfig("lyric.isLocked")
+                ? t("basicSettings.lyric.unlock")
+                : t("basicSettings.lyric.lock"),
+            show: !!Config.getConfig("lyric.showStatusBarLyric"),
+            onPress() {
+                const isLocked = Config.getConfig("lyric.isLocked");
+                if (isLocked) {
+                    LyricUtil.unlockDesktopLyric();
+                    Config.setConfig("lyric.isLocked", false);
+                    Toast.success(t("basicSettings.lyric.unlock"));
+                } else {
+                    LyricUtil.lockDesktopLyric();
+                    Config.setConfig("lyric.isLocked", true);
+                    Toast.success(t("basicSettings.lyric.lock"));
                 }
                 hidePanel();
             },
