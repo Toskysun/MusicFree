@@ -11,6 +11,7 @@ import { addFileScheme, getFileName } from "@/utils/fileUtils";
 import { getMediaExtraProperty, patchMediaExtra } from "@/utils/mediaExtra";
 import { getLocalPath, isSameMediaItem, resetMediaItem } from "@/utils/mediaUtils";
 import notImplementedFunction from "@/utils/notImplementedFunction.ts";
+import type { IPluginManager } from "@/types/core/pluginManager";
 import axios from "axios";
 import bigInt from "big-integer";
 import * as cheerio from "cheerio";

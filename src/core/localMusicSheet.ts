@@ -3,7 +3,7 @@ import {
     internalSerializeKey,
     supportLocalMediaType,
 } from "@/constants/commonConst";
-import mp3Util, { IBasicMeta } from "@/native/mp3Util";
+import mp3Util from "@/native/mp3Util";
 import { addFileScheme, getFileName } from "@/utils/fileUtils.ts";
 import {
     getLocalPath,
@@ -163,7 +163,7 @@ async function importLocal(_folderPaths: string[]) {
         throw new Error("Import Broken");
     }
     // 分组请求，不然序列化可能出问题
-    let metas: IBasicMeta[] = [];
+    let metas: any[] = [];
     const groups = Math.ceil(musicList.length / groupNum);
     for (let i = 0; i < groups; ++i) {
         metas = metas.concat(

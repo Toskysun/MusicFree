@@ -61,12 +61,14 @@ export default function SongInfo(props: ISongInfoProps) {
             // 单歌手，直接跳转
             const singer = singerList[0];
             const artistItem: IArtist.IArtistItem = {
-                id: singer.id,
+                id: String(singer.id),
                 singerMID: singer.mid,  // QQ音乐有mid，其他插件可能没有
                 name: singer.name,
                 platform: musicItem.platform,
                 avatar: singer.avatar || "",
                 worksNum: 0,
+                musicList: [] as any,
+                albumList: [] as any,
             };
 
             navigate(ROUTE_PATH.ARTIST_DETAIL, {
@@ -108,6 +110,7 @@ export default function SongInfo(props: ISongInfoProps) {
             artwork: musicItem.artwork,
             artist: musicItem.artist,
             description: "",
+            musicList: [],
         };
 
         navigate(ROUTE_PATH.ALBUM_DETAIL, {

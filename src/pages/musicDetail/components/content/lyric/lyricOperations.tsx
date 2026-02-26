@@ -46,7 +46,7 @@ export default function LyricOperations(props: ILyricOperationsProps) {
                     showPanel("SetFontSize", {
                         defaultSelect: detailFontSize ?? 1,
                         onSelectChange(value) {
-                            devLog("Setting lyric font size to:", value);
+                            devLog("log", "Setting lyric font size to:", value);
                             appConfig.setConfig("lyric.detailFontSize", value);
                             scrollToCurrentLrcItem();
                         },

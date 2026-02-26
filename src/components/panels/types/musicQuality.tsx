@@ -91,7 +91,7 @@ export default function MusicQuality(props: IMusicQualityProps) {
                         ) : (
                             <Pressable style={style.item}>
                                 <ThemeText fontColor="textSecondary">
-                                    {i18n.t("panel.musicQuality.noQualityAvailable", "暂无可用音质")}
+                                    {i18n.t("panel.musicQuality.noQualityAvailable")}
                                 </ThemeText>
                             </Pressable>
                         )}

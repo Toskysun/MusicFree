@@ -19,6 +19,8 @@ interface ISimpleInputProps {
     maxLength?: number;
     placeholder?: string;
     autoFocus?: boolean;
+    defaultValue?: string;
+    tips?: string;
 }
 
 export default function SimpleInput(props: ISimpleInputProps) {

@@ -2,11 +2,21 @@
  * QQ Music QRC Decrypter Tests
  */
 
+jest.mock("@/native/lyricUtil", () => ({
+  __esModule: true,
+  default: {
+    decryptQRCLyric: async (encryptedHex: string) =>
+      encryptedHex ? "[00:00.00]mock lyric" : "",
+    decryptKuwoLyric: async (lrcBase64: string) => lrcBase64,
+  },
+}));
+
 import {
   decryptQRCLyric,
   isQRCEncrypted,
   autoDecryptLyric,
 } from '../musicDecrypter';
+import { describe, expect, it, jest } from "@jest/globals";
 
 describe('musicDecrypter', () => {
   describe('isQRCEncrypted', () => {
@@ -45,36 +55,36 @@ describe('musicDecrypter', () => {
   });
 
   describe('autoDecryptLyric', () => {
-    it('should return original lyrics if not encrypted', () => {
+    it('should return original lyrics if not encrypted', async () => {
       const plainLyrics = '[00:00.00]Plain text lyrics';
-      expect(autoDecryptLyric(plainLyrics)).toBe(plainLyrics);
+      await expect(autoDecryptLyric(plainLyrics)).resolves.toBe(plainLyrics);
     });
 
-    it('should attempt decryption for encrypted lyrics', () => {
+    it('should attempt decryption for encrypted lyrics', async () => {
       const encryptedHex = '0'.repeat(2000);
-      const result = autoDecryptLyric(encryptedHex);
+      const result = await autoDecryptLyric(encryptedHex);
       // Should either return decrypted text or original on error
       expect(result).toBeDefined();
+      expect(typeof result).toBe('string');
     });
   });
 
   describe('decryptQRCLyric', () => {
-    it('should handle invalid hex input gracefully', () => {
-      const result = decryptQRCLyric('00');
-      // Should return something even if decryption fails internally
-      expect(typeof result).toBe('string');
+    it('should handle invalid hex input gracefully', async () => {
+      const result = await decryptQRCLyric('00');
+      expect(typeof result).toBe("string");
     });
 
-    it('should handle empty input', () => {
-      const result = decryptQRCLyric('');
+    it('should handle empty input', async () => {
+      const result = await decryptQRCLyric('');
       expect(typeof result).toBe('string');
       expect(result).toBe(''); // Empty hex produces empty result
     });
 
-    it('should process valid hex format', () => {
+    it('should process valid hex format', async () => {
       // Simple hex input (will not produce valid lyrics, but tests the pipeline)
       const hexInput = '48656c6c6f'; // "Hello" in hex
-      const result = decryptQRCLyric(hexInput);
+      const result = await decryptQRCLyric(hexInput);
       expect(typeof result).toBe('string');
     });
 

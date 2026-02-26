@@ -44,6 +44,8 @@ declare namespace IFileNaming {
         maxLength: number;
         /** 截断时是否保留扩展名 */
         keepExtension: boolean;
+        /** 是否在文件名中显示音质 */
+        showQuality?: boolean;
     }
 
     /**

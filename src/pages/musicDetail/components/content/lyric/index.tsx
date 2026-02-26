@@ -150,7 +150,7 @@ export default function Lyric(props: IProps) {
         ["romanization", "original", "translation"],
     );
     const fontSizeKey = useAppConfig("lyric.detailFontSize") ?? 1;
-    devLog("Lyric detail page font size:", fontSizeKey);
+    devLog("log", "Lyric detail page font size:", fontSizeKey);
     const fontSizeStyle = useMemo(
         () => ({
             fontSize: fontSizeMap[fontSizeKey],
@@ -461,9 +461,11 @@ export default function Lyric(props: IProps) {
                                         }
                                         romanization={romanizationText}
                                         hasRomanizationWordByWord={
-                                            showRomanization &&
-                                            hasRomanization &&
-                                            item.hasRomanizationWordByWord
+                                            showRomanization === true &&
+                                            hasRomanization === true &&
+                                            item.hasRomanizationWordByWord === true
+                                                ? true
+                                                : undefined
                                         }
                                         isRomanizationPseudo={item.isRomanizationPseudo}
                                         translation={translationText}
@@ -473,9 +475,11 @@ export default function Lyric(props: IProps) {
                                                 : undefined
                                         }
                                         hasTranslationWordByWord={
-                                            showTranslation &&
-                                            hasTranslation &&
-                                            item.hasTranslationWordByWord
+                                            showTranslation === true &&
+                                            hasTranslation === true &&
+                                            item.hasTranslationWordByWord === true
+                                                ? true
+                                                : undefined
                                         }
                                         lyricOrder={order}
                                         align={lyricAlign}

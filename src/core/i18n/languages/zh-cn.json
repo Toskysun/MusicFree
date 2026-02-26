@@ -459,6 +459,7 @@
     "panel.musicItemOptions.cacheCleared": "缓存已清除",
     "panel.musicItemOptions.deleteFailed": "删除失败",
     "panel.musicQuality.title": "设置{type}音质",
+    "panel.musicQuality.noQualityAvailable": "暂无可用音质",
     "panel.searchLrc.unnamed": "(未命名)",
     "panel.searchLrc.notSupported": "搜索歌词",
     "panel.setFontSize.title": "设置字体大小",

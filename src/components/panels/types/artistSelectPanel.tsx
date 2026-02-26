@@ -39,12 +39,14 @@ export default function ArtistSelectPanel(props: IArtistSelectPanelProps) {
     const handleArtistPress = (singer: ISingerInfo) => {
         // 构造 artistItem，包含完整的歌手信息
         const artistItem: IArtist.IArtistItem = {
-            id: singer.id,
+            id: String(singer.id),
             singerMID: singer.mid,
             name: singer.name,
             platform: platform,
             avatar: singer.avatar || "",
             worksNum: 0,
+            musicList: [] as any,
+            albumList: [] as any,
         };
 
         // 获取插件 hash

@@ -158,7 +158,7 @@ class NotificationPermissionManager {
             return hasPermission;
         } catch (error) {
             errorLog("Failed to request notification permission", error);
-            Toast.error("请求通知权限失败");
+            Toast.warn("请求通知权限失败");
             return false;
         }
     }

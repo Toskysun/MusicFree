@@ -500,7 +500,7 @@ export default function BasicSetting() {
                                 { label: "自定义模板", value: "custom" },
                             ],
                             onOk(val) {
-                                Config.setConfig("basic.fileNamingType", val);
+                                Config.setConfig("basic.fileNamingType", val as "preset" | "custom");
                                 // 设置默认值
                                 if (val === "preset" && !fileNamingPreset) {
                                     Config.setConfig("basic.fileNamingPreset", DEFAULT_FILE_NAMING_CONFIG.preset);
@@ -530,7 +530,7 @@ export default function BasicSetting() {
                                 value: template,
                             })),
                             onOk(val) {
-                                Config.setConfig("basic.fileNamingPreset", val);
+                                Config.setConfig("basic.fileNamingPreset", val as IFileNaming.IPresetTemplate);
                             },
                         });
                     },

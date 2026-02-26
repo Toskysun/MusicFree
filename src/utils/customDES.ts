@@ -291,7 +291,7 @@ function f(state: number, key: Uint8Array): number {
 /**
  * DES key setup
  */
-function desKeySetup(key: Uint8Array, schedule: Uint8Array[][], mode: DESMode): number {
+function desKeySetup(key: Uint8Array, schedule: Uint8Array[], mode: DESMode): number {
   const keyRndShift = [1, 1, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 1];
   const keyPermC = [56, 48, 40, 32, 24, 16, 8, 0, 57, 49, 41, 33, 25, 17,
                     9, 1, 58, 50, 42, 34, 26, 18, 10, 2, 59, 51, 43, 35];
@@ -334,7 +334,7 @@ function desKeySetup(key: Uint8Array, schedule: Uint8Array[][], mode: DESMode): 
 /**
  * DES crypt (single block)
  */
-function desCrypt(inputBytes: Uint8Array, keySchedule: Uint8Array[][]): Uint8Array {
+function desCrypt(inputBytes: Uint8Array, keySchedule: Uint8Array[]): Uint8Array {
   const state = new Uint32Array(2);
 
   // Initial Permutation
@@ -361,7 +361,7 @@ function desCrypt(inputBytes: Uint8Array, keySchedule: Uint8Array[][]): Uint8Arr
  * DES encrypt function
  */
 function funcDes(buff: Uint8Array, key: Uint8Array, length: number): Uint8Array {
-  const schedule: Uint8Array[][] = Array(16).fill(null).map(() => []);
+  const schedule: Uint8Array[] = new Array(16);
   desKeySetup(key, schedule, DESMode.DES_ENCRYPT);
 
   const output = new Uint8Array(length);
@@ -378,7 +378,7 @@ function funcDes(buff: Uint8Array, key: Uint8Array, length: number): Uint8Array 
  * DES decrypt function
  */
 function funcDdes(buff: Uint8Array, key: Uint8Array, length: number): Uint8Array {
-  const schedule: Uint8Array[][] = Array(16).fill(null).map(() => []);
+  const schedule: Uint8Array[] = new Array(16);
   desKeySetup(key, schedule, DESMode.DES_DECRYPT);
 
   const output = new Uint8Array(length);

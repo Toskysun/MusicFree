@@ -39,6 +39,7 @@ export interface IAppConfigProperties {
     "basic.fileNamingPreset": IFileNaming.IPresetTemplate;
     "basic.fileNamingCustom": string;
     "basic.fileNamingMaxLength": number;
+    "basic.fileNamingShowQuality": boolean;
     "basic.qualityKeysList": string[];
     "basic.qualityTranslations": Record<string, string>;
     "basic.qualityAbbreviations": Record<string, string>;

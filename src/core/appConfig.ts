@@ -184,7 +184,6 @@ class AppConfig implements IAppConfig {
 
         if (schemaVersion < 3) {
             // Migrate lyric.detailFontSize from PersistStatus to AppConfig
-            const getOrCreateMMKV = (await import("@/utils/getOrCreateMMKV")).default;
             const persistStatusStore = getOrCreateMMKV("App.PersistStatus");
             const detailFontSizeStr = persistStatusStore.getString("lyric.detailFontSize");
 

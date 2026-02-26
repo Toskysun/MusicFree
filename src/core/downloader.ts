@@ -671,7 +671,7 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
         
         // 从musicItem.qualities中获取预期文件大小
         let expectedFileSize = 0;
-        let qualityInfo = null;
+        let qualityInfo: { url?: string; size?: string | number } | null = null;
         const taskQuality = nextTask.quality ?? 
             this.configService.getConfig("basic.defaultDownloadQuality") ?? 
             "320k";
@@ -930,9 +930,9 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
                                     }
                                 }
                                 
-                            } catch (statError) {
+                            } catch (statError: any) {
                                 // 文件可能正在写入或不可访问
-                                devLog('warn', '⚠️[下载器] 获取文件状态失败，可能正在写入', statError.message);
+                                devLog('warn', '⚠️[下载器] 获取文件状态失败，可能正在写入', statError?.message);
                             }
                         } catch (error) {
                             clearInterval(checkInterval);

@@ -62,7 +62,7 @@ export default function MiniLyric(props: IMiniLyricProps) {
     );
 
     const effectiveLyricOrder = useMemo(
-        () => (layout === "compact" ? ["original"] : lyricOrder),
+        () => (layout === "compact" ? ["original"] : lyricOrder) ?? ["original"],
         [layout, lyricOrder],
     );
     const effectiveShowTranslation = layout === "compact" ? false : showTranslation;

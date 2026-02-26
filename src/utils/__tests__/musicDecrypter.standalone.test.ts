@@ -4,6 +4,7 @@
  */
 
 import CryptoJS from 'crypto-js';
+import { describe, expect, it } from "@jest/globals";
 
 /**
  * Convert Uint8Array to CryptoJS WordArray (big-endian)

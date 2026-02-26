@@ -459,6 +459,7 @@
     "panel.musicItemOptions.cacheCleared": "Cache cleared",
     "panel.musicItemOptions.deleteFailed": "Delete failed",
     "panel.musicQuality.title": "Set {type} Quality",
+    "panel.musicQuality.noQualityAvailable": "No quality available",
     "panel.searchLrc.unnamed": "(Unnamed)",
     "panel.searchLrc.notSupported": "Search Lyrics",
     "panel.setFontSize.title": "Set Font Size",

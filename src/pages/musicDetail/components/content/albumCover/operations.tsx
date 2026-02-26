@@ -74,7 +74,7 @@ export default function Operations() {
 
                         try {
                             // 获取插件实例
-                            const plugin = PluginManager.getPlugin(musicItem.platform);
+                            const plugin = PluginManager.getByName(musicItem.platform);
                             let enhancedMusicItem = musicItem;
                             
                             // 如果插件支持getMusicInfo且当前音乐没有qualities信息，则获取完整信息
@@ -92,7 +92,7 @@ export default function Operations() {
                             }
 
                             // 隐藏加载对话框
-                            hideDialog("LoadingDialog");
+                            hideDialog();
 
                             // 显示音质选择面板
                             showPanel("MusicQuality", {
@@ -104,7 +104,7 @@ export default function Operations() {
                             });
                         } catch (error) {
                             // 隐藏加载对话框
-                            hideDialog("LoadingDialog");
+                            hideDialog();
                             
                             // 出错时使用原始音乐信息
                             showPanel("MusicQuality", {

@@ -72,6 +72,7 @@ export interface ILanguageData {
     "home.starredPlaylistsCount.a11y": string; // 我喜欢的歌单数量
     "home.songCount": string; // 歌曲数量
     "home.clickToSearch": string; // 点击搜索
+    "home.playById.a11y": string; // 通过ID播放
 
     // 对话框相关
     "dialog.deleteSheetTitle": string; // 删除歌单
@@ -81,6 +82,7 @@ export interface ILanguageData {
 
     // 提示消息相关
     "toast.deleteSuccess": string; // 删除成功
+    "toast.deleteFailed": string; // 删除失败
     "toast.hasStarred": string; // 已收藏歌单
     "toast.hasUnstarred": string; // 已取消收藏歌单
     "toast.importSuccess": string; // 导入成功
@@ -103,6 +105,8 @@ export interface ILanguageData {
     "lyric.unlinkLyric": string; // 取消链接歌词
     "lyric.noLyric": string; // 暂无歌词
     "lyric.searchLyric": string; // 搜索歌词
+    "lyric.detailAlign": string; // 歌词对齐方式
+    "lyric.alignSwitched": string; // 对齐方式已切换
 
     // 音乐列表编辑器相关
     "musicListEditor.selectMusicCount": string; // 选择的音乐数量
@@ -116,6 +120,8 @@ export interface ILanguageData {
     "permissionSetting.floatWindowPermissionDescription": string; // 悬浮窗权限说明
     "permissionSetting.fileReadWritePermission": string; // 文件读写权限
     "permissionSetting.fileReadWritePermissionDescription": string; // 文件读写权限说明
+    "permissionSetting.notificationPermission": string; // 通知权限
+    "permissionSetting.notificationPermissionDescription": string; // 通知权限说明
 
     // 推荐歌单相关
     "recommendSheet.title": string; // 推荐歌单
@@ -160,6 +166,9 @@ export interface ILanguageData {
     "downloading.downloadStatus.downloadProgress": string; // 下载进度
     "downloading.downloadStatus.pending": string; // 等待中
     "downloading.downloadStatus.preparing": string; // 准备中
+    "downloading.clearErrorTasks": string; // 清除错误任务
+    "downloading.clearErrorSuccess": string; // 已清除错误任务
+    "downloading.noErrorTasksToClear": string; // 没有错误任务需要清除
 
     // 艺术家详情相关
     "artistDetail.fansCount": string; // 粉丝数量
@@ -234,6 +243,9 @@ export interface ILanguageData {
     "themeSettings.lightMode": string; // 明亮模式
     "themeSettings.darkMode": string; // 黑暗模式
     "themeSettings.customMode": string; // 自定义模式
+    "themeSettings.coverStyle": string; // 封面样式
+    "themeSettings.coverStyleSquare": string; // 方形
+    "themeSettings.coverStyleCircle": string; // 圆形
 
 
     // 自定义主题相关
@@ -289,6 +301,11 @@ export interface ILanguageData {
     "basicSettings.associateLyricType": string; // 关联歌词类型
     "basicSettings.associateLyricType.input": string; // 输入
     "basicSettings.associateLyricType.search": string; // 搜索
+    "basicSettings.keyboardAvoidMode": string; // 键盘避让模式
+    "basicSettings.keyboardAvoidMode.auto": string; // 自动
+    "basicSettings.keyboardAvoidMode.manual": string; // 手动
+    "basicSettings.keyboardAvoidMode.off": string; // 关闭
+    "basicSettings.openPlayDetailOnLaunch": string; // 启动时打开播放详情
     "basicSettings.showExitOnNotification": string; // 通知中显示退出
     "basicSettings.sheetAndAlbum": string; // 歌单和专辑
     "basicSettings.clickMusicInSearch": string; // 点击搜索中的音乐
@@ -368,6 +385,8 @@ export interface ILanguageData {
     "basicSettings.developer.devLog": string; // 调试面板
     "basicSettings.developer.viewErrorLog": string; // 查看错误日志
     "basicSettings.developer.clearLog": string; // 清空日志
+    "basicSettings.developer.checkAnnouncements": string; // 检查公告
+    "basicSettings.developer.clearAnnouncements": string; // 清除公告
     
     // 对话框相关 - 缓存设置
     "dialog.setCacheTitle": string; // 设置缓存
@@ -386,6 +405,7 @@ export interface ILanguageData {
     "dialog.setScheduleCloseTime.placeholder": string; // 请输入时间
     "dialog.setScheduleCloseTime.unit": string; // 分钟
     "dialog.setScheduleCloseTime.hint": string; // 最长支持设置24小时（1440分钟）
+    "dialog.dontShowAgain": string; // 不再显示
     
     // 提示消息相关 - 缓存和日志
     "toast.cacheSetSuccess": string; // 设置成功
@@ -500,9 +520,11 @@ export interface ILanguageData {
     "panel.musicItemOptions.clearPluginCache": string; // 清除插件缓存
     "panel.musicItemOptions.cacheCleared": string; // 缓存已清除
     "panel.musicItemOptions.deleteFailed": string; // 删除失败
+    "panel.musicItemOptions.redownload": string; // 重新下载
 
     // 面板相关 - 音质设置
     "panel.musicQuality.title": string; // 设置音质
+    "panel.musicQuality.noQualityAvailable": string; // 暂无可用音质
 
     // 面板相关 - 搜索歌词
     "panel.searchLrc.unnamed": string; // 未命名
@@ -536,6 +558,23 @@ export interface ILanguageData {
 
     // 面板相关 - 歌单标签
     "panel.sheetTags.title": string; // 歌单类别
+
+    // 面板相关 - 艺人选择
+    "panel.artistSelect.title": string; // 选择歌手
+    "panel.artistSelect.description": string; // 请选择要查看的歌手
+
+    // 面板相关 - 通过ID播放
+    "panel.playById.title": string; // 通过ID播放
+    "panel.playById.selectPluginFirst": string; // 请先选择插件
+    "panel.playById.inputIdFirst": string; // 请先输入ID
+    "panel.playById.unknownArtist": string; // 未知歌手
+    "panel.playById.playingNow": string; // 开始播放
+    "panel.playById.fetchFailed": string; // 获取歌曲信息失败
+    "panel.playById.selectPlugin": string; // 选择插件
+    "panel.playById.inputLabel": string; // 输入ID
+    "panel.playById.placeholder": string; // 请输入歌曲ID
+    "panel.playById.hint": string; // 输入歌曲ID后点击确认开始播放
+    "panel.playById.qqHint": string; // QQ音乐可输入songmid或songId
 
     // 播放模式相关
     "repeatMode.SHUFFLE": string; // 随机播放

@@ -149,7 +149,7 @@ class AnnouncementService {
             }
         }
 
-        errorLog('获取公告失败，所有源都不可用');
+        errorLog('获取公告失败，所有源都不可用', null);
         return null;
     }
 

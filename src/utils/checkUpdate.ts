@@ -75,7 +75,7 @@ export default async function checkUpdate(): Promise<IUpdateInfo | undefined> {
                 needUpdate: false,
                 data: rawInfo,
             };
-        } catch (error) {
+        } catch (error: any) {
             devLog('warn', '⚠️[版本检查] version.json获取失败', {
                 source: updateList[i],
                 error: error?.message || String(error)
@@ -166,7 +166,7 @@ export default async function checkUpdate(): Promise<IUpdateInfo | undefined> {
             }
         };
         
-    } catch (error) {
+    } catch (error: any) {
         devLog('error', '❌[版本检查] GitHub API获取失败', {
             apiUrl: GITHUB_API_URL,
             error: error?.message || String(error)

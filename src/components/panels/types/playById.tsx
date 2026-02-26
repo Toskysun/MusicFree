@@ -14,7 +14,7 @@ import NoPlugin from "@/components/base/noPlugin";
 import Toast from "@/utils/toast";
 import TrackPlayer from "@/core/trackPlayer";
 import { ROUTE_PATH, useNavigate } from "@/core/router";
-import Plugin from "@/core/pluginManager/plugin";
+import { Plugin } from "@/core/pluginManager/plugin";
 
 export default function PlayById() {
     const { t } = useI18N();
@@ -89,6 +89,9 @@ export default function PlayById() {
                         platform: selectedPlugin.name,
                         title: inputValue,
                         artist: t("panel.playById.unknownArtist"),
+                        duration: 0,
+                        album: "",
+                        artwork: "",
                     } as IMusic.IMusicItem;
                 }
             } else {
@@ -102,6 +105,9 @@ export default function PlayById() {
                     platform: selectedPlugin.name,
                     title: inputValue,
                     artist: t("panel.playById.unknownArtist"),
+                    duration: 0,
+                    album: "",
+                    artwork: "",
                 } as IMusic.IMusicItem;
             }
 

@@ -522,7 +522,7 @@ class TrackPlayer extends EventEmitter<{
             if (musicItem.qualities || musicItem.source) {
                 selectedQuality = getSmartQuality(
                     preferredQuality,
-                    musicItem.qualities || musicItem.source,
+                    (musicItem.qualities || musicItem.source) as IMusic.IQuality | undefined,
                     plugin?.supportedQualities // 假设插件提供支持的音质列表
                 );
             } else {

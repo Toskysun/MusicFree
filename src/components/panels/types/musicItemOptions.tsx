@@ -191,7 +191,7 @@ export default function MusicItemOptions(props: IMusicItemOptionsProps) {
 
                 try {
                     // 获取插件实例
-                    const plugin = pluginManager.getPlugin(musicItem.platform);
+                    const plugin = pluginManager.getByName(musicItem.platform);
                     let enhancedMusicItem = musicItem;
                     
                     // 如果插件支持getMusicInfo且当前音乐没有qualities信息，则获取完整信息
@@ -209,7 +209,7 @@ export default function MusicItemOptions(props: IMusicItemOptionsProps) {
                     }
 
                     // 隐藏加载对话框
-                    hideDialog("LoadingDialog");
+                    hideDialog();
 
                     // 显示音质选择面板
                     showPanel("MusicQuality", {
@@ -221,7 +221,7 @@ export default function MusicItemOptions(props: IMusicItemOptionsProps) {
                     });
                 } catch (error) {
                     // 隐藏加载对话框
-                    hideDialog("LoadingDialog");
+                    hideDialog();
                     
                     // 出错时使用原始音乐信息
                     showPanel("MusicQuality", {

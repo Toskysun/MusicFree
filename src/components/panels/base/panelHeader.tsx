@@ -15,6 +15,7 @@ interface IPanelHeaderProps {
     hideButtons?: boolean;
     hideDivider?: boolean;
     style?: StyleProp<ViewStyle>;
+    loading?: boolean;
 }
 export default function PanelHeader(props: IPanelHeaderProps) {
     const {

@@ -130,7 +130,7 @@ export default function MusicMetadataSettings(_props: IMusicMetadataSettingsProp
                         <View style={styles.textContent}>
                             <ThemeText
                                 fontSize="content"
-                                fontWeight={level === 0 ? "semibold" : "normal"}
+                                fontWeight={level === 0 ? "semibold" : "regular"}
                                 style={level > 0 && styles.subItemTitle}>
                                 {title}
                             </ThemeText>
