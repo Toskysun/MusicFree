@@ -306,7 +306,7 @@
     "basicSettings.lyric.textColor": "文本顏色",
     "basicSettings.lyric.sungColor": "已唱顏色",
     "basicSettings.lyric.backgroundColor": "文本背景色",
-    "basicSettings.lyric.colorPreset": "顏色預設",
+    "basicSettings.lyric.colorPreset": "顏色預設（長按自訂）",
     "basicSettings.lyric.unlock": "解鎖桌面歌詞",
     "basicSettings.lyric.lock": "鎖定桌面歌詞",
     "basicSettings.cache": "快取",

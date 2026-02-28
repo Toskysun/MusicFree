@@ -12,6 +12,7 @@ import { useI18N } from "@/core/i18n";
 import { ROUTE_PATH, useNavigate } from "@/core/router";
 import useColors from "@/hooks/useColors";
 import LyricUtil, { NativeTextAlignment, LYRIC_COLOR_PRESETS } from "@/native/lyricUtil";
+import { resolveLyricPresets } from "@/utils/lyricPreset";
 import { AppConfigPropertyKey } from "@/types/core/config";
 import { clearCache, getCacheSize, sizeFormatter } from "@/utils/fileUtils";
 import { clearLog, getErrorLogContent } from "@/utils/log";
@@ -26,6 +27,7 @@ import { SectionList, StyleSheet, TouchableOpacity, View } from "react-native";
 import { readdir } from "react-native-fs";
 import { FlatList, ScrollView } from "react-native-gesture-handler";
 import Mp3Util from "@/native/mp3Util";
+import lyricManager from "@/core/lyricManager";
 import {
     getPresetTemplates,
     validateTemplate,
@@ -882,8 +884,12 @@ function LyricSetting() {
     const enableBreathingDots = useAppConfig("lyric.enableBreathingDots");
     const desktopShowTranslation = useAppConfig("lyric.desktopShowTranslation");
     const desktopShowRomanization = useAppConfig("lyric.desktopShowRomanization");
+    const invertColors = useAppConfig("lyric.invertColors");
+    const topPercent = useAppConfig("lyric.topPercent");
+    const leftPercent = useAppConfig("lyric.leftPercent");
 
     const { t } = useI18N();
+    const colors = useColors();
 
     const autoSearchLyric = createSwitch(t("basicSettings.lyric.autoSearchLyric"), "lyric.autoSearchLyric", enableAutoSearchLyric ?? false);
     const wordByWordLyric = createSwitch("逐字歌词", "lyric.enableWordByWord", enableWordByWord ?? true);
@@ -893,6 +899,41 @@ function LyricSetting() {
     const hideWhenPaused = createSwitch(t("basicSettings.lyric.hideDesktopLyricWhenPaused"), "lyric.hideDesktopLyricWhenPaused", hideDesktopLyricWhenPaused ?? true);
     const desktopTranslation = createSwitch("桌面歌词显示翻译", "lyric.desktopShowTranslation", desktopShowTranslation ?? false);
     const desktopRomanization = createSwitch("桌面歌词显示罗马音", "lyric.desktopShowRomanization", desktopShowRomanization ?? false);
+    const invertColorsSwitch = createSwitch("颜色反转（已唱白色/未唱彩色）", "lyric.invertColors", invertColors ?? false, (newValue) => {
+        Config.setConfig("lyric.invertColors", newValue);
+        if (showStatusBarLyric) {
+            // 刷新桌面歌词以应用反转
+            LyricUtil.hideStatusBarLyric().then(() => {
+                LyricUtil.showStatusBarLyric("MusicFree", {
+                    topPercent: Config.getConfig("lyric.topPercent"),
+                    leftPercent: Config.getConfig("lyric.leftPercent"),
+                    align: Config.getConfig("lyric.align"),
+                    color: Config.getConfig("lyric.color"),
+                    sungColor: Config.getConfig("lyric.sungColor"),
+                    backgroundColor: Config.getConfig("lyric.backgroundColor"),
+                    widthPercent: Config.getConfig("lyric.widthPercent"),
+                    fontSize: Config.getConfig("lyric.fontSize"),
+                    presetIndex: Config.getConfig("lyric.presetIndex") ?? 0,
+                    presets: resolveLyricPresets(),
+                }).then(() => {
+                    // Resync lyric line data + playback state to restore word-by-word
+                    lyricManager.resyncDesktopLyric();
+                });
+            });
+        }
+    });
+
+    // 获取当前预设的颜色（考虑自定义覆盖）
+    const customPresets = Config.getConfig("lyric.customPresets") as Array<{
+        unsungColor: string;
+        sungColor: string;
+        backgroundColor: string;
+    } | null> | undefined;
+
+    const getPresetColor = (idx: number) => {
+        const custom = customPresets?.[idx];
+        return custom ? custom.sungColor : LYRIC_COLOR_PRESETS[idx]?.sungColor ?? '#FFFFFF';
+    };
 
     const openStatusBarLyric = createSwitch(
         t("basicSettings.lyric.showStatusBarLyric"),
@@ -913,7 +954,7 @@ function LyricSetting() {
                             widthPercent: Config.getConfig("lyric.widthPercent"),
                             fontSize: Config.getConfig("lyric.fontSize"),
                             presetIndex: Config.getConfig("lyric.presetIndex") ?? 0,
-                            presets: LYRIC_COLOR_PRESETS,
+                            presets: resolveLyricPresets(),
                         });
                         Config.setConfig("lyric.showStatusBarLyric", true);
                     } else {
@@ -928,6 +969,71 @@ function LyricSetting() {
             } catch { }
         },
     );
+
+    const openColorPicker = (title: string, currentColor: string, onSelected: (hex: string) => void) => {
+        showPanel("ColorPicker", {
+            defaultColor: currentColor,
+            onSelected: (color: any) => {
+                const hex = color.rgb().hexa().toString();
+                onSelected(hex);
+            },
+        });
+    };
+
+    const handleCustomizePreset = (idx: number) => {
+        const custom = customPresets?.[idx];
+        const base = LYRIC_COLOR_PRESETS[idx];
+        const current = custom ?? base;
+
+        showDialog("RadioDialog", {
+            title: `自定义预设 ${idx + 1}`,
+            content: [
+                { label: "未播放颜色", value: "unsungColor" },
+                { label: "已播放颜色", value: "sungColor" },
+                { label: "背景颜色", value: "backgroundColor" },
+                { label: "恢复默认", value: "reset" },
+            ],
+            onOk(val) {
+                if (val === "reset") {
+                    const newCustom = [...(customPresets ?? Array(LYRIC_COLOR_PRESETS.length).fill(null))];
+                    newCustom[idx] = null;
+                    Config.setConfig("lyric.customPresets", newCustom);
+                    if (showStatusBarLyric && (presetIndex ?? 0) === idx) {
+                        LyricUtil.setColorPreset(idx);
+                    }
+                    return;
+                }
+                const colorKey = val as "unsungColor" | "sungColor" | "backgroundColor";
+                openColorPicker(
+                    colorKey === "unsungColor" ? "未播放颜色" : colorKey === "sungColor" ? "已播放颜色" : "背景颜色",
+                    current[colorKey],
+                    (hex) => {
+                        const newCustom = [...(customPresets ?? Array(LYRIC_COLOR_PRESETS.length).fill(null))];
+                        const existing = newCustom[idx] ?? { ...base };
+                        (existing as any)[colorKey] = hex;
+                        newCustom[idx] = existing;
+                        Config.setConfig("lyric.customPresets", newCustom);
+                        // 如果当前正在使用这个预设，立即刷新
+                        if (showStatusBarLyric && (presetIndex ?? 0) === idx) {
+                            LyricUtil.hideStatusBarLyric().then(() => {
+                                LyricUtil.showStatusBarLyric("MusicFree", {
+                                    topPercent: Config.getConfig("lyric.topPercent"),
+                                    leftPercent: Config.getConfig("lyric.leftPercent"),
+                                    align: Config.getConfig("lyric.align"),
+                                    widthPercent: Config.getConfig("lyric.widthPercent"),
+                                    fontSize: Config.getConfig("lyric.fontSize"),
+                                    presetIndex: idx,
+                                    presets: resolveLyricPresets(),
+                                }).then(() => {
+                                    lyricManager.resyncDesktopLyric();
+                                });
+                            });
+                        }
+                    }
+                );
+            },
+        });
+    };
 
     return (
         <View>
@@ -970,8 +1076,60 @@ function LyricSetting() {
                 <ListItem.Content title={desktopRomanization.title} />
                 {desktopRomanization.right}
             </ListItem>
+            <ListItem withHorizontalPadding heightType="small" onPress={invertColorsSwitch.onPress}>
+                <ListItem.Content title={invertColorsSwitch.title} />
+                {invertColorsSwitch.right}
+            </ListItem>
 
-            {/* 预设颜色方案 */}
+            {/* 位置控制 */}
+            <ListItem withHorizontalPadding heightType="small">
+                <ListItem.Content title={`上下位置  ${Math.round((topPercent ?? 0.5) * 100)}%`} />
+            </ListItem>
+            <View style={lyricStyles.sliderContainer}>
+                <Slider
+                    style={lyricStyles.slider}
+                    minimumValue={0}
+                    maximumValue={1}
+                    step={0.01}
+                    value={topPercent ?? 0.5}
+                    onValueChange={(val: number) => {
+                        if (showStatusBarLyric) {
+                            LyricUtil.setStatusBarLyricTop(val);
+                        }
+                    }}
+                    onSlidingComplete={(val: number) => {
+                        Config.setConfig("lyric.topPercent", val);
+                    }}
+                    minimumTrackTintColor={colors.textHighlight}
+                    maximumTrackTintColor={colors.textSecondary + '40'}
+                    thumbTintColor={colors.textHighlight}
+                />
+            </View>
+            <ListItem withHorizontalPadding heightType="small">
+                <ListItem.Content title={`左右位置  ${Math.round((leftPercent ?? 0.5) * 100)}%`} />
+            </ListItem>
+            <View style={lyricStyles.sliderContainer}>
+                <Slider
+                    style={lyricStyles.slider}
+                    minimumValue={0}
+                    maximumValue={1}
+                    step={0.01}
+                    value={leftPercent ?? 0.5}
+                    onValueChange={(val: number) => {
+                        if (showStatusBarLyric) {
+                            LyricUtil.setStatusBarLyricLeft(val);
+                        }
+                    }}
+                    onSlidingComplete={(val: number) => {
+                        Config.setConfig("lyric.leftPercent", val);
+                    }}
+                    minimumTrackTintColor={colors.textHighlight}
+                    maximumTrackTintColor={colors.textSecondary + '40'}
+                    thumbTintColor={colors.textHighlight}
+                />
+            </View>
+
+            {/* 预设颜色方案（纯圆点，长按自定义） */}
             <ListItem withHorizontalPadding heightType="small">
                 <ListItem.Content title={t("basicSettings.lyric.colorPreset")} />
             </ListItem>
@@ -980,19 +1138,19 @@ function LyricSetting() {
                     <TouchableOpacity
                         key={idx}
                         style={[
-                            lyricStyles.presetBlock,
-                            (presetIndex ?? 0) === idx && lyricStyles.presetBlockActive,
+                            lyricStyles.presetDotWrapper,
+                            (presetIndex ?? 0) === idx && lyricStyles.presetDotActive,
                         ]}
                         onPress={() => {
                             Config.setConfig("lyric.presetIndex", idx);
                             if (showStatusBarLyric) {
                                 LyricUtil.setColorPreset(idx);
                             }
+                        }}
+                        onLongPress={() => {
+                            handleCustomizePreset(idx);
                         }}>
-                        <View style={[lyricStyles.presetSwatch, { backgroundColor: preset.sungColor.slice(0, 7) }]} />
-                        <ThemeText fontSize="description" numberOfLines={1} style={lyricStyles.presetName}>
-                            {preset.name}
-                        </ThemeText>
+                        <View style={[lyricStyles.presetDot, { backgroundColor: getPresetColor(idx).slice(0, 7) }]} />
                     </TouchableOpacity>
                 ))}
             </View>
@@ -1030,28 +1188,26 @@ const lyricStyles = StyleSheet.create({
         flexWrap: "wrap",
         paddingHorizontal: rpx(24),
         paddingBottom: rpx(16),
-        gap: rpx(16),
-    },
-    presetBlock: {
+        gap: rpx(20),
         alignItems: "center",
-        width: rpx(96),
-        padding: rpx(8),
-        borderRadius: rpx(8),
-        borderWidth: 1,
+    },
+    presetDotWrapper: {
+        alignItems: "center",
+        justifyContent: "center",
+        width: rpx(56),
+        height: rpx(56),
+        borderRadius: rpx(28),
+        borderWidth: 2,
         borderColor: "transparent",
     },
-    presetBlockActive: {
-        borderColor: "#4CAF50",
+    presetDotActive: {
+        borderColor: "#FFFFFFCC",
     },
-    presetSwatch: {
-        width: rpx(48),
-        height: rpx(48),
-        borderRadius: rpx(24),
-        marginBottom: rpx(4),
+    presetDot: {
+        width: rpx(40),
+        height: rpx(40),
+        borderRadius: rpx(20),
         borderWidth: 1,
         borderColor: "rgba(128,128,128,0.3)",
-    },
-    presetName: {
-        textAlign: "center",
     },
 });

@@ -36,6 +36,7 @@ class LyricView(private val reactContext: ReactContext) : Activity() {
     // 事件回调（由 LyricUtilModule 注入）
     var onLockStateChanged: ((Boolean) -> Unit)? = null
     var onPresetChanged: ((Int) -> Unit)? = null
+    var onPresetLongPressed: ((Int) -> Unit)? = null
     var onFontSizeChanged: ((Float) -> Unit)? = null
     var onPositionChanged: ((Double, Double) -> Unit)? = null
     var onClose: (() -> Unit)? = null
@@ -124,6 +125,9 @@ class LyricView(private val reactContext: ReactContext) : Activity() {
                         applyPreset(idx)
                         onPresetChanged?.invoke(idx)
                     }
+                    override fun onRequestColorPresetLongPress(index: Int) {
+                        onPresetLongPressed?.invoke(index)
+                    }
                     override fun onRequestFontSizeChange(newFontSp: Float) {
                         setFontSize(newFontSp)
                         onFontSizeChanged?.invoke(newFontSp)
@@ -156,6 +160,12 @@ class LyricView(private val reactContext: ReactContext) : Activity() {
 
                 windowManager?.addView(container, layoutParams)
                 topPct?.toString()?.toDouble()?.let { setTopPercent(it) }
+
+                // 首屏应用预设颜色（修复重启后颜色不恢复的问题）
+                if (presets.isNotEmpty()) {
+                    applyPreset(currentPresetIndex)
+                }
+
                 listenOrientationChange()
             }
         } catch (e: Exception) {

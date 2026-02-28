@@ -78,6 +78,12 @@ export interface IAppConfigProperties {
     "lyric.desktopShowRomanization": boolean;
     "lyric.presetIndex": number;
     "lyric.isLocked": boolean;
+    "lyric.customPresets": Array<{
+        unsungColor: string;
+        sungColor: string;
+        backgroundColor: string;
+    } | null>;
+    "lyric.invertColors": boolean;
 
     // Theme
     "theme.background": string;

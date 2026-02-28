@@ -93,7 +93,7 @@ class DesktopLyricView(context: Context) : View(context) {
 
     private val secondaryPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#FFE9D2")
-        textSize = 38f
+        textSize = 41f  // 48 * 0.85
         alpha = 180
         isFakeBoldText = true
         style = Paint.Style.FILL
@@ -101,7 +101,7 @@ class DesktopLyricView(context: Context) : View(context) {
 
     private val secondaryStrokePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0x99000000.toInt()
-        textSize = 38f
+        textSize = 41f  // 48 * 0.85
         isFakeBoldText = true
         style = Paint.Style.STROKE
         strokeWidth = 2.5f
@@ -120,6 +120,7 @@ class DesktopLyricView(context: Context) : View(context) {
 
     private var textAlign: Int = Gravity.CENTER
     private var transitionDuration: Long = 160L
+    private val MIN_TEXT_SCALE = 0.85f
 
     // ==================== Choreographer ====================
 
@@ -216,9 +217,9 @@ class DesktopLyricView(context: Context) : View(context) {
         sungPaint.textSize = sizePx
         strokePaint.textSize = sizePx
         strokePaint.strokeWidth = (sizePx * 0.06f).coerceIn(2f, 5f)
-        secondaryPaint.textSize = sizePx * 0.8f
-        secondaryStrokePaint.textSize = sizePx * 0.8f
-        secondaryStrokePaint.strokeWidth = (sizePx * 0.8f * 0.06f).coerceIn(1.5f, 4f)
+        secondaryPaint.textSize = sizePx * 0.85f
+        secondaryStrokePaint.textSize = sizePx * 0.85f
+        secondaryStrokePaint.strokeWidth = (sizePx * 0.85f * 0.06f).coerceIn(1.5f, 4f)
         // 重新计算词位置
         currentLine?.let { computeWordPositions(it) }
         invalidate()
@@ -281,23 +282,56 @@ class DesktopLyricView(context: Context) : View(context) {
 
         val intAlpha = (alpha * 255).toInt().coerceIn(0, 255)
 
-        // 计算主文本位置
-        val textWidth = unsungPaint.measureText(line.primaryText)
+        // 计算主文本宽度并处理溢出
+        val rawTextWidth = unsungPaint.measureText(line.primaryText)
+        var displayText = line.primaryText
+        var textScale = 1f
+        var isEllipsized = false
+
+        if (rawTextWidth > availableWidth && availableWidth > 0) {
+            textScale = (availableWidth / rawTextWidth).coerceAtLeast(MIN_TEXT_SCALE)
+            if (textScale < 1f && rawTextWidth * textScale > availableWidth) {
+                // 缩放到 MIN_TEXT_SCALE 仍超宽，需要省略
+                textScale = MIN_TEXT_SCALE
+                isEllipsized = true
+                val scaledPaint = TextPaint(unsungPaint)
+                scaledPaint.textSize = unsungPaint.textSize * textScale
+                displayText = ellipsizeText(line.primaryText, scaledPaint, availableWidth)
+            }
+        }
+
+        val effectiveTextSize = unsungPaint.textSize * textScale
+        val savedTextSize = unsungPaint.textSize
+        val savedStrokeSize = strokePaint.textSize
+        val savedSungSize = sungPaint.textSize
+
+        if (textScale < 1f) {
+            unsungPaint.textSize = effectiveTextSize
+            strokePaint.textSize = effectiveTextSize
+            sungPaint.textSize = effectiveTextSize
+        }
+
+        val textWidth = unsungPaint.measureText(displayText)
         val textX = computeTextX(paddingH, availableWidth, textWidth)
         val fm = unsungPaint.fontMetrics
         val textHeight = fm.descent - fm.ascent
         val textY = paddingV - fm.ascent
 
         // 计算已唱进度
-        val progressX = if (isCurrent && !line.primaryWords.isNullOrEmpty()) {
+        val progressX = if (isCurrent && !line.primaryWords.isNullOrEmpty() && !isEllipsized) {
             computeProgressX(line, textX)
+        } else if (isCurrent && !line.primaryWords.isNullOrEmpty() && isEllipsized) {
+            // 省略模式：按比例映射进度
+            val rawProgressX = computeProgressX(line, 0f)
+            val progressRatio = if (primaryTextWidth > 0) (rawProgressX / primaryTextWidth).coerceIn(0f, 1f) else 0f
+            textX + textWidth * progressRatio
         } else textX
 
         // 绘制未唱层：先描边再填充
         strokePaint.alpha = (intAlpha * 0.6f).toInt().coerceIn(0, 255)
         unsungPaint.alpha = intAlpha
-        canvas.drawText(line.primaryText, textX, textY, strokePaint)
-        canvas.drawText(line.primaryText, textX, textY, unsungPaint)
+        canvas.drawText(displayText, textX, textY, strokePaint)
+        canvas.drawText(displayText, textX, textY, unsungPaint)
 
         // 绘制已唱层（clip 区域内：先描边再填充）
         if (isCurrent && !line.primaryWords.isNullOrEmpty() && progressX > textX) {
@@ -305,9 +339,16 @@ class DesktopLyricView(context: Context) : View(context) {
             canvas.clipRect(textX, 0f, progressX, height.toFloat())
             strokePaint.alpha = (intAlpha * 0.6f).toInt().coerceIn(0, 255)
             sungPaint.alpha = intAlpha
-            canvas.drawText(line.primaryText, textX, textY, strokePaint)
-            canvas.drawText(line.primaryText, textX, textY, sungPaint)
+            canvas.drawText(displayText, textX, textY, strokePaint)
+            canvas.drawText(displayText, textX, textY, sungPaint)
             canvas.restore()
+        }
+
+        // 恢复字体大小
+        if (textScale < 1f) {
+            unsungPaint.textSize = savedTextSize
+            strokePaint.textSize = savedStrokeSize
+            sungPaint.textSize = savedSungSize
         }
 
         // 绘制副行（翻译/罗马音）：描边 + 填充，与主行视觉一致
@@ -318,10 +359,16 @@ class DesktopLyricView(context: Context) : View(context) {
             secondaryPaint.alpha = secAlpha
             secondaryStrokePaint.alpha = secStrokeAlpha
             for (secondary in line.secondaryLines) {
-                val secWidth = secondaryPaint.measureText(secondary.text)
+                // 副行也处理溢出
+                var secText = secondary.text
+                val secRawWidth = secondaryPaint.measureText(secText)
+                if (secRawWidth > availableWidth && availableWidth > 0) {
+                    secText = ellipsizeText(secText, secondaryPaint, availableWidth)
+                }
+                val secWidth = secondaryPaint.measureText(secText)
                 val secX = computeTextX(paddingH, availableWidth, secWidth)
-                canvas.drawText(secondary.text, secX, secondaryY, secondaryStrokePaint)
-                canvas.drawText(secondary.text, secX, secondaryY, secondaryPaint)
+                canvas.drawText(secText, secX, secondaryY, secondaryStrokePaint)
+                canvas.drawText(secText, secX, secondaryY, secondaryPaint)
                 val secFm = secondaryPaint.fontMetrics
                 secondaryY += secFm.descent - secFm.ascent + 4f
             }
@@ -331,6 +378,27 @@ class DesktopLyricView(context: Context) : View(context) {
         unsungPaint.alpha = 255
         sungPaint.alpha = 255
         strokePaint.alpha = 255
+    }
+
+    /** 截断文本并添加省略号 */
+    private fun ellipsizeText(text: String, paint: TextPaint, maxWidth: Float): String {
+        val ellipsis = "…"
+        val ellipsisWidth = paint.measureText(ellipsis)
+        val targetWidth = maxWidth - ellipsisWidth
+        if (targetWidth <= 0) return ellipsis
+
+        // 二分查找截断点
+        var lo = 0
+        var hi = text.length
+        while (lo < hi) {
+            val mid = (lo + hi + 1) / 2
+            if (paint.measureText(text, 0, mid) <= targetWidth) {
+                lo = mid
+            } else {
+                hi = mid - 1
+            }
+        }
+        return if (lo < text.length) text.substring(0, lo) + ellipsis else text
     }
 
     private fun computeTextX(paddingH: Float, availableWidth: Float, textWidth: Float): Float {

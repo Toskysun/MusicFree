@@ -17,7 +17,8 @@ import { iconSizeConst } from "@/constants/uiConst";
 import Config, { useAppConfig } from "@/core/appConfig";
 import lyricManager from "@/core/lyricManager";
 import mediaCache from "@/core/mediaCache";
-import LyricUtil, { LYRIC_COLOR_PRESETS } from "@/native/lyricUtil";
+import LyricUtil from "@/native/lyricUtil";
+import { resolveLyricPresets } from "@/utils/lyricPreset";
 import { getDocumentAsync } from "expo-document-picker";
 import { readAsStringAsync } from "expo-file-system";
 import { FlatList } from "react-native-gesture-handler";
@@ -174,7 +175,7 @@ export default function MusicItemLyricOptions(
                             widthPercent: Config.getConfig("lyric.widthPercent"),
                             fontSize: Config.getConfig("lyric.fontSize"),
                             presetIndex: Config.getConfig("lyric.presetIndex") ?? 0,
-                            presets: LYRIC_COLOR_PRESETS,
+                            presets: resolveLyricPresets(),
                         };
                         LyricUtil.showStatusBarLyric(
                             "MusicFree",

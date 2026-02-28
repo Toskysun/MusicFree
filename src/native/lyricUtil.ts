@@ -18,12 +18,12 @@ export interface ILyricColorPreset {
 }
 
 export const LYRIC_COLOR_PRESETS: ILyricColorPreset[] = [
-  { name: '默认透明', unsungColor: '#E0E0E0FF', sungColor: '#FFFFFFFF', backgroundColor: '#00000000' },
-  { name: '纯暗',     unsungColor: '#FFFFFF80', sungColor: '#FFFFFFFF', backgroundColor: '#00000099' },
-  { name: '纯亮',     unsungColor: '#00000080', sungColor: '#000000FF', backgroundColor: '#FFFFFF99' },
-  { name: '护眼绿',   unsungColor: '#A5D6A7FF', sungColor: '#4CAF50FF', backgroundColor: '#000000CC' },
-  { name: '卡拉OK金', unsungColor: '#FFE082FF', sungColor: '#FFD54FFF', backgroundColor: '#00000000' },
-  { name: '赛博蓝',   unsungColor: '#80DEAEFF', sungColor: '#00BCD4FF', backgroundColor: '#001020CC' },
+  { name: '烈焰红',   unsungColor: '#FFFFFFB3', sungColor: '#FF2D55FF', backgroundColor: '#00000000' },
+  { name: '海洋蓝',   unsungColor: '#E6E6E6CC', sungColor: '#2979FFFF', backgroundColor: '#00000099' },
+  { name: '翡翠绿',   unsungColor: '#F2F2F2B3', sungColor: '#00C853FF', backgroundColor: '#001A1A99' },
+  { name: '落日橙',   unsungColor: '#FFFFFF99', sungColor: '#FF6D00FF', backgroundColor: '#00000066' },
+  { name: '幻紫',     unsungColor: '#E0E0E0CC', sungColor: '#AA00FFFF', backgroundColor: '#12001899' },
+  { name: '琥珀金',   unsungColor: '#D9D9D9CC', sungColor: '#FFD600FF', backgroundColor: '#00000099' },
 ];
 
 /** 桌面逐字歌词行数据 */
@@ -145,7 +145,7 @@ class LyricUtilManager {
 
   /** 监听原生事件（锁定状态/预设/字号/位置变化） */
   addListener(
-    event: 'LyricUtil:onLockStateChanged' | 'LyricUtil:onPresetChanged' | 'LyricUtil:onFontSizeChanged' | 'LyricUtil:onPositionChanged' | 'LyricUtil:onClose',
+    event: 'LyricUtil:onLockStateChanged' | 'LyricUtil:onPresetChanged' | 'LyricUtil:onFontSizeChanged' | 'LyricUtil:onPositionChanged' | 'LyricUtil:onClose' | 'LyricUtil:onPresetLongPress',
     handler: (payload: any) => void,
   ): { remove: () => void } {
     const sub = this.emitter?.addListener(event, handler);

@@ -55,6 +55,10 @@ class LyricUtilModule(private val reactContext: ReactApplicationContext): ReactC
                             val payload = Arguments.createMap().apply { putInt("index", index) }
                             emitEvent("LyricUtil:onPresetChanged", payload)
                         }
+                        lv.onPresetLongPressed = { index ->
+                            val payload = Arguments.createMap().apply { putInt("index", index) }
+                            emitEvent("LyricUtil:onPresetLongPress", payload)
+                        }
                         lv.onFontSizeChanged = { fontSize ->
                             val payload = Arguments.createMap().apply { putDouble("fontSize", fontSize.toDouble()) }
                             emitEvent("LyricUtil:onFontSizeChanged", payload)

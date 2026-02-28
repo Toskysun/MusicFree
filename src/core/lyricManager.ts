@@ -9,7 +9,8 @@ import { atom, getDefaultStore, useAtomValue } from "jotai";
 import { Plugin } from "./pluginManager";
 
 import pathConst from "@/constants/pathConst";
-import LyricUtil, { IDesktopLyricLineData, LYRIC_COLOR_PRESETS } from "@/native/lyricUtil";
+import LyricUtil, { IDesktopLyricLineData } from "@/native/lyricUtil";
+import { resolveLyricPresets } from "@/utils/lyricPreset";
 import { checkAndCreateDir } from "@/utils/fileUtils";
 import PersistStatus from "@/utils/persistStatus";
 import CryptoJs from "crypto-js";
@@ -206,7 +207,7 @@ class LyricManager implements IInjectable {
                     widthPercent: this.appConfig.getConfig("lyric.widthPercent"),
                     fontSize: this.appConfig.getConfig("lyric.fontSize"),
                     presetIndex: this.appConfig.getConfig("lyric.presetIndex") ?? 0,
-                    presets: LYRIC_COLOR_PRESETS,
+                    presets: resolveLyricPresets(),
                 };
                 LyricUtil.showStatusBarLyric(
                     currentMusic ? `${currentMusic.title} - ${currentMusic.artist}` : "MusicFree",
@@ -431,6 +432,28 @@ class LyricManager implements IInjectable {
         this.refreshLyric(false, false).catch(err => {
             devLog('warn', 'Lyric reload failed', err);
         });
+    }
+
+    /**
+     * Re-send current lyric line data + sync playback state to the desktop lyric window.
+     * Call this after hide+show cycle (e.g. color inversion toggle, preset customization)
+     * to restore word-by-word display without requiring a song change.
+     */
+    async resyncDesktopLyric() {
+        const currentLyricItem = this.currentLyricItem;
+        if (currentLyricItem) {
+            this.updateDesktopLyricDisplay(currentLyricItem);
+        }
+        // Sync playback state so Choreographer animation resumes
+        try {
+            const progress = await this.trackPlayer.getProgress();
+            const state = await RNTrackPlayer.getPlaybackState();
+            const status = state.state === State.Playing ? 'playing' : 'paused';
+            LyricUtil.syncPlaybackState({
+                status,
+                positionMs: progress.position * 1000,
+            });
+        } catch (_) {}
     }
 
 

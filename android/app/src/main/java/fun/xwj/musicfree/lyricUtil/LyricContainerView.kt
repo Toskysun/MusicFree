@@ -29,6 +29,7 @@ class LyricContainerView(
         fun onRequestLockStateChange(locked: Boolean)
         fun onRequestClose()
         fun onRequestColorPresetChange(nextIndex: Int)
+        fun onRequestColorPresetLongPress(index: Int)
         fun onRequestFontSizeChange(newFontSp: Float)
         fun onDragPercentChanged(leftPercent: Double, topPercent: Double)
         fun onLayoutChanged()
@@ -83,6 +84,7 @@ class LyricContainerView(
         // 按钮点击
         controlBar.onLockClick = { onLockClick() }
         controlBar.onColorPresetClick = { index -> onColorPresetClick(index) }
+        controlBar.onColorPresetLongPress = { index -> callbacks.onRequestColorPresetLongPress(index) }
         controlBar.onMinusClick = { onMinusClick() }
         controlBar.onPlusClick = { onPlusClick() }
         controlBar.onCloseClick = { callbacks.onRequestClose() }
@@ -226,6 +228,7 @@ class ControlBarView(context: Context) : LinearLayout(context) {
 
     var onLockClick: (() -> Unit)? = null
     var onColorPresetClick: ((Int) -> Unit)? = null
+    var onColorPresetLongPress: ((Int) -> Unit)? = null
     var onMinusClick: (() -> Unit)? = null
     var onPlusClick: (() -> Unit)? = null
     var onCloseClick: (() -> Unit)? = null
@@ -288,9 +291,10 @@ class ControlBarView(context: Context) : LinearLayout(context) {
         colorDots.clear()
         activePresetIndex = activeIndex
         sungColors.forEachIndexed { idx, color ->
-            val dot = ColorDotView(context, color, dotSize, idx == activeIndex, dotBorderWidth) {
-                onColorPresetClick?.invoke(idx)
-            }
+            val dot = ColorDotView(context, color, dotSize, idx == activeIndex, dotBorderWidth,
+                onClick = { onColorPresetClick?.invoke(idx) },
+                onLongClick = { onColorPresetLongPress?.invoke(idx) },
+            )
             val lp = LayoutParams(dotSize, dotSize)
             lp.setMargins(dotMargin, 0, dotMargin, 0)
             colorDotsContainer.addView(dot, lp)
@@ -321,6 +325,7 @@ class ColorDotView(
     private var active: Boolean,
     private val borderWidth: Float,
     private val onClick: () -> Unit,
+    private val onLongClick: (() -> Unit)? = null,
 ) : View(context) {
 
     private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -335,6 +340,9 @@ class ColorDotView(
 
     init {
         setOnClickListener { onClick() }
+        onLongClick?.let { handler ->
+            setOnLongClickListener { handler(); true }
+        }
     }
 
     fun setActive(isActive: Boolean) {
