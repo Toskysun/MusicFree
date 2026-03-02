@@ -86,6 +86,8 @@ class LyricUtilModule(private val reactContext: ReactApplicationContext): ReactC
                     options.getString("backgroundColor")?.let { put("backgroundColor", it) }
                     if (options.hasKey("widthPercent")) put("widthPercent", options.getDouble("widthPercent"))
                     if (options.hasKey("fontSize")) put("fontSize", options.getDouble("fontSize"))
+                    if (options.hasKey("secondaryFontRatio")) put("secondaryFontRatio", options.getDouble("secondaryFontRatio"))
+                    if (options.hasKey("secondaryAlphaRatio")) put("secondaryAlphaRatio", options.getDouble("secondaryAlphaRatio"))
                     options.getString("sungColor")?.let { put("sungColor", it) }
                     if (options.hasKey("presetIndex")) put("presetIndex", options.getInt("presetIndex"))
                     // Parse presets array
@@ -344,6 +346,30 @@ class LyricUtilModule(private val reactContext: ReactApplicationContext): ReactC
         try {
             UiThreadUtil.runOnUiThread {
                 lyricView?.setColorPreset(index)
+            }
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("Exception", e.message)
+        }
+    }
+
+    @ReactMethod
+    fun setSecondaryFontRatio(ratio: Float, promise: Promise) {
+        try {
+            UiThreadUtil.runOnUiThread {
+                lyricView?.setSecondaryFontRatio(ratio)
+            }
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("Exception", e.message)
+        }
+    }
+
+    @ReactMethod
+    fun setSecondaryAlphaRatio(ratio: Float, promise: Promise) {
+        try {
+            UiThreadUtil.runOnUiThread {
+                lyricView?.setSecondaryAlphaRatio(ratio)
             }
             promise.resolve(true)
         } catch (e: Exception) {

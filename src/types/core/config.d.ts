@@ -76,6 +76,8 @@ export interface IAppConfigProperties {
     "lyric.detailAlign": "left" | "center";
     "lyric.desktopShowTranslation": boolean;
     "lyric.desktopShowRomanization": boolean;
+    "lyric.desktopSecondaryFontRatio": number;
+    "lyric.desktopSecondaryAlphaRatio": number;
     "lyric.presetIndex": number;
     "lyric.isLocked": boolean;
     "lyric.customPresets": Array<{

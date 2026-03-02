@@ -37,7 +37,7 @@ export interface IDesktopLyricLineData {
     space?: boolean;
   }> | null;
   secondaryLines?: Array<{
-    type: 'translation' | 'romanization';
+    type: 'translation' | 'romanization' | 'original';
     text: string;
   }>;
   lineStartMs: number;
@@ -79,6 +79,8 @@ class LyricUtilManager {
       fontSize?: number;
       presetIndex?: number;
       presets?: ILyricColorPreset[];
+      secondaryFontRatio?: number;
+      secondaryAlphaRatio?: number;
     }
   ): Promise<boolean> {
     return this.nativeModule.showStatusBarLyric(initLyric || null, options || null);
@@ -122,6 +124,14 @@ class LyricUtilManager {
 
   async setStatusBarLyricFontSize(fontSize: number): Promise<boolean> {
     return this.nativeModule.setStatusBarLyricFontSize(fontSize);
+  }
+
+  async setSecondaryFontRatio(ratio: number): Promise<boolean> {
+    return this.nativeModule.setSecondaryFontRatio(ratio);
+  }
+
+  async setSecondaryAlphaRatio(ratio: number): Promise<boolean> {
+    return this.nativeModule.setSecondaryAlphaRatio(ratio);
   }
 
   async setStatusBarColors(textColor?: string | null, backgroundColor?: string | null): Promise<boolean> {

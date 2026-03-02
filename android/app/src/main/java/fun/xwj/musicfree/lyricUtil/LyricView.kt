@@ -106,6 +106,8 @@ class LyricView(private val reactContext: ReactContext) : Activity() {
                 layoutParams?.format = PixelFormat.TRANSPARENT
 
                 val textSizePx = (fontSize?.toString()?.toFloat() ?: 14f) * reactContext.resources.displayMetrics.scaledDensity
+                val secondaryFontRatio = options["secondaryFontRatio"]?.toString()?.toFloat() ?: 0.85f
+                val secondaryAlphaRatio = options["secondaryAlphaRatio"]?.toString()?.toFloat() ?: 0.90f
                 val unsungColorParsed = parseColor(color?.toString(), "#FFE9D2")
                 val bgColorParsed = parseColor(backgroundColor?.toString(), "#84888153")
                 val sungColorParsed = parseColor(sungColor?.toString(), "#FFFFFFFF")
@@ -143,6 +145,8 @@ class LyricView(private val reactContext: ReactContext) : Activity() {
                 }).also { c ->
                     c.lyricView.setText(initText ?: "")
                     c.lyricView.setTextSize(textSizePx)
+                    c.lyricView.setSecondaryFontRatio(secondaryFontRatio)
+                    c.lyricView.setSecondaryAlphaRatio(secondaryAlphaRatio)
                     c.lyricView.setUnsungColor(unsungColorParsed)
                     c.lyricView.setLyricBackgroundColor(bgColorParsed)
                     c.lyricView.setSungColor(sungColorParsed)
@@ -357,6 +361,15 @@ class LyricView(private val reactContext: ReactContext) : Activity() {
 
     fun setColorPreset(index: Int) {
         applyPreset(index)
+    }
+
+    fun setSecondaryFontRatio(ratio: Float) {
+        container?.lyricView?.setSecondaryFontRatio(ratio)
+        requestLayoutUpdate()
+    }
+
+    fun setSecondaryAlphaRatio(ratio: Float) {
+        container?.lyricView?.setSecondaryAlphaRatio(ratio)
     }
 
     private fun requestLayoutUpdate() {

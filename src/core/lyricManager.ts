@@ -208,11 +208,18 @@ class LyricManager implements IInjectable {
                     fontSize: this.appConfig.getConfig("lyric.fontSize"),
                     presetIndex: this.appConfig.getConfig("lyric.presetIndex") ?? 0,
                     presets: resolveLyricPresets(),
+                    secondaryFontRatio: this.appConfig.getConfig("lyric.desktopSecondaryFontRatio") ?? 0.85,
+                    secondaryAlphaRatio: this.appConfig.getConfig("lyric.desktopSecondaryAlphaRatio") ?? 0.90,
                 };
                 LyricUtil.showStatusBarLyric(
                     currentMusic ? `${currentMusic.title} - ${currentMusic.artist}` : "MusicFree",
                     statusBarLyricConfig ?? {}
                 );
+
+                // Restore lock state after window (re)creation
+                if (this.appConfig.getConfig("lyric.isLocked")) {
+                    LyricUtil.lockDesktopLyric();
+                }
 
                 // Sync playing state to native for Choreographer-driven animation
                 const progress = await this.trackPlayer.getProgress();
@@ -293,32 +300,55 @@ class LyricManager implements IInjectable {
         const translation = desktopShowTranslation ? (lyricItem.translation ?? "") : "";
         const romanization = desktopShowRomanization ? (lyricItem.romanization ?? "") : "";
 
-        // Build secondary lines according to lyric order (excluding original)
-        const secondaryLines: Array<{ type: 'translation' | 'romanization'; text: string }> = [];
-        for (const type of lyricOrder) {
-            if (type === "translation" && translation) {
-                secondaryLines.push({ type: "translation", text: translation });
-            } else if (type === "romanization" && romanization) {
-                secondaryLines.push({ type: "romanization", text: romanization });
-            }
-        }
+        // Map type -> text for available lines
+        const textMap: Record<string, string> = {};
+        if (original) textMap["original"] = original;
+        if (translation) textMap["translation"] = translation;
+        if (romanization) textMap["romanization"] = romanization;
 
-        // Build word-by-word data if available
-        const primaryWords = lyricItem.hasWordByWord && lyricItem.words?.length
-            ? lyricItem.words.map(w => ({
+        // Follow lyric page order: first available type is primary
+        const availableTypes = lyricOrder.filter(type => !!textMap[type]);
+        const primaryType = availableTypes[0] ?? "original";
+        const primaryText = textMap[primaryType] ?? original;
+
+        // Select word-by-word data based on primary type
+        let primaryWords: Array<{ text: string; startTime: number; duration: number; space?: boolean }> | null = null;
+        if (primaryType === "original" && lyricItem.hasWordByWord && lyricItem.words?.length) {
+            primaryWords = lyricItem.words.map(w => ({
                 text: w.text,
                 startTime: w.startTime,
                 duration: w.duration,
                 space: w.space,
-            }))
-            : null;
+            }));
+        } else if (primaryType === "romanization" && lyricItem.hasRomanizationWordByWord && lyricItem.romanizationWords?.length) {
+            primaryWords = lyricItem.romanizationWords.map(w => ({
+                text: w.text,
+                startTime: w.startTime,
+                duration: w.duration,
+                space: w.space,
+            }));
+        } else if (primaryType === "translation" && lyricItem.translationWords?.length) {
+            primaryWords = lyricItem.translationWords.map(w => ({
+                text: w.text,
+                startTime: w.startTime,
+                duration: w.duration,
+                space: w.space,
+            }));
+        }
+
+        // Remaining available types become secondary lines
+        const secondaryLines: Array<{ type: 'translation' | 'romanization' | 'original'; text: string }> = [];
+        for (let i = 1; i < availableTypes.length; i++) {
+            const type = availableTypes[i] as 'translation' | 'romanization' | 'original';
+            secondaryLines.push({ type, text: textMap[type] });
+        }
 
         const musicItem = this.trackPlayer.currentMusic;
         const lineId = `${musicItem?.platform ?? ''}:${musicItem?.id ?? ''}:${lyricItem.index ?? 0}:${Math.round(lyricItem.time * 1000)}`;
 
         const payload: IDesktopLyricLineData = {
             lineId,
-            primaryText: original,
+            primaryText,
             primaryWords,
             secondaryLines,
             lineStartMs: Math.round(lyricItem.time * 1000),

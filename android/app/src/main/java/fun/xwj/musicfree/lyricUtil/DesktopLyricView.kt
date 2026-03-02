@@ -121,6 +121,8 @@ class DesktopLyricView(context: Context) : View(context) {
     private var textAlign: Int = Gravity.CENTER
     private var transitionDuration: Long = 160L
     private val MIN_TEXT_SCALE = 0.85f
+    private var secondaryFontRatio: Float = 0.85f
+    private var secondaryAlphaRatio: Float = 0.90f
 
     // ==================== Choreographer ====================
 
@@ -178,6 +180,7 @@ class DesktopLyricView(context: Context) : View(context) {
         if (playbackSnapshot.status == PlaybackStatus.PLAYING) {
             ensureFrameLoop()
         }
+        requestLayout()
         invalidate()
     }
 
@@ -217,11 +220,26 @@ class DesktopLyricView(context: Context) : View(context) {
         sungPaint.textSize = sizePx
         strokePaint.textSize = sizePx
         strokePaint.strokeWidth = (sizePx * 0.06f).coerceIn(2f, 5f)
-        secondaryPaint.textSize = sizePx * 0.85f
-        secondaryStrokePaint.textSize = sizePx * 0.85f
-        secondaryStrokePaint.strokeWidth = (sizePx * 0.85f * 0.06f).coerceIn(1.5f, 4f)
+        secondaryPaint.textSize = sizePx * secondaryFontRatio
+        secondaryStrokePaint.textSize = sizePx * secondaryFontRatio
+        secondaryStrokePaint.strokeWidth = (sizePx * secondaryFontRatio * 0.06f).coerceIn(1.5f, 4f)
         // 重新计算词位置
         currentLine?.let { computeWordPositions(it) }
+        invalidate()
+    }
+
+    fun setSecondaryFontRatio(ratio: Float) {
+        secondaryFontRatio = ratio.coerceIn(0.5f, 1f)
+        // 重新应用字体大小以更新副行
+        val currentSize = unsungPaint.textSize
+        secondaryPaint.textSize = currentSize * secondaryFontRatio
+        secondaryStrokePaint.textSize = currentSize * secondaryFontRatio
+        secondaryStrokePaint.strokeWidth = (currentSize * secondaryFontRatio * 0.06f).coerceIn(1.5f, 4f)
+        invalidate()
+    }
+
+    fun setSecondaryAlphaRatio(ratio: Float) {
+        secondaryAlphaRatio = ratio.coerceIn(0.3f, 1f)
         invalidate()
     }
 
@@ -247,6 +265,7 @@ class DesktopLyricView(context: Context) : View(context) {
         transitionStartMs = SystemClock.elapsedRealtime()
         computeWordPositions(line)
         stopFrameLoop()
+        requestLayout()
         invalidate()
     }
 
@@ -354,7 +373,7 @@ class DesktopLyricView(context: Context) : View(context) {
         // 绘制副行（翻译/罗马音）：描边 + 填充，与主行视觉一致
         if (line.secondaryLines.isNotEmpty()) {
             var secondaryY = textY + textHeight + 8f
-            val secAlpha = (intAlpha * 0.7f).toInt().coerceIn(0, 255)
+            val secAlpha = (intAlpha * secondaryAlphaRatio).toInt().coerceIn(0, 255)
             val secStrokeAlpha = (secAlpha * 0.6f).toInt().coerceIn(0, 255)
             secondaryPaint.alpha = secAlpha
             secondaryStrokePaint.alpha = secStrokeAlpha

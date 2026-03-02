@@ -884,6 +884,8 @@ function LyricSetting() {
     const enableBreathingDots = useAppConfig("lyric.enableBreathingDots");
     const desktopShowTranslation = useAppConfig("lyric.desktopShowTranslation");
     const desktopShowRomanization = useAppConfig("lyric.desktopShowRomanization");
+    const desktopSecondaryFontRatio = useAppConfig("lyric.desktopSecondaryFontRatio");
+    const desktopSecondaryAlphaRatio = useAppConfig("lyric.desktopSecondaryAlphaRatio");
     const invertColors = useAppConfig("lyric.invertColors");
     const topPercent = useAppConfig("lyric.topPercent");
     const leftPercent = useAppConfig("lyric.leftPercent");
@@ -915,6 +917,8 @@ function LyricSetting() {
                     fontSize: Config.getConfig("lyric.fontSize"),
                     presetIndex: Config.getConfig("lyric.presetIndex") ?? 0,
                     presets: resolveLyricPresets(),
+                    secondaryFontRatio: Config.getConfig("lyric.desktopSecondaryFontRatio") ?? 0.85,
+                    secondaryAlphaRatio: Config.getConfig("lyric.desktopSecondaryAlphaRatio") ?? 0.90,
                 }).then(() => {
                     // Resync lyric line data + playback state to restore word-by-word
                     lyricManager.resyncDesktopLyric();
@@ -955,6 +959,8 @@ function LyricSetting() {
                             fontSize: Config.getConfig("lyric.fontSize"),
                             presetIndex: Config.getConfig("lyric.presetIndex") ?? 0,
                             presets: resolveLyricPresets(),
+                            secondaryFontRatio: Config.getConfig("lyric.desktopSecondaryFontRatio") ?? 0.85,
+                            secondaryAlphaRatio: Config.getConfig("lyric.desktopSecondaryAlphaRatio") ?? 0.90,
                         });
                         Config.setConfig("lyric.showStatusBarLyric", true);
                     } else {
@@ -1024,6 +1030,8 @@ function LyricSetting() {
                                     fontSize: Config.getConfig("lyric.fontSize"),
                                     presetIndex: idx,
                                     presets: resolveLyricPresets(),
+                                    secondaryFontRatio: Config.getConfig("lyric.desktopSecondaryFontRatio") ?? 0.85,
+                                    secondaryAlphaRatio: Config.getConfig("lyric.desktopSecondaryAlphaRatio") ?? 0.90,
                                 }).then(() => {
                                     lyricManager.resyncDesktopLyric();
                                 });
@@ -1076,6 +1084,52 @@ function LyricSetting() {
                 <ListItem.Content title={desktopRomanization.title} />
                 {desktopRomanization.right}
             </ListItem>
+            <ListItem withHorizontalPadding heightType="small">
+                <ListItem.Content title={`副行字号比例  ${((desktopSecondaryFontRatio ?? 0.85) * 100).toFixed(0)}%`} />
+            </ListItem>
+            <View style={lyricStyles.sliderContainer}>
+                <Slider
+                    style={lyricStyles.slider}
+                    minimumValue={0.5}
+                    maximumValue={1}
+                    step={0.01}
+                    value={desktopSecondaryFontRatio ?? 0.85}
+                    onValueChange={(val: number) => {
+                        if (showStatusBarLyric) {
+                            LyricUtil.setSecondaryFontRatio(val);
+                        }
+                    }}
+                    onSlidingComplete={(val: number) => {
+                        Config.setConfig("lyric.desktopSecondaryFontRatio", val);
+                    }}
+                    minimumTrackTintColor={colors.textHighlight}
+                    maximumTrackTintColor={colors.textSecondary + '40'}
+                    thumbTintColor={colors.textHighlight}
+                />
+            </View>
+            <ListItem withHorizontalPadding heightType="small">
+                <ListItem.Content title={`副行透明度比例  ${((desktopSecondaryAlphaRatio ?? 0.90) * 100).toFixed(0)}%`} />
+            </ListItem>
+            <View style={lyricStyles.sliderContainer}>
+                <Slider
+                    style={lyricStyles.slider}
+                    minimumValue={0.3}
+                    maximumValue={1}
+                    step={0.01}
+                    value={desktopSecondaryAlphaRatio ?? 0.90}
+                    onValueChange={(val: number) => {
+                        if (showStatusBarLyric) {
+                            LyricUtil.setSecondaryAlphaRatio(val);
+                        }
+                    }}
+                    onSlidingComplete={(val: number) => {
+                        Config.setConfig("lyric.desktopSecondaryAlphaRatio", val);
+                    }}
+                    minimumTrackTintColor={colors.textHighlight}
+                    maximumTrackTintColor={colors.textSecondary + '40'}
+                    thumbTintColor={colors.textHighlight}
+                />
+            </View>
             <ListItem withHorizontalPadding heightType="small" onPress={invertColorsSwitch.onPress}>
                 <ListItem.Content title={invertColorsSwitch.title} />
                 {invertColorsSwitch.right}
