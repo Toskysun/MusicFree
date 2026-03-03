@@ -2,7 +2,7 @@ import type { ResumeMode, SortType } from "@/constants/commonConst.ts";
 import type { CustomizedColors } from "@/hooks/useColors";
 
 export interface IAppConfigProperties {
-    $schema: "2";
+    $schema: "4";
     // Common
     "common.isAgreePact": boolean;
     // Basic
@@ -55,11 +55,21 @@ export interface IAppConfigProperties {
     "basic.lyricOrder": ("original" | "translation" | "romanization")[];
     // 逐字歌词配置（QRC格式保留逐字时间戳）
     "basic.enableWordByWordLyric": boolean;
+    // Phase 1: 下载器性能优化配置
+    "basic.downloadProgressThrottleEnabled": boolean;
+    "basic.downloadSchedulerSingleFlightEnabled": boolean;
+    "basic.downloadProgressMinIntervalMs": number;
+    "basic.downloadProgressMinBytesDelta": number;
+    "basic.downloadProgressMinPercentDelta": number;
+    // Phase 2: 下载器性能优化配置
+    "basic.downloadProgressBatchEnabled": boolean;
+    "basic.downloadSystemStatusNativeMonitorEnabled": boolean;
+    "basic.downloadProgressBatchIntervalMs": number;
 
     // Lyric
     "lyric.showStatusBarLyric": boolean;
     "lyric.topPercent": number;
-    "lyric.leftPercent": number;
+    "lyric.leftPercent": number;  // 保存用户拖拽位置，不在设置页面显示
     "lyric.align": number;
     "lyric.color": string;
     "lyric.sungColor": string;

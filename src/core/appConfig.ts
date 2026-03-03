@@ -201,6 +201,20 @@ class AppConfig implements IAppConfig {
             configStore.set("$schema", "3");
         }
 
+        if (schemaVersion < 4) {
+            // Add lyric.widthPercent config (default 0.8)
+            // leftPercent is kept for saving user drag position, but no longer shown in settings UI
+            if (this.getConfig("lyric.widthPercent") === undefined) {
+                this.setConfig("lyric.widthPercent", 0.8);
+            }
+            // Ensure leftPercent has a default value for drag position
+            if (this.getConfig("lyric.leftPercent") === undefined) {
+                this.setConfig("lyric.leftPercent", 0.5);
+            }
+
+            configStore.set("$schema", "4");
+        }
+
     }
 
     async setup(): Promise<void> {

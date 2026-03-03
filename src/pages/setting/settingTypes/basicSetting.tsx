@@ -888,7 +888,7 @@ function LyricSetting() {
     const desktopSecondaryAlphaRatio = useAppConfig("lyric.desktopSecondaryAlphaRatio");
     const invertColors = useAppConfig("lyric.invertColors");
     const topPercent = useAppConfig("lyric.topPercent");
-    const leftPercent = useAppConfig("lyric.leftPercent");
+    const widthPercent = useAppConfig("lyric.widthPercent");
 
     const { t } = useI18N();
     const colors = useColors();
@@ -1160,22 +1160,22 @@ function LyricSetting() {
                 />
             </View>
             <ListItem withHorizontalPadding heightType="small">
-                <ListItem.Content title={`左右位置  ${Math.round((leftPercent ?? 0.5) * 100)}%`} />
+                <ListItem.Content title={`歌词宽度  ${Math.round((widthPercent ?? 0.8) * 100)}%`} />
             </ListItem>
             <View style={lyricStyles.sliderContainer}>
                 <Slider
                     style={lyricStyles.slider}
-                    minimumValue={0}
+                    minimumValue={0.3}
                     maximumValue={1}
                     step={0.01}
-                    value={leftPercent ?? 0.5}
+                    value={widthPercent ?? 0.8}
                     onValueChange={(val: number) => {
                         if (showStatusBarLyric) {
-                            LyricUtil.setStatusBarLyricLeft(val);
+                            LyricUtil.setStatusBarLyricWidth(val);
                         }
                     }}
                     onSlidingComplete={(val: number) => {
-                        Config.setConfig("lyric.leftPercent", val);
+                        Config.setConfig("lyric.widthPercent", val);
                     }}
                     minimumTrackTintColor={colors.textHighlight}
                     maximumTrackTintColor={colors.textSecondary + '40'}
