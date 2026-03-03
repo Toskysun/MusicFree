@@ -45,6 +45,7 @@ class LyricContainerView(
     private var downRawX = 0f
     private var downRawY = 0f
     private var dragging = false
+    private var activePointerId = MotionEvent.INVALID_POINTER_ID
     private var locked = false
     var currentPresetIndex = 0
     var currentFontSp = 24f
@@ -77,90 +78,155 @@ class LyricContainerView(
     // ==================== 公开方法 ====================
 
     fun setLocked(newLocked: Boolean) {
+        if (locked && !newLocked) {
+            // 解锁时重置状态
+            resetTouchState()
+        } else if (!locked && newLocked) {
+            // 锁定时如果正在拖动，先结束拖动
+            if (dragging) {
+                callbacks.onDragFinished(lastLeftPercent, lastTopPercent)
+            }
+            resetTouchState()
+        }
         locked = newLocked
     }
 
     // ==================== 触摸处理 ====================
 
     override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
-        if (locked) return false
-        return when (ev.actionMasked) {
-            MotionEvent.ACTION_DOWN -> {
-                downRawX = ev.rawX
-                downRawY = ev.rawY
-                dragging = false
-                dragStartLeftPx = viewLeftPx.toFloat()
-                dragStartTopPx = viewTopPx.toFloat()
-                false
-            }
-            MotionEvent.ACTION_MOVE -> {
-                if (!dragging) {
-                    val dx = ev.rawX - downRawX
-                    val dy = ev.rawY - downRawY
-                    if (sqrt(dx * dx + dy * dy) > tapSlopPx) {
-                        dragging = true
-                        callbacks.onDragStarted()
-                    }
-                }
-                dragging
-            }
-            else -> false
-        }
+        return !locked
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         if (locked) return false
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                if (event.pointerCount != 1) {
+                    resetTouchState()
+                    return false
+                }
+                activePointerId = event.getPointerId(0)
                 downRawX = event.rawX
                 downRawY = event.rawY
                 dragging = false
                 dragStartLeftPx = viewLeftPx.toFloat()
                 dragStartTopPx = viewTopPx.toFloat()
+                cacheCurrentPercents()
+            }
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                if (dragging) {
+                    callbacks.onDragFinished(lastLeftPercent, lastTopPercent)
+                }
+                resetTouchState()
             }
             MotionEvent.ACTION_MOVE -> {
+                if (activePointerId == MotionEvent.INVALID_POINTER_ID) {
+                    return true
+                }
+                if (event.pointerCount > 1) {
+                    if (dragging) {
+                        callbacks.onDragFinished(lastLeftPercent, lastTopPercent)
+                    }
+                    resetTouchState()
+                    return true
+                }
+                val pointerIndex = event.findPointerIndex(activePointerId)
+                if (pointerIndex < 0) {
+                    if (dragging) {
+                        callbacks.onDragFinished(lastLeftPercent, lastTopPercent)
+                    }
+                    resetTouchState()
+                    return true
+                }
+                // 使用 rawX/rawY（相对于屏幕的绝对坐标）保持一致性
+                val rawX = event.rawX
+                val rawY = event.rawY
+                val dx = rawX - downRawX
+                val dy = rawY - downRawY
+                if (!dragging && sqrt(dx * dx + dy * dy) > tapSlopPx) {
+                    dragging = true
+                    callbacks.onDragStarted()
+                }
                 if (dragging) {
-                    val dx = event.rawX - downRawX
-                    val dy = event.rawY - downRawY
-                    val viewHeightPx = (if (height > 0) height else measuredHeight).coerceAtLeast(1)
-                    val maxLeft = (windowWidthPx - viewWidthPx).coerceAtLeast(0).toFloat()
-                    val maxTop = (windowHeightPx - viewHeightPx).coerceAtLeast(0).toFloat()
-
-                    val newLeft = (dragStartLeftPx + dx).coerceIn(0f, maxLeft)
-                    val newTop = (dragStartTopPx + dy).coerceIn(0f, maxTop)
-
-                    val leftPct = if (maxLeft > 0f) (newLeft / maxLeft).toDouble() else 0.0
-                    val topPct = if (maxTop > 0f) (newTop / maxTop).toDouble() else 0.0
-
-                    lastLeftPercent = leftPct.coerceIn(0.0, 1.0)
-                    lastTopPercent = topPct.coerceIn(0.0, 1.0)
-
-                    // 本地先更新一份，避免拖动过程中因回调时序造成跳变
-                    viewLeftPx = newLeft.toInt()
-                    viewTopPx = newTop.toInt()
-
-                    callbacks.onDragPercentChanged(
-                        lastLeftPercent,
-                        lastTopPercent,
-                    )
+                    dispatchDragMove(rawX, rawY)
+                }
+            }
+            MotionEvent.ACTION_POINTER_UP -> {
+                val pointerId = event.getPointerId(event.actionIndex)
+                if (pointerId == activePointerId) {
+                    if (dragging) {
+                        callbacks.onDragFinished(lastLeftPercent, lastTopPercent)
+                    }
+                    resetTouchState()
                 }
             }
             MotionEvent.ACTION_UP -> {
-                if (dragging) {
-                    callbacks.onDragFinished(lastLeftPercent, lastTopPercent)
-                } else {
-                    callbacks.onTapToggleControlBar()
+                if (activePointerId != MotionEvent.INVALID_POINTER_ID) {
+                    if (dragging) {
+                        callbacks.onDragFinished(lastLeftPercent, lastTopPercent)
+                    } else {
+                        callbacks.onTapToggleControlBar()
+                    }
                 }
-                dragging = false
+                resetTouchState()
             }
             MotionEvent.ACTION_CANCEL -> {
                 if (dragging) {
                     callbacks.onDragFinished(lastLeftPercent, lastTopPercent)
                 }
-                dragging = false
+                resetTouchState()
             }
         }
         return true
+    }
+
+    private fun dispatchDragMove(rawX: Float, rawY: Float) {
+        val dx = rawX - downRawX
+        val dy = rawY - downRawY
+        val viewHeightPx = (if (height > 0) height else measuredHeight).coerceAtLeast(1)
+        val maxLeft = (windowWidthPx - viewWidthPx).coerceAtLeast(0).toFloat()
+        val maxTop = (windowHeightPx - viewHeightPx).coerceAtLeast(0).toFloat()
+
+        val newLeft = (dragStartLeftPx + dx).coerceIn(0f, maxLeft)
+        val newTop = (dragStartTopPx + dy).coerceIn(0f, maxTop)
+
+        // 像素级去重优化，避免频繁 updateViewLayout
+        if (kotlin.math.abs(newLeft.toInt() - viewLeftPx) < 1 &&
+            kotlin.math.abs(newTop.toInt() - viewTopPx) < 1) {
+            return
+        }
+
+        val leftPct = if (maxLeft > 0f) (newLeft / maxLeft).toDouble() else 0.0
+        val topPct = if (maxTop > 0f) (newTop / maxTop).toDouble() else 0.0
+        val clampedLeftPercent = leftPct.coerceIn(0.0, 1.0)
+        val clampedTopPercent = topPct.coerceIn(0.0, 1.0)
+
+        lastLeftPercent = clampedLeftPercent
+        lastTopPercent = clampedTopPercent
+        viewLeftPx = newLeft.toInt()
+        viewTopPx = newTop.toInt()
+        callbacks.onDragPercentChanged(lastLeftPercent, lastTopPercent)
+    }
+
+    private fun cacheCurrentPercents() {
+        val viewHeightPx = (if (height > 0) height else measuredHeight).coerceAtLeast(1)
+        val maxLeft = (windowWidthPx - viewWidthPx).coerceAtLeast(0).toFloat()
+        val maxTop = (windowHeightPx - viewHeightPx).coerceAtLeast(0).toFloat()
+        lastLeftPercent = if (maxLeft > 0f) {
+            (viewLeftPx / maxLeft).toDouble().coerceIn(0.0, 1.0)
+        } else {
+            0.0
+        }
+        lastTopPercent = if (maxTop > 0f) {
+            (viewTopPx / maxTop).toDouble().coerceIn(0.0, 1.0)
+        } else {
+            0.0
+        }
+    }
+
+    private fun resetTouchState() {
+        dragging = false
+        activePointerId = MotionEvent.INVALID_POINTER_ID
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
