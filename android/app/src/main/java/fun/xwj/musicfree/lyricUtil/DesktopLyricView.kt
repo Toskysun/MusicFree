@@ -375,6 +375,15 @@ class DesktopLyricView(context: Context) : View(context) {
             var secondaryY = textY + textHeight + 8f
             val secAlpha = (intAlpha * secondaryAlphaRatio).toInt().coerceIn(0, 255)
             val secStrokeAlpha = (secAlpha * 0.6f).toInt().coerceIn(0, 255)
+
+            // 副行也应用与主行相同的缩放比例
+            val savedSecondarySize = secondaryPaint.textSize
+            val savedSecondaryStrokeSize = secondaryStrokePaint.textSize
+            if (textScale < 1f) {
+                secondaryPaint.textSize = savedSecondarySize * textScale
+                secondaryStrokePaint.textSize = savedSecondarySize * textScale
+            }
+
             secondaryPaint.alpha = secAlpha
             secondaryStrokePaint.alpha = secStrokeAlpha
             for (secondary in line.secondaryLines) {
@@ -390,6 +399,12 @@ class DesktopLyricView(context: Context) : View(context) {
                 canvas.drawText(secText, secX, secondaryY, secondaryPaint)
                 val secFm = secondaryPaint.fontMetrics
                 secondaryY += secFm.descent - secFm.ascent + 4f
+            }
+
+            // 恢复副行字体大小
+            if (textScale < 1f) {
+                secondaryPaint.textSize = savedSecondarySize
+                secondaryStrokePaint.textSize = savedSecondaryStrokeSize
             }
         }
 

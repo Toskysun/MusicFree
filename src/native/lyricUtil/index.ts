@@ -25,7 +25,7 @@ interface ILyricUtil extends NativeModule {
     setStatusBarLyricText: (lyric: string) => Promise<void>;
     /** 设置距离顶部的距离 */
     setStatusBarLyricTop: (percent: number) => Promise<void>;
-    /** 设置距离左部的距离 */
+    /** 设置距离左部的距离（内部使用，保存拖拽位置） */
     setStatusBarLyricLeft: (percent: number) => Promise<void>;
     /** 设置宽度 */
     setStatusBarLyricWidth: (percent: number) => Promise<void>;

@@ -200,6 +200,7 @@ class LyricManager implements IInjectable {
                 const statusBarLyricConfig = {
                     topPercent: this.appConfig.getConfig("lyric.topPercent"),
                     leftPercent: this.appConfig.getConfig("lyric.leftPercent"),
+                    widthPercent: this.appConfig.getConfig("lyric.widthPercent"),
                     align: this.appConfig.getConfig("lyric.align"),
                     color: this.appConfig.getConfig("lyric.color"),
                     backgroundColor: this.appConfig.getConfig("lyric.backgroundColor"),

@@ -1,6 +1,7 @@
 package `fun`.xwj.musicfree.lyricUtil
 
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -18,6 +19,29 @@ import java.nio.charset.StandardCharsets
 class LyricUtilModule(private val reactContext: ReactApplicationContext): ReactContextBaseJavaModule(reactContext) {
     override fun getName() = "LyricUtil"
     private var lyricView: LyricView? = null
+    private val positionPrefsName = "MusicFreeDesktopLyricPosition"
+    private val positionLeftKey = "leftPercent"
+    private val positionTopKey = "topPercent"
+    private val positionPrefs by lazy {
+        reactContext.getSharedPreferences(positionPrefsName, Context.MODE_PRIVATE)
+    }
+
+    private fun savePositionToNative(leftPercent: Double, topPercent: Double) {
+        positionPrefs.edit()
+            .putFloat(positionLeftKey, leftPercent.coerceIn(0.0, 1.0).toFloat())
+            .putFloat(positionTopKey, topPercent.coerceIn(0.0, 1.0).toFloat())
+            .apply()
+    }
+
+    private fun readPositionFromNative(): Pair<Double, Double>? {
+        val left = positionPrefs.getFloat(positionLeftKey, Float.NaN)
+        val top = positionPrefs.getFloat(positionTopKey, Float.NaN)
+        if (left.isNaN() || top.isNaN()) return null
+        return Pair(
+            left.toDouble().coerceIn(0.0, 1.0),
+            top.toDouble().coerceIn(0.0, 1.0),
+        )
+    }
 
     @ReactMethod
     fun checkSystemAlertPermission(promise: Promise) {
@@ -64,6 +88,7 @@ class LyricUtilModule(private val reactContext: ReactApplicationContext): ReactC
                             emitEvent("LyricUtil:onFontSizeChanged", payload)
                         }
                         lv.onPositionChanged = { leftPercent, topPercent ->
+                            savePositionToNative(leftPercent, topPercent)
                             val payload = Arguments.createMap().apply {
                                 putDouble("leftPercent", leftPercent)
                                 putDouble("topPercent", topPercent)
@@ -76,34 +101,52 @@ class LyricUtilModule(private val reactContext: ReactApplicationContext): ReactC
                         }
                     }
                 }
-
+                var hasTopPercent = false
+                var hasLeftPercent = false
                 val mapOptions = mutableMapOf<String, Any>().apply {
-                    if (options == null) return@apply
-                    if (options.hasKey("topPercent")) put("topPercent", options.getDouble("topPercent"))
-                    if (options.hasKey("leftPercent")) put("leftPercent", options.getDouble("leftPercent"))
-                    if (options.hasKey("align")) put("align", options.getInt("align"))
-                    options.getString("color")?.let { put("color", it) }
-                    options.getString("backgroundColor")?.let { put("backgroundColor", it) }
-                    if (options.hasKey("widthPercent")) put("widthPercent", options.getDouble("widthPercent"))
-                    if (options.hasKey("fontSize")) put("fontSize", options.getDouble("fontSize"))
-                    if (options.hasKey("secondaryFontRatio")) put("secondaryFontRatio", options.getDouble("secondaryFontRatio"))
-                    if (options.hasKey("secondaryAlphaRatio")) put("secondaryAlphaRatio", options.getDouble("secondaryAlphaRatio"))
-                    options.getString("sungColor")?.let { put("sungColor", it) }
-                    if (options.hasKey("presetIndex")) put("presetIndex", options.getInt("presetIndex"))
-                    // Parse presets array
-                    if (options.hasKey("presets") && !options.isNull("presets")) {
-                        val presetsArr = options.getArray("presets")
-                        if (presetsArr != null) {
-                            val presetList = (0 until presetsArr.size()).mapNotNull { i ->
-                                presetsArr.getMap(i)?.let { m ->
-                                    mapOf(
-                                        "unsungColor" to (m.getString("unsungColor") ?: "#FFE9D2FF"),
-                                        "sungColor" to (m.getString("sungColor") ?: "#FFFFFFFF"),
-                                        "backgroundColor" to (m.getString("backgroundColor") ?: "#84888153"),
-                                    )
+                    options?.let { opts ->
+                        if (opts.hasKey("topPercent") && !opts.isNull("topPercent")) {
+                            put("topPercent", opts.getDouble("topPercent"))
+                            hasTopPercent = true
+                        }
+                        if (opts.hasKey("leftPercent") && !opts.isNull("leftPercent")) {
+                            put("leftPercent", opts.getDouble("leftPercent"))
+                            hasLeftPercent = true
+                        }
+                        if (opts.hasKey("align")) put("align", opts.getInt("align"))
+                        opts.getString("color")?.let { put("color", it) }
+                        opts.getString("backgroundColor")?.let { put("backgroundColor", it) }
+                        if (opts.hasKey("widthPercent")) put("widthPercent", opts.getDouble("widthPercent"))
+                        if (opts.hasKey("fontSize")) put("fontSize", opts.getDouble("fontSize"))
+                        if (opts.hasKey("secondaryFontRatio")) put("secondaryFontRatio", opts.getDouble("secondaryFontRatio"))
+                        if (opts.hasKey("secondaryAlphaRatio")) put("secondaryAlphaRatio", opts.getDouble("secondaryAlphaRatio"))
+                        opts.getString("sungColor")?.let { put("sungColor", it) }
+                        if (opts.hasKey("presetIndex")) put("presetIndex", opts.getInt("presetIndex"))
+                        // Parse presets array
+                        if (opts.hasKey("presets") && !opts.isNull("presets")) {
+                            val presetsArr = opts.getArray("presets")
+                            if (presetsArr != null) {
+                                val presetList = (0 until presetsArr.size()).mapNotNull { i ->
+                                    presetsArr.getMap(i)?.let { m ->
+                                        mapOf(
+                                            "unsungColor" to (m.getString("unsungColor") ?: "#FFE9D2FF"),
+                                            "sungColor" to (m.getString("sungColor") ?: "#FFFFFFFF"),
+                                            "backgroundColor" to (m.getString("backgroundColor") ?: "#84888153"),
+                                        )
+                                    }
                                 }
+                                put("presets", presetList)
                             }
-                            put("presets", presetList)
+                        }
+                    }
+
+                    // Native 持久化兜底：当 JS 未传入位置时恢复上次拖动位置
+                    readPositionFromNative()?.let { (savedLeft, savedTop) ->
+                        if (!hasLeftPercent) {
+                            put("leftPercent", savedLeft)
+                        }
+                        if (!hasTopPercent) {
+                            put("topPercent", savedTop)
                         }
                     }
                 }

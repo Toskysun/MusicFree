@@ -5,8 +5,6 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
-import android.os.Handler
-import android.os.Looper
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -15,10 +13,9 @@ import kotlin.math.sqrt
 
 /**
  * 桌面歌词容器 View（垂直 LinearLayout）
- * - 子 View 1: DesktopLyricView（歌词绘制）
- * - 子 View 2: ControlBarView（控制条：锁定/颜色圆点/字体-/字体+/关闭）
+ * - 仅包含 DesktopLyricView（歌词绘制）
+ * - 控制条已独立为单独的悬浮窗，由 LyricView 管理
  * - 触摸状态机：tap(8dp 阈值) vs drag
- * - 控制条 3 秒自动隐藏，位于歌词下方
  */
 class LyricContainerView(
     context: Context,
@@ -32,13 +29,15 @@ class LyricContainerView(
         fun onRequestColorPresetLongPress(index: Int)
         fun onRequestFontSizeChange(newFontSp: Float)
         fun onDragPercentChanged(leftPercent: Double, topPercent: Double)
+        fun onDragStarted()
+        fun onDragFinished(leftPercent: Double, topPercent: Double)
         fun onLayoutChanged()
+        fun onTapToggleControlBar()
     }
 
     // ==================== 子 View ====================
 
     val lyricView: DesktopLyricView = DesktopLyricView(context)
-    private val controlBar: ControlBarView
 
     // ==================== 状态 ====================
 
@@ -49,14 +48,19 @@ class LyricContainerView(
     private var locked = false
     var currentPresetIndex = 0
     var currentFontSp = 24f
+    private var dragStartLeftPx = 0f
+    private var dragStartTopPx = 0f
+    private var lastLeftPercent = 0.0
+    private var lastTopPercent = 0.0
+
+    // 当前悬浮窗左上角（由 LyricView 注入并维护）
+    var viewLeftPx = 0
+    var viewTopPx = 0
 
     // 窗口尺寸（由 LyricView 注入，用于换算 percent）
     var windowWidthPx = 1080
     var windowHeightPx = 1920
     var viewWidthPx = 540
-
-    private val hideHandler = Handler(Looper.getMainLooper())
-    private val autoHideTask = Runnable { hideControlBar() }
 
     // ==================== 初始化 ====================
 
@@ -68,57 +72,12 @@ class LyricContainerView(
             LayoutParams.MATCH_PARENT,
             LayoutParams.WRAP_CONTENT,
         ))
-
-        // 控制条在歌词下方居中
-        controlBar = ControlBarView(context)
-        val barParams = LayoutParams(
-            LayoutParams.WRAP_CONTENT,
-            LayoutParams.WRAP_CONTENT,
-        ).apply {
-            gravity = Gravity.CENTER_HORIZONTAL
-            topMargin = (2 * resources.displayMetrics.density).toInt()
-        }
-        addView(controlBar, barParams)
-        controlBar.visibility = View.GONE
-
-        // 按钮点击
-        controlBar.onLockClick = { onLockClick() }
-        controlBar.onColorPresetClick = { index -> onColorPresetClick(index) }
-        controlBar.onColorPresetLongPress = { index -> callbacks.onRequestColorPresetLongPress(index) }
-        controlBar.onMinusClick = { onMinusClick() }
-        controlBar.onPlusClick = { onPlusClick() }
-        controlBar.onCloseClick = { callbacks.onRequestClose() }
     }
 
     // ==================== 公开方法 ====================
 
     fun setLocked(newLocked: Boolean) {
         locked = newLocked
-        controlBar.setLocked(newLocked)
-        if (newLocked) hideControlBar()
-    }
-
-    fun setPresetColors(colors: List<Int>) {
-        controlBar.setPresetColors(colors, currentPresetIndex)
-    }
-
-    fun updateActivePreset(index: Int) {
-        currentPresetIndex = index
-        controlBar.setActivePreset(index)
-    }
-
-    fun showControlBar() {
-        if (locked) return
-        controlBar.visibility = View.VISIBLE
-        scheduleAutoHide()
-        // Post to let layout settle before notifying WindowManager
-        post { callbacks.onLayoutChanged() }
-    }
-
-    fun hideControlBar() {
-        hideHandler.removeCallbacks(autoHideTask)
-        controlBar.visibility = View.GONE
-        post { callbacks.onLayoutChanged() }
     }
 
     // ==================== 触摸处理 ====================
@@ -127,20 +86,20 @@ class LyricContainerView(
         if (locked) return false
         return when (ev.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                // 记录起点，不拦截，让子 View（控制栏按钮）先处理
                 downRawX = ev.rawX
                 downRawY = ev.rawY
                 dragging = false
+                dragStartLeftPx = viewLeftPx.toFloat()
+                dragStartTopPx = viewTopPx.toFloat()
                 false
             }
             MotionEvent.ACTION_MOVE -> {
-                // 超过阈值才拦截（变为拖拽）
                 if (!dragging) {
                     val dx = ev.rawX - downRawX
                     val dy = ev.rawY - downRawY
                     if (sqrt(dx * dx + dy * dy) > tapSlopPx) {
                         dragging = true
-                        hideControlBar()
+                        callbacks.onDragStarted()
                     }
                 }
                 dragging
@@ -153,72 +112,66 @@ class LyricContainerView(
         if (locked) return false
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                // 子 View 未消费时才到这里（空白区域点击）
                 downRawX = event.rawX
                 downRawY = event.rawY
                 dragging = false
+                dragStartLeftPx = viewLeftPx.toFloat()
+                dragStartTopPx = viewTopPx.toFloat()
             }
             MotionEvent.ACTION_MOVE -> {
                 if (dragging) {
                     val dx = event.rawX - downRawX
                     val dy = event.rawY - downRawY
-                    val newLeft = (downRawX + dx - viewWidthPx / 2f)
-                        .coerceIn(0f, (windowWidthPx - viewWidthPx).toFloat())
-                    val newTop = (downRawY + dy - height / 2f)
-                        .coerceIn(0f, (windowHeightPx - height).toFloat())
-                    val leftPct = if (windowWidthPx > viewWidthPx)
-                        newLeft / (windowWidthPx - viewWidthPx).toDouble() else 0.0
-                    val topPct = if (windowHeightPx > height)
-                        newTop / (windowHeightPx - height).toDouble() else 0.0
+                    val viewHeightPx = (if (height > 0) height else measuredHeight).coerceAtLeast(1)
+                    val maxLeft = (windowWidthPx - viewWidthPx).coerceAtLeast(0).toFloat()
+                    val maxTop = (windowHeightPx - viewHeightPx).coerceAtLeast(0).toFloat()
+
+                    val newLeft = (dragStartLeftPx + dx).coerceIn(0f, maxLeft)
+                    val newTop = (dragStartTopPx + dy).coerceIn(0f, maxTop)
+
+                    val leftPct = if (maxLeft > 0f) (newLeft / maxLeft).toDouble() else 0.0
+                    val topPct = if (maxTop > 0f) (newTop / maxTop).toDouble() else 0.0
+
+                    lastLeftPercent = leftPct.coerceIn(0.0, 1.0)
+                    lastTopPercent = topPct.coerceIn(0.0, 1.0)
+
+                    // 本地先更新一份，避免拖动过程中因回调时序造成跳变
+                    viewLeftPx = newLeft.toInt()
+                    viewTopPx = newTop.toInt()
+
                     callbacks.onDragPercentChanged(
-                        leftPct.coerceIn(0.0, 1.0),
-                        topPct.coerceIn(0.0, 1.0),
+                        lastLeftPercent,
+                        lastTopPercent,
                     )
                 }
             }
             MotionEvent.ACTION_UP -> {
-                if (!dragging) {
-                    if (controlBar.visibility == View.VISIBLE) hideControlBar()
-                    else showControlBar()
+                if (dragging) {
+                    callbacks.onDragFinished(lastLeftPercent, lastTopPercent)
+                } else {
+                    callbacks.onTapToggleControlBar()
                 }
                 dragging = false
             }
             MotionEvent.ACTION_CANCEL -> {
+                if (dragging) {
+                    callbacks.onDragFinished(lastLeftPercent, lastTopPercent)
+                }
                 dragging = false
             }
         }
         return true
     }
 
-    // ==================== 按钮回调 ====================
-
-    private fun onLockClick() {
-        callbacks.onRequestLockStateChange(!locked)
-    }
-
-    private fun onColorPresetClick(index: Int) {
-        callbacks.onRequestColorPresetChange(index)
-        scheduleAutoHide()
-    }
-
-    private fun onMinusClick() {
-        callbacks.onRequestFontSizeChange((currentFontSp - 1f).coerceAtLeast(12f))
-        scheduleAutoHide()
-    }
-
-    private fun onPlusClick() {
-        callbacks.onRequestFontSizeChange((currentFontSp + 1f).coerceAtMost(56f))
-        scheduleAutoHide()
-    }
-
-    private fun scheduleAutoHide() {
-        hideHandler.removeCallbacks(autoHideTask)
-        hideHandler.postDelayed(autoHideTask, 3000L)
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        if (w != oldw || h != oldh) {
+            callbacks.onLayoutChanged()
+        }
     }
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
-        hideHandler.removeCallbacks(autoHideTask)
     }
 }
 
@@ -254,7 +207,7 @@ class ControlBarView(context: Context) : LinearLayout(context) {
 
     init {
         orientation = HORIZONTAL
-        gravity = Gravity.CENTER_VERTICAL
+        gravity = Gravity.CENTER_VERTICAL or Gravity.CENTER_HORIZONTAL
         setWillNotDraw(false)
 
         val btnSize = (36 * dp).toInt()
@@ -266,7 +219,6 @@ class ControlBarView(context: Context) : LinearLayout(context) {
         plusBtn  = ControlButton(context, "A+", btnSize) { onPlusClick?.invoke() }
         closeBtn = ControlButton(context, "✕", btnSize)  { onCloseClick?.invoke() }
 
-        // Color dots container between lock and A-
         colorDotsContainer = LinearLayout(context).apply {
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -433,8 +385,6 @@ class LockIconButton(
     override fun onDraw(canvas: Canvas) {
         val w = width.toFloat()
         val h = height.toFloat()
-
-        // 缩小绘制区域，与文字按钮视觉大小一致
         val scale = 0.55f
         val ox = w * (1f - scale) / 2f
         val oy = h * (1f - scale) / 2f
@@ -443,7 +393,6 @@ class LockIconButton(
         val sw = w * scale
         val sh = h * scale
 
-        // 锁体（圆角矩形）
         val bodyLeft = sw * 0.18f
         val bodyRight = sw * 0.82f
         val bodyTop = sh * 0.46f
@@ -452,10 +401,8 @@ class LockIconButton(
         val bodyRect = RectF(bodyLeft, bodyTop, bodyRight, bodyBottom)
         canvas.drawRoundRect(bodyRect, bodyRadius, bodyRadius, paint)
 
-        // 锁孔
         canvas.drawCircle(sw * 0.5f, (bodyTop + bodyBottom) * 0.48f, sw * 0.05f, fillPaint)
 
-        // 锁环
         val shackleRect = RectF(sw * 0.28f, sh * 0.12f, sw * 0.72f, sh * 0.58f)
         if (locked) {
             canvas.drawArc(shackleRect, 180f, 180f, false, paint)
