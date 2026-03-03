@@ -2,6 +2,19 @@ import { NativeModules, NativeEventEmitter } from 'react-native';
 import { devLog } from '@/utils/log';
 import type { IMp3Util } from '@/types/metadata';
 
+// Phase 2: 批量进度事件类型定义
+export interface IMp3UtilProgressItem {
+  id: string;
+  downloaded: number;
+  total: number;
+  percent: number;
+  progressText: string;
+}
+
+export interface IMp3UtilDownloadProgressBatch {
+  items: IMp3UtilProgressItem[];
+}
+
 // 获取原生Mp3Util模块
 const { Mp3Util: NativeMp3Util } = NativeModules;
 export const Mp3UtilEmitter = new NativeEventEmitter(NativeMp3Util);

@@ -58,9 +58,33 @@ class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactCo
                 .build()
         }
 
+        // Phase 2: 批量进度聚合数据结构
+        data class ProgressSnapshot(
+            val id: String,
+            val downloaded: Long,
+            val total: Long,
+            val percent: Int,
+            val progressText: String,
+            val timestamp: Long = System.currentTimeMillis()
+        )
+
+        private val progressCache = ConcurrentHashMap<String, ProgressSnapshot>()
+        private var flushScheduled = false
+        private val flushLock = Any()
+
         fun registerCall(id: String, call: okhttp3.Call) { httpCalls[id] = call }
         fun removeCall(id: String) { httpCalls.remove(id) }
         fun cancelCall(id: String) { httpCalls[id]?.cancel() }
+
+        // Phase 2: 更新进度快照
+        fun updateProgressSnapshot(snapshot: ProgressSnapshot) {
+            progressCache[snapshot.id] = snapshot
+        }
+
+        // Phase 2: 移除进度快照
+        fun removeProgressSnapshot(id: String) {
+            progressCache.remove(id)
+        }
     }
 
     override fun getName() = "Mp3Util"
@@ -916,6 +940,52 @@ class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactCo
         } catch (_: Exception) {}
     }
 
+    // Phase 2: 定时 flush 批量进度
+    private fun scheduleFlush() {
+        synchronized(flushLock) {
+            if (flushScheduled) return
+            flushScheduled = true
+        }
+
+        Thread {
+            Thread.sleep(350) // 350ms 间隔
+            synchronized(flushLock) {
+                flushScheduled = false
+            }
+            flushProgressBatch()
+        }.start()
+    }
+
+    // Phase 2: flush 批量进度事件
+    private fun flushProgressBatch() {
+        if (progressCache.isEmpty()) return
+
+        try {
+            val items = Arguments.createArray()
+            val snapshots = progressCache.values.toList()
+
+            for (snapshot in snapshots) {
+                val item = Arguments.createMap().apply {
+                    putString("id", snapshot.id)
+                    putDouble("downloaded", snapshot.downloaded.toDouble())
+                    putDouble("total", snapshot.total.toDouble())
+                    putInt("percent", snapshot.percent)
+                    putString("progressText", snapshot.progressText)
+                }
+                items.pushMap(item)
+            }
+
+            if (items.size() > 0) {
+                val batch = Arguments.createMap().apply {
+                    putArray("items", items)
+                }
+                emitEvent("Mp3UtilDownloadProgressBatch", batch)
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("Mp3UtilModule", "Failed to flush progress batch: ${e.message}")
+        }
+    }
+
     @ReactMethod
     fun downloadWithHttp(options: ReadableMap, promise: Promise) {
         Thread {
@@ -1065,13 +1135,23 @@ class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactCo
                                             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "取消", cancelPending)
                                         try { notifier.notify(notifId, builder.build()) } catch (_: Exception) {}
 
-                                        // 与通知同步地发送JS事件，确保进度显示一致
-                                        lastEmit = now
+                                        // Phase 2: 更新进度快照并调度批量 flush
                                         val progressText = when {
                                             total > 0 -> "${formatFileSize(downloaded)} / ${formatFileSize(total)}"
                                             downloaded > 0 -> "已下载 ${formatFileSize(downloaded)}"
                                             else -> "正在准备下载..."
                                         }
+                                        updateProgressSnapshot(ProgressSnapshot(
+                                            id = httpId,
+                                            downloaded = downloaded,
+                                            total = total,
+                                            percent = percent,
+                                            progressText = progressText
+                                        ))
+                                        scheduleFlush()
+
+                                        // 保留单条事件作为兜底（通过配置控制）
+                                        lastEmit = now
                                         val map = Arguments.createMap().apply {
                                             putString("id", httpId)
                                             putDouble("downloaded", downloaded.toDouble())
@@ -1086,11 +1166,24 @@ class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactCo
                                     // 当不显示通知时，仍然以较高频率向JS发送事件
                                     if (!showNotificationFlag && now - lastEmit > 300) {
                                         lastEmit = now
+                                        val percent = if (total > 0) ((downloaded * 100 / total).toInt()) else 0
                                         val progressText = when {
                                             total > 0 -> "${formatFileSize(downloaded)} / ${formatFileSize(total)}"
                                             downloaded > 0 -> "已下载 ${formatFileSize(downloaded)}"
                                             else -> "正在准备下载..."
                                         }
+
+                                        // Phase 2: 更新进度快照并调度批量 flush
+                                        updateProgressSnapshot(ProgressSnapshot(
+                                            id = httpId,
+                                            downloaded = downloaded,
+                                            total = total,
+                                            percent = percent,
+                                            progressText = progressText
+                                        ))
+                                        scheduleFlush()
+
+                                        // 保留单条事件作为兜底
                                         val map = Arguments.createMap().apply {
                                             putString("id", httpId)
                                             putDouble("downloaded", downloaded.toDouble())
@@ -1169,6 +1262,9 @@ class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactCo
                 // Resolve with a pseudo id so caller can log
                 promise.resolve(httpId)
                 try {
+                    // Phase 2: 清理进度快照
+                    removeProgressSnapshot(httpId)
+
                     val map = Arguments.createMap().apply {
                         putString("id", httpId)
                         putString("destinationPath", outFile.absolutePath)
@@ -1195,6 +1291,9 @@ class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactCo
                 } catch (_: Exception) {}
                 promise.reject("HttpDownloadError", e.message)
                 try {
+                    // Phase 2: 清理进度快照
+                    removeProgressSnapshot("http:${'$'}notifId")
+
                     val map = Arguments.createMap().apply {
                         putString("id", "http:${'$'}notifId")
                         putString("error", e.message)

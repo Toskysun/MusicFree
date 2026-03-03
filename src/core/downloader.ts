@@ -112,10 +112,21 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
     private downloadingCount = 0;
     private nativeEventBound = false;
     private internalIdToKey = new Map<string, string>();
-    // Lock to prevent race condition in downloadNextPendingTask
-    private isSchedulingTask = false;
+    // Phase 1: 单飞调度状态（替代旧的 isSchedulingTask 锁）
     // 移除自定义通知管理器状态
     // private notificationManagerInitialized = false;
+
+    // Phase 1: 进度门控状态容器
+    private progressGates = new Map<string, {
+        lastEmitTs: number;
+        lastEmitBytes: number;
+        lastEmitPercent: number;
+        pendingPatch: Partial<IDownloadTaskInfo> | null;
+    }>();
+
+    // Phase 1: 单飞调度状态
+    private scheduleRequested = false;
+    private scheduleInFlight = false;
 
     private generateFilename(musicItem: IMusic.IMusicItem, quality?: IMusic.IQualityKey): string {
         // 获取文件命名配置
@@ -177,11 +188,63 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
                     if (!key) return;
                     const task = downloadTasks.get(key);
                     if (!task) return;
+
+                    // Phase 1: 进度门控判断
+                    const now = Date.now();
+                    const downloaded = typeof e?.downloaded === 'number' ? e.downloaded : 0;
+                    const total = typeof e?.total === 'number' && e.total > 0 ? e.total : task.fileSize || 0;
+
+                    if (!this.shouldPublishProgress(key, downloaded, total, now)) {
+                        // 不满足门限，只更新内存快照（已在 shouldPublishProgress 中更新）
+                        return;
+                    }
+
+                    // 满足门限，更新任务并发布事件
                     this.updateDownloadTask(task.musicItem, {
-                        downloadedSize: typeof e?.downloaded === 'number' ? e.downloaded : undefined,
-                        fileSize: typeof e?.total === 'number' && e.total > 0 ? e.total : task.fileSize,
+                        downloadedSize: downloaded,
+                        fileSize: total,
                         progressText: typeof e?.progressText === 'string' ? e.progressText : task.progressText,
                     });
+                });
+
+                // Phase 2: 批量进度事件监听
+                Mp3UtilEmitter.addListener('Mp3UtilDownloadProgressBatch', (e: any) => {
+                    const batchEnabled = this.configService.getConfig("basic.downloadProgressBatchEnabled") ?? true;
+                    if (!batchEnabled) {
+                        return; // 批量处理关闭，忽略批量事件
+                    }
+
+                    const items = e?.items;
+                    if (!Array.isArray(items) || items.length === 0) {
+                        return;
+                    }
+
+                    devLog('info', `📦[下载器] 收到批量进度事件 (${items.length} 项)`);
+
+                    // 批量合并更新
+                    const patches = new Map<string, Partial<IDownloadTaskInfo>>();
+                    for (const item of items) {
+                        const key = this.internalIdToKey.get(item.id);
+                        if (!key) continue;
+                        const task = downloadTasks.get(key);
+                        if (!task) continue;
+
+                        patches.set(key, {
+                            downloadedSize: item.downloaded,
+                            fileSize: item.total > 0 ? item.total : task.fileSize,
+                            progressText: item.progressText,
+                        });
+                    }
+
+                    // 一次性应用所有补丁
+                    for (const [key, patch] of patches) {
+                        const task = downloadTasks.get(key);
+                        if (task) {
+                            const newValue = { ...task, ...patch } as IDownloadTaskInfo;
+                            downloadTasks.set(key, newValue);
+                            this.emit(DownloaderEvent.DownloadTaskUpdate, newValue);
+                        }
+                    }
                 });
                 Mp3UtilEmitter.addListener('Mp3UtilDownloadCancelled', (e: any) => {
                     const key = this.internalIdToKey.get(e?.id);
@@ -215,6 +278,45 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
     
     // 移除自定义通知管理器初始化方法
     // private async initializeNotificationManager(): Promise<void> { ... }
+
+    // Phase 1: 进度门控函数
+    private shouldPublishProgress(taskKey: string, downloaded: number, total: number, now: number): boolean {
+        const throttleEnabled = this.configService.getConfig("basic.downloadProgressThrottleEnabled") ?? true;
+        if (!throttleEnabled) {
+            return true; // 节流关闭，直接发布
+        }
+
+        const minIntervalMs = this.configService.getConfig("basic.downloadProgressMinIntervalMs") ?? 400;
+        const minBytesDelta = this.configService.getConfig("basic.downloadProgressMinBytesDelta") ?? 262144; // 256KB
+        const minPercentDelta = this.configService.getConfig("basic.downloadProgressMinPercentDelta") ?? 1; // 1%
+
+        let gate = this.progressGates.get(taskKey);
+        if (!gate) {
+            gate = {
+                lastEmitTs: 0,
+                lastEmitBytes: 0,
+                lastEmitPercent: 0,
+                pendingPatch: null,
+            };
+            this.progressGates.set(taskKey, gate);
+        }
+
+        const timeDelta = now - gate.lastEmitTs;
+        const bytesDelta = downloaded - gate.lastEmitBytes;
+        const currentPercent = total > 0 ? (downloaded / total) * 100 : 0;
+        const percentDelta = currentPercent - gate.lastEmitPercent;
+
+        // 规则：时间间隔 >= minIntervalMs 且 (百分比增量 >= minPercentDelta 或 字节增量 >= minBytesDelta)
+        const shouldPublish = timeDelta >= minIntervalMs && (percentDelta >= minPercentDelta || bytesDelta >= minBytesDelta);
+
+        if (shouldPublish) {
+            gate.lastEmitTs = now;
+            gate.lastEmitBytes = downloaded;
+            gate.lastEmitPercent = currentPercent;
+        }
+
+        return shouldPublish;
+    }
 
     private updateDownloadTask(musicItem: IMusic.IMusicItem, patch: Partial<IDownloadTaskInfo>) {
         const newValue = {
@@ -465,80 +567,108 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
     }
 
 
-    private async downloadNextPendingTask() {
-        // Prevent race condition: use lock to ensure atomic check-and-increment
-        if (this.isSchedulingTask) {
-            devLog('info', '🔒[下载器] 调度锁生效，跳过本次调度');
-            return;
-        }
-        this.isSchedulingTask = true;
-
-        const maxDownloadCount = Math.max(1, Math.min(+(this.configService.getConfig("basic.maxDownload") || 3), 10));
-        const downloadQueue = getDefaultStore().get(downloadQueueAtom);
-
-        devLog('info', '📋[下载器] 调度检查', {
-            downloadingCount: this.downloadingCount,
-            maxDownloadCount,
-            queueLength: downloadQueue.length,
-            pendingTasks: Array.from(downloadTasks.values()).filter(t => t.status === DownloadStatus.Pending).length
-        });
-
-        // 如果超过最大下载数量，或者没有下载任务，则不执行
-        if (this.downloadingCount >= maxDownloadCount || this.downloadingCount >= downloadQueue.length) {
-            this.isSchedulingTask = false;
-            devLog('info', '⏸️[下载器] 达到并发上限或队列已满，等待中', {
-                downloadingCount: this.downloadingCount,
-                maxDownloadCount,
-                queueLength: downloadQueue.length
-            });
+    // Phase 1: 单飞调度 - 请求调度
+    private requestSchedule(reason: string) {
+        const singleFlightEnabled = this.configService.getConfig("basic.downloadSchedulerSingleFlightEnabled") ?? true;
+        if (!singleFlightEnabled) {
+            // 单飞调度关闭，回退旧行为（使用 runScheduleLoop 作为兼容实现）
+            setTimeout(() => this.runScheduleLoop(), 0);
             return;
         }
 
-        // 寻找下一个pending task
-        let nextTask: IDownloadTaskInfo | null = null;
-        for (let i = 0; i < downloadQueue.length; i++) {
-            const musicItem = downloadQueue[i];
-            const key = getMediaUniqueKey(musicItem);
-            const task = downloadTasks.get(key);
-            if (task && task.status === DownloadStatus.Pending) {
-                nextTask = task;
-                break;
+        if (this.scheduleRequested) {
+            devLog('info', `🔄[下载器] 调度已请求，跳过重复请求 (${reason})`);
+            return;
+        }
+
+        this.scheduleRequested = true;
+        devLog('info', `📌[下载器] 请求调度 (${reason})`);
+
+        // 使用 setImmediate 或 setTimeout(0) 触发调度循环
+        setTimeout(() => this.runScheduleLoop(), 0);
+    }
+
+    // Phase 1: 单飞调度 - 调度循环
+    private async runScheduleLoop() {
+        if (this.scheduleInFlight) {
+            devLog('info', '🔒[下载器] 调度循环已在运行，跳过');
+            return;
+        }
+
+        this.scheduleInFlight = true;
+        this.scheduleRequested = false;
+
+        try {
+            const maxDownloadCount = Math.max(1, Math.min(+(this.configService.getConfig("basic.maxDownload") || 3), 10));
+
+            // 循环补满并发槽位
+            while (this.downloadingCount < maxDownloadCount) {
+                const downloadQueue = getDefaultStore().get(downloadQueueAtom);
+
+                // 寻找下一个 pending task
+                let nextTask: IDownloadTaskInfo | null = null;
+                for (let i = 0; i < downloadQueue.length; i++) {
+                    const musicItem = downloadQueue[i];
+                    const key = getMediaUniqueKey(musicItem);
+                    const task = downloadTasks.get(key);
+                    if (task && task.status === DownloadStatus.Pending) {
+                        nextTask = task;
+                        break;
+                    }
+                }
+
+                if (!nextTask) {
+                    // 没有待处理任务了
+                    if (this.downloadingCount === 0) {
+                        this.emit(DownloaderEvent.DownloadQueueCompleted);
+                    }
+                    break;
+                }
+
+                // 启动下载任务（不等待完成）
+                this.downloadSingleTask(nextTask.musicItem).catch(err => {
+                    errorLog('下载任务执行失败', err);
+                });
+            }
+        } finally {
+            this.scheduleInFlight = false;
+
+            // 如果在循环期间又有新的调度请求，重新触发
+            if (this.scheduleRequested) {
+                setTimeout(() => this.runScheduleLoop(), 0);
             }
         }
+    }
 
-        // 没有下一个任务了
-        if (!nextTask) {
-            this.isSchedulingTask = false;
-            if (this.downloadingCount === 0) {
-                this.emit(DownloaderEvent.DownloadQueueCompleted);
-            }
-            return;
-        }
-
-        const musicItem = nextTask.musicItem;
-        // 更新下载状态 - increment downloadingCount before releasing lock
+    // Phase 1: 单个任务下载逻辑（从 downloadNextPendingTask 提取）
+    private async downloadSingleTask(musicItem: IMusic.IMusicItem) {
+        // 更新下载状态
         this.markTaskAsStarted(musicItem);
-
-        // Release lock after downloadingCount is incremented
-        this.isSchedulingTask = false;
 
         let url = musicItem.url;
         let headers = musicItem.headers;
         let mflacEkey: string | undefined;
 
         const plugin = this.pluginManagerService.getByName(musicItem.platform);
+        const taskKey = getMediaUniqueKey(musicItem);
+        const task = downloadTasks.get(taskKey);
+        if (!task) {
+            this.markTaskAsError(musicItem, DownloadFailReason.Unknown);
+            this.requestSchedule('task-not-found');
+            return;
+        }
 
         try {
             if (plugin) {
                 const qualityOrder = getQualityOrder(
-                    nextTask.quality ??
+                    task.quality ??
                     this.configService.getConfig("basic.defaultDownloadQuality") ??
                     "master",
                     this.configService.getConfig("basic.downloadQualityOrder") ?? "desc",
                 );
                 let data: IPlugin.IMediaSourceResult | null = null;
-                const requestedQuality = nextTask.quality ?? 
-                    this.configService.getConfig("basic.defaultDownloadQuality") ?? 
+                const requestedQuality = task.quality ??
+                    this.configService.getConfig("basic.defaultDownloadQuality") ??
                     "master";
                 let actualQuality: IMusic.IQualityKey | null = null;
                 
@@ -597,9 +727,9 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
                         platform: musicItem.platform,
                         message: `用户请求${requestedQuality}音质，但插件只能提供${actualQuality}音质`
                     });
-                    
+
                     // 更新任务的实际音质
-                    nextTask.quality = actualQuality;
+                    task.quality = actualQuality;
                 } else if (actualQuality) {
                     devLog('info', '✅[下载器] 音质获取成功', {
                         quality: actualQuality,
@@ -623,7 +753,7 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
                 } else {
                     devLog('warn', '⚠️[下载器] 未从插件获取到 ekey', {
                         platform: musicItem.platform,
-                        quality: nextTask.quality,
+                        quality: task.quality,
                         dataKeys: data ? Object.keys(data) : []
                     });
                 }
@@ -640,7 +770,7 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
                 });
                 // 本地文件不需要下载，标记为已完成
                 this.markTaskAsCompleted(musicItem, url.replace('file://', ''));
-                setTimeout(() => this.downloadNextPendingTask(), 0);
+                this.requestSchedule('local-file-completed');
                 return;
             }
         } catch (e: any) {
@@ -650,7 +780,7 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
                     id: musicItem.id,
                     title: musicItem.title,
                     platform: musicItem.platform,
-                    quality: nextTask.quality,
+                    quality: task.quality,
                 },
                 reason: e?.message ?? e,
             });
@@ -661,19 +791,15 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
                 this.markTaskAsError(musicItem, DownloadFailReason.Unknown, e);
             }
             // Trigger next task after error
-            setTimeout(() => this.downloadNextPendingTask(), 0);
+            this.requestSchedule('fetch-source-error');
             return;
         }
 
-        // 预处理完成，可以开始处理下一个任务
-        // Use setTimeout to ensure lock is released before next call
-        setTimeout(() => this.downloadNextPendingTask(), 0);
-        
         // 从musicItem.qualities中获取预期文件大小
         let expectedFileSize = 0;
         let qualityInfo: { url?: string; size?: string | number } | null = null;
-        const taskQuality = nextTask.quality ?? 
-            this.configService.getConfig("basic.defaultDownloadQuality") ?? 
+        const taskQuality = task.quality ??
+            this.configService.getConfig("basic.defaultDownloadQuality") ??
             "320k";
         
         if (musicItem.qualities && musicItem.qualities[taskQuality]) {
@@ -748,7 +874,7 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
         });
 
         // 真实下载地址
-        const targetDownloadPath = this.getDownloadPath(`${nextTask.filename}.${extension}`);
+        const targetDownloadPath = this.getDownloadPath(`${task.filename}.${extension}`);
         // detect encrypted mflac/mgg/mmp4 and route to temp file for post-decrypt
         const { isMflacUrl, normalizeEkey } = require("@/utils/mflac");
         const willDownloadEncrypted = !!mflacEkey || isMflacUrl(url);
@@ -772,7 +898,7 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
         });
 
         const tempEncryptedPath = willDownloadEncrypted
-            ? this.getDownloadPath(`${nextTask.filename}.${encryptedExtension}`)
+            ? this.getDownloadPath(`${task.filename}.${encryptedExtension}`)
             : targetDownloadPath;
 
         // 检测下载位置是否存在
@@ -785,7 +911,7 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
             }
         } catch (e: any) {
             this.markTaskAsError(musicItem, DownloadFailReason.NoWritePermission, e);
-            setTimeout(() => this.downloadNextPendingTask(), 0);
+            this.requestSchedule('mkdir-error');
             return;
         }
 
@@ -804,7 +930,7 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
                     url,
                     destinationPath: destPath,
                     // 标题遵循文件命名设置（不含扩展名）
-                    title: nextTask.filename,
+                    title: task.filename,
                     description: '正在下载音乐文件...',
                     headers,
                     showNotification: true,
@@ -988,7 +1114,7 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
                         output: targetDownloadPath
                     });
                     this.markTaskAsError(musicItem, DownloadFailReason.Unknown, e);
-                    setTimeout(() => this.downloadNextPendingTask(), 0);
+                    this.requestSchedule('decrypt-error');
                     return;
                 }
             }
@@ -1026,13 +1152,14 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
             });
 
             this.markTaskAsCompleted(musicItem, targetDownloadPath);
-            
+            this.requestSchedule('task-completed');
+
         } catch (e: any) {
             devLog('error', '❌[下载器] 系统下载失败', {
                 error: e?.message || String(e),
                 title: musicItem.title
             });
-            
+
             // 检查是否是路径不支持错误，提供友好的用户提示
             if (e?.code === 'UnsupportedPath') {
                 // 显示用户友好的提示
@@ -1044,10 +1171,8 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
             } else {
                 this.markTaskAsError(musicItem, DownloadFailReason.Unknown, e);
             }
+            this.requestSchedule('task-error');
         }
-
-        // 继续处理下一个任务 - use setTimeout to ensure proper scheduling
-        setTimeout(() => this.downloadNextPendingTask(), 0);
 
         // 如果任务状态是完成，则从队列中移除
         const key = getMediaUniqueKey(musicItem);
@@ -1103,13 +1228,8 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
         const newDownloadQueue = [...downloadQueue, ...musicItems];
         getDefaultStore().set(downloadQueueAtom, newDownloadQueue);
 
-        // Start multiple concurrent downloads up to maxDownload limit
-        const maxDownloadCount = Math.max(1, Math.min(+(this.configService.getConfig("basic.maxDownload") || 3), 10));
-        const tasksToStart = Math.min(maxDownloadCount, musicItems.length);
-        for (let i = 0; i < tasksToStart; i++) {
-            // Use setTimeout to ensure lock is released between calls
-            setTimeout(() => this.downloadNextPendingTask(), i * 10);
-        }
+        // 触发调度
+        this.requestSchedule('new-tasks-added');
     }
 
     remove(musicItem: IMusic.IMusicItem) {
@@ -1154,9 +1274,9 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
                 devLog('info', '📢[下载器] 取消通知调用（简化版本）', error);
             });
 
-            // 触发下一个任务 - use setTimeout to ensure proper scheduling
-            setTimeout(() => this.downloadNextPendingTask(), 0);
-            
+            // 触发下一个任务
+            this.requestSchedule('task-removed');
+
             return true;
         }
         return false;
