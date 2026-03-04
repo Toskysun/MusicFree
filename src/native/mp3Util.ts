@@ -1,19 +1,6 @@
-import { NativeModules, NativeEventEmitter } from 'react-native';
-import { devLog } from '@/utils/log';
+import { NativeModules, NativeEventEmitter } from "react-native";
+import { devLog } from "@/utils/log";
 import type { IMp3Util } from '@/types/metadata';
-
-// Phase 2: 批量进度事件类型定义
-export interface IMp3UtilProgressItem {
-  id: string;
-  downloaded: number;
-  total: number;
-  percent: number;
-  progressText: string;
-}
-
-export interface IMp3UtilDownloadProgressBatch {
-  items: IMp3UtilProgressItem[];
-}
 
 export interface INativeDownloadTaskStatus {
   taskId: string;
@@ -54,7 +41,6 @@ export interface INativeDownloadProgressItem {
 // 获取原生Mp3Util模块
 const { Mp3Util: NativeMp3Util } = NativeModules;
 const { NativeDownload: NativeDownloadModule } = NativeModules;
-export const Mp3UtilEmitter = new NativeEventEmitter(NativeMp3Util);
 export const NativeDownloadEmitter = NativeDownloadModule
   ? new NativeEventEmitter(NativeDownloadModule)
   : null;
@@ -164,78 +150,6 @@ class Mp3UtilManager implements IMp3Util {
   }
 
   /**
-   * 使用系统下载管理器下载文件
-   */
-  async downloadWithSystemManager(
-    url: string,
-    destinationPath: string,
-    title: string,
-    description: string,
-    headers?: Record<string, string>
-  ): Promise<string> {
-    devLog('info', '📥[Mp3Util] 调用系统下载管理器', {
-      url,
-      destinationPath,
-      title,
-      headers
-    });
-
-    try {
-      const downloadId = await this.nativeModule.downloadWithSystemManager(
-        url,
-        destinationPath,
-        title,
-        description,
-        headers || null
-      );
-      devLog('info', '✅[Mp3Util] 系统下载任务创建成功', { downloadId });
-      return downloadId;
-    } catch (error) {
-      devLog('error', '❌[Mp3Util] 系统下载任务创建失败', error);
-      throw error;
-    }
-  }
-
-  /**
-   * 使用内置HTTP下载器下载文件，并显示原生通知（可选）
-   */
-  async downloadWithHttp(options: {
-    url: string;
-    destinationPath: string;
-    title: string;
-    description: string;
-    headers?: Record<string, string> | null;
-    showNotification?: boolean;
-    coverUrl?: string | null;
-  }): Promise<string> {
-    devLog('info', '📥[Mp3Util] 调用内置HTTP下载器', {
-      url: options?.url,
-      destinationPath: options?.destinationPath,
-      title: options?.title,
-      showNotification: options?.showNotification,
-    });
-    if (!this.nativeModule?.downloadWithHttp) {
-      throw new Error('downloadWithHttp not available');
-    }
-    try {
-      const id = await this.nativeModule.downloadWithHttp({
-        url: options.url,
-        destinationPath: options.destinationPath,
-        title: options.title,
-        description: options.description,
-        headers: options.headers ?? null,
-        showNotification: options.showNotification ?? true,
-        coverUrl: options.coverUrl ?? null,
-      });
-      devLog('info', '✅[Mp3Util] 内置HTTP下载任务完成', { id });
-      return id;
-    } catch (error) {
-      devLog('error', '❌[Mp3Util] 内置HTTP下载任务失败', error);
-      throw error;
-    }
-  }
-
-  /**
    * Decrypt an encrypted .mflac file to .flac using native decoder.
    */
   async decryptMflacToFlac(inputPath: string, outputPath: string, ekey: string): Promise<boolean> {
@@ -243,16 +157,6 @@ class Mp3UtilManager implements IMp3Util {
       throw new Error('decryptMflacToFlac not available');
     }
     return this.nativeModule.decryptMflacToFlac(inputPath, outputPath, ekey);
-  }
-
-  async cancelHttpDownload(id: string): Promise<boolean> {
-    if (!this.nativeModule?.cancelHttpDownload) return false;
-    return this.nativeModule.cancelHttpDownload(id);
-  }
-
-  async cancelSystemDownload(id: string): Promise<boolean> {
-    if (!this.nativeModule?.cancelSystemDownload) return false;
-    return this.nativeModule.cancelSystemDownload(id);
   }
 
   /**

@@ -32,13 +32,6 @@
           android:resource="@xml/file_paths" />
       </provider>
 
-      <receiver
-        android:name=".mp3Util.Mp3UtilModule$DownloadActionReceiver"
-        android:exported="false">
-        <intent-filter>
-          <action android:name="fun.xwj.musicfree.action.CANCEL_DOWNLOAD" />
-        </intent-filter>
-      </receiver>
       <activity
         android:name=".MainActivity"
         android:theme="@style/Theme.App.SplashScreen"

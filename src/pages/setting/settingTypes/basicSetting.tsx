@@ -24,9 +24,8 @@ import Clipboard from "@react-native-clipboard/clipboard";
 import Slider from "@react-native-community/slider";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { SectionList, StyleSheet, TouchableOpacity, View } from "react-native";
-import { readdir } from "react-native-fs";
+import { readdir, unlink as unlinkFile, writeFile } from "react-native-fs";
 import { FlatList, ScrollView } from "react-native-gesture-handler";
-import Mp3Util from "@/native/mp3Util";
 import lyricManager from "@/core/lyricManager";
 import {
     getPresetTemplates,
@@ -398,16 +397,11 @@ export default function BasicSetting() {
                                 // 先检查基本权限
                                 await readdir(targetDir.path);
                                 
-                                // 检查Android系统是否支持该路径进行下载
+                                // 检查目标目录是否可写（Native 下载器基于 FileOutputStream）
                                 try {
                                     const testPath = `${targetDir.path}/musicfree_path_test.tmp`;
-                                    await Mp3Util.downloadWithSystemManager(
-                                        "data:text/plain;base64,dGVzdA==", // "test" in base64
-                                        testPath,
-                                        "路径测试",
-                                        "测试Android系统是否支持该路径",
-                                        {}
-                                    );
+                                    await writeFile(testPath, "musicfree_path_test", "utf8");
+                                    await unlinkFile(testPath).catch(() => {});
                                     
                                     // 如果到这里说明路径支持，设置路径
                                     Config.setConfig(
@@ -417,12 +411,13 @@ export default function BasicSetting() {
                                     return true;
                                 } catch (pathError: any) {
                                     // 检查是否是路径不支持错误
-                                    if (pathError?.code === 'UnsupportedPath' || 
-                                        pathError?.message?.includes('Unsupported path')) {
+                                    if (pathError?.code === "EACCES" || 
+                                        pathError?.message?.includes("permission") ||
+                                        pathError?.message?.includes("denied")) {
                                         // 显示用户友好的对话框提示
                                         showDialog("SimpleDialog", {
                                             title: "路径不支持",
-                                            content: "Android系统不支持该下载路径，请选择系统支持的路径（如Music目录或Downloads目录）",
+                                            content: "该目录不可写，请选择有写入权限的目录（如 Music 或 Downloads）",
                                             cancelText: "知道了",
                                             okText: "重新选择",
                                             onOk() {
