@@ -1,11 +1,10 @@
 /**
- * 简化的下载通知管理器
- * 现在使用RNFetchBlob + Android系统下载管理器，不需要自定义通知
- * 此文件保留是为了兼容性，防止其他地方的引用报错
+ * 下载通知管理器（JS 兼容层）
+ * 真实下载通知由原生 NativeDownload 队列负责，这里主要维护权限能力接口。
  */
 
-import { Platform } from "react-native";
 import { devLog } from "@/utils/log";
+import notificationPermissionManager from "@/core/notificationPermissionManager";
 
 interface NotificationTask {
   taskId: string;
@@ -20,48 +19,62 @@ class DownloadNotificationManager implements IDownloadNotification.IDownloadNoti
     private activeTasks = new Map<string, NotificationTask>();
 
     async initialize(): Promise<void> {
-        devLog('info', '🏠[通知管理器] 使用系统下载管理器，跳过自定义通知管理器初始化');
+        devLog("info", "🏠[通知管理器] 使用原生下载队列通知");
+        try {
+            await notificationPermissionManager.silentRequestPermission();
+        } catch {
+            // ignore permission bootstrap errors
+        }
         this.isInitialized = true;
     }
 
     async showDownloadNotification(taskId: string, musicItem: IMusic.IMusicItem): Promise<void> {
-        devLog('info', '📢[通知管理器] 系统下载管理器将自动显示通知', { musicTitle: musicItem.title });
-        // 系统下载管理器会自动处理通知
+        this.activeTasks.set(taskId, {
+            taskId,
+            musicItem,
+            notificationId: taskId,
+            lastUpdateTime: Date.now(),
+            lastDownloadedSize: 0,
+        });
+        devLog("info", "📢[通知管理器] 原生下载器将显示通知", { musicTitle: musicItem.title });
     }
 
     async updateProgress(taskId: string, progress: IDownloadNotification.DownloadProgress): Promise<void> {
-        devLog('info', '📈[通知管理器] 系统下载管理器将自动更新进度', { 
+        const task = this.activeTasks.get(taskId);
+        if (task) {
+            task.lastUpdateTime = Date.now();
+            task.lastDownloadedSize = progress.downloadedSize;
+        }
+        devLog("info", "📈[通知管理器] 原生下载器将更新进度通知", {
             progress: `${progress.progress}%`,
-            taskId 
+            taskId,
         });
-        // 系统下载管理器会自动处理进度更新
     }
 
     async showCompleted(taskId: string, musicItem: IMusic.IMusicItem, filePath: string): Promise<void> {
-        devLog('info', '✅[通知管理器] 系统下载管理器将自动显示完成通知', { 
+        this.activeTasks.delete(taskId);
+        devLog("info", "✅[通知管理器] 原生下载器将显示完成通知", {
             musicTitle: musicItem.title,
-            filePath 
+            filePath,
         });
-        // 系统下载管理器会自动处理完成通知
     }
 
     async showError(taskId: string, error: string): Promise<void> {
-        devLog('info', '❌[通知管理器] 系统下载管理器将自动显示错误通知', { 
+        this.activeTasks.delete(taskId);
+        devLog("info", "❌[通知管理器] 原生下载器将显示错误通知", {
             error,
-            taskId 
+            taskId,
         });
-        // 系统下载管理器会自动处理错误通知
     }
 
     async cancelNotification(taskId: string): Promise<void> {
-        devLog('info', '🗑[通知管理器] 系统下载管理器将自动取消通知', { taskId });
-        // 系统下载管理器会自动处理取消通知
+        devLog("info", "🗑[通知管理器] 取消任务通知记录", { taskId });
         this.activeTasks.delete(taskId);
     }
 
     /** 清理所有下载通知 */
     async clearAllNotifications(): Promise<void> {
-        devLog('info', '🧩[通知管理器] 清理所有通知记录');
+        devLog("info", "🧩[通知管理器] 清理所有通知记录");
         this.activeTasks.clear();
     }
 
@@ -72,18 +85,18 @@ class DownloadNotificationManager implements IDownloadNotification.IDownloadNoti
 
     /** 请求通知权限（显式请求，带用户提示） */
     async requestNotificationPermission(): Promise<boolean> {
-        devLog('info', '🔒[通知管理器] 系统下载管理器不需要额外的通知权限');
-        return true; // 系统下载管理器有自己的权限管理
+        devLog("info", "🔒[通知管理器] 请求通知权限");
+        return notificationPermissionManager.requestPermission(true);
     }
 
     /** 检查通知权限状态 */
     async checkNotificationPermission(): Promise<boolean> {
-        return true; // 系统下载管理器有自己的权限管理
+        return notificationPermissionManager.checkPermission();
     }
 
     /** 获取权限状态描述 */
     async getPermissionStatusDescription(): Promise<string> {
-        return "使用系统下载管理器，由系统自动处理通知权限";
+        return notificationPermissionManager.getPermissionStatusDescription();
     }
 }
 

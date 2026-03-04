@@ -26,6 +26,7 @@ class DownloadManager(
 
     private val appContext = context.applicationContext
     private val database = DownloadDatabase(appContext)
+    private val notificationManager = DownloadNotificationManager(appContext)
 
     private val downloadClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
@@ -206,6 +207,7 @@ class DownloadManager(
         dispatcherExecutor.shutdownNow()
         workerExecutor.shutdownNow()
         progressFlushExecutor.shutdownNow()
+        notificationManager.shutdown()
     }
 
     private fun restoreTasksFromDb() {
@@ -343,6 +345,7 @@ class DownloadManager(
         if (snapshots.isEmpty()) return
 
         progressCache.clear()
+        val taskSnapshotById = mutableMapOf<String, DownloadTask>()
         synchronized(lock) {
             snapshots.forEach { snapshot ->
                 val task = tasks[snapshot.taskId] ?: return@forEach
@@ -350,9 +353,11 @@ class DownloadManager(
                 task.totalBytes = snapshot.total
                 task.updatedAt = System.currentTimeMillis()
                 database.upsertTask(task)
+                taskSnapshotById[snapshot.taskId] = task.copy()
             }
         }
         listener.onProgressBatch(snapshots)
+        notificationManager.onProgressBatch(snapshots, taskSnapshotById)
     }
 
     private fun maybeEmitQueueDrained() {
@@ -361,6 +366,7 @@ class DownloadManager(
             val hasRunning = runningTasks.isNotEmpty()
             if (!hasPending && !hasRunning) {
                 listener.onQueueDrained()
+                notificationManager.onQueueDrained()
             }
         }
     }
@@ -378,7 +384,9 @@ class DownloadManager(
     }
 
     private fun emitStatusChanged(task: DownloadTask) {
-        listener.onTaskStatusChanged(task.copy())
+        val snapshot = task.copy()
+        listener.onTaskStatusChanged(snapshot)
+        notificationManager.onTaskStatusChanged(snapshot)
     }
 
     private fun removeFromQueue(taskId: String) {
