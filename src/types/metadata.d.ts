@@ -166,6 +166,54 @@ export interface IMp3Util {
   startMflacProxy(): Promise<string>;
   /** 注册mflac流并返回本地URL（Android） */
   registerMflacStream(src: string, ekey: string, headers?: Record<string, string> | null): Promise<string>;
+
+  /** Native 下载队列：添加任务 */
+  addDownloadTask(params: {
+    taskId: string;
+    url: string;
+    destinationPath: string;
+    headers?: Record<string, string>;
+    title?: string;
+    description?: string;
+    coverUrl?: string | null;
+    extraJson?: string | null;
+  }): Promise<boolean>;
+
+  /** Native 下载队列：暂停任务 */
+  pauseDownloadTask(taskId: string): Promise<boolean>;
+  /** Native 下载队列：恢复任务 */
+  resumeDownloadTask(taskId: string): Promise<boolean>;
+  /** Native 下载队列：取消任务 */
+  cancelDownloadTask(taskId: string): Promise<boolean>;
+  /** Native 下载队列：删除任务记录 */
+  removeDownloadTask(taskId: string): Promise<boolean>;
+
+  /** Native 下载队列：查询单任务 */
+  getDownloadTaskStatus(taskId: string): Promise<{
+    taskId: string;
+    status: "PENDING" | "PREPARING" | "DOWNLOADING" | "PAUSED" | "COMPLETED" | "CANCELED" | "ERROR";
+    downloaded: number;
+    total: number;
+    progressText?: string;
+    error?: string | null;
+    extraJson?: string | null;
+    destinationPath?: string;
+  } | null>;
+
+  /** Native 下载队列：查询全部任务 */
+  getAllDownloadTasks(): Promise<Array<{
+    taskId: string;
+    status: "PENDING" | "PREPARING" | "DOWNLOADING" | "PAUSED" | "COMPLETED" | "CANCELED" | "ERROR";
+    downloaded: number;
+    total: number;
+    progressText?: string;
+    error?: string | null;
+    extraJson?: string | null;
+    destinationPath?: string;
+  }>>;
+
+  /** Native 下载队列：设置最大并发（1-10） */
+  setDownloadMaxConcurrency(max: number): Promise<boolean>;
 }
 
 /**

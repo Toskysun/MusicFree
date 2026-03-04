@@ -2,7 +2,7 @@ import { internalSerializeKey, supportLocalMediaType } from "@/constants/commonC
 import pathConst from "@/constants/pathConst";
 import { IAppConfig } from "@/types/core/config";
 import { IInjectable } from "@/types/infra";
-import { escapeCharacter } from "@/utils/fileUtils";
+import { escapeCharacter, mkdirR, removeFileScheme } from "@/utils/fileUtils";
 import { errorLog, devLog } from "@/utils/log";
 import { patchMediaExtra } from "@/utils/mediaExtra";
 import { getMediaUniqueKey, isSameMediaItem } from "@/utils/mediaUtils";
@@ -10,126 +10,211 @@ import network from "@/utils/network";
 import { getQualityOrder } from "@/utils/qualities";
 import { generateFileNameFromConfig, DEFAULT_FILE_NAMING_CONFIG } from "@/utils/fileNamingFormatter";
 import { formatLyricsByTimestamp } from "@/utils/lrcParser";
+import { isMflacUrl, normalizeEkey } from "@/utils/mflac";
 import EventEmitter from "eventemitter3";
 import { atom, getDefaultStore, useAtomValue } from "jotai";
 import path from "path-browserify";
 import { useEffect, useState } from "react";
-import { exists, stopDownload } from "react-native-fs";
-import Mp3Util from "@/native/mp3Util";
+import { exists, unlink } from "react-native-fs";
+import Mp3Util, {
+    INativeDownloadTaskParams,
+    INativeDownloadTaskStatus,
+    NativeDownloadEmitter,
+} from "@/native/mp3Util";
 import LocalMusicSheet from "./localMusicSheet";
 import { IPluginManager } from "@/types/core/pluginManager";
-import downloadNotificationManager from "./downloadNotificationManager"; // 保留兼容性，但现在是简化版本
 import musicMetadataManager from "./musicMetadataManager";
 import type { IDownloadMetadataConfig, IDownloadTaskMetadata } from "@/types/metadata";
 import { autoDecryptLyric } from "@/utils/musicDecrypter";
 
-
 export enum DownloadStatus {
-    // 等待下载
     Pending,
-    // 准备下载链接
     Preparing,
-    // 下载中
     Downloading,
-    // 下载完成
     Completed,
-    // 下载失败
-    Error
+    Error,
 }
 
-
 export enum DownloaderEvent {
-    // 某次下载行为出错
     DownloadError = "download-error",
-
-    // 下载任务更新
     DownloadTaskUpdate = "download-task-update",
-
-    // 下载某个音乐时出错
     DownloadTaskError = "download-task-error",
-
-    // 下载完成
     DownloadQueueCompleted = "download-queue-completed",
 }
 
 export enum DownloadFailReason {
-    /** 无网络 */
     NetworkOffline = "network-offline",
-    /** 设置-禁止在移动网络下下载 */
     NotAllowToDownloadInCellular = "not-allow-to-download-in-cellular",
-    /** 无法获取到媒体源 */
     FailToFetchSource = "no-valid-source",
-    /** 没有文件写入的权限 */
     NoWritePermission = "no-write-permission",
     Unknown = "unknown",
 }
 
 interface IDownloadTaskInfo {
-    // 状态
     status: DownloadStatus;
-    // 目标文件名
     filename: string;
-    // 下载id
-    jobId?: number;
-    // 内置下载任务id（如 http:123）
-    internalTaskId?: string;
-    // 下载引擎
-    engine?: 'internal' | 'system';
-    // 下载音质
     quality?: IMusic.IQualityKey;
-    // 文件大小
     fileSize?: number;
-    // 已下载大小
     downloadedSize?: number;
-    // 原生通知生成的进度文案（与通知完全一致）
     progressText?: string;
-    // 音乐信息
     musicItem: IMusic.IMusicItem;
-    // 如果下载失败，下载失败的原因
     errorReason?: DownloadFailReason;
 }
 
+interface IDownloadRuntimeInfo {
+    taskId: string;
+    targetDownloadPath: string;
+    tempEncryptedPath: string;
+    willDownloadEncrypted: boolean;
+    mflacEkey?: string;
+    extension: string;
+    encryptedExtension: string;
+}
+
+interface IPrepareTask {
+    musicItem: IMusic.IMusicItem;
+    quality?: IMusic.IQualityKey;
+}
+
+interface IResolveTaskResult {
+    runtimeInfo?: IDownloadRuntimeInfo;
+    nativeParams?: INativeDownloadTaskParams;
+    localFilePath?: string;
+    quality?: IMusic.IQualityKey;
+    expectedFileSize?: number;
+    failReason?: DownloadFailReason;
+}
+
+interface IExtraPayload {
+    musicItem: IMusic.IMusicItem;
+    quality?: IMusic.IQualityKey;
+    filename: string;
+    runtimeInfo?: IDownloadRuntimeInfo;
+}
 
 const downloadQueueAtom = atom<IMusic.IMusicItem[]>([]);
 const downloadTasks = new Map<string, IDownloadTaskInfo>();
 
-
 interface IEvents {
-    /** 某次下载行为出现报错 */
     [DownloaderEvent.DownloadError]: (reason: DownloadFailReason, error?: Error) => void;
-    /** 下载某个媒体时报错 */
     [DownloaderEvent.DownloadTaskError]: (reason: DownloadFailReason, mediaItem: IMusic.IMusicItem, error?: Error) => void;
-    /** 下载任务更新 */
     [DownloaderEvent.DownloadTaskUpdate]: (task: IDownloadTaskInfo) => void;
-    /** 下载队列清空 */
     [DownloaderEvent.DownloadQueueCompleted]: () => void;
 }
 
 class Downloader extends EventEmitter<IEvents> implements IInjectable {
     private configService!: IAppConfig;
     private pluginManagerService!: IPluginManager;
-
-    private downloadingCount = 0;
     private nativeEventBound = false;
-    private internalIdToKey = new Map<string, string>();
-    // Phase 1: 单飞调度状态（替代旧的 isSchedulingTask 锁）
-    // 移除自定义通知管理器状态
-    // private notificationManagerInitialized = false;
 
-    // Phase 1: 进度门控状态容器
-    private progressGates = new Map<string, {
-        lastEmitTs: number;
-        lastEmitBytes: number;
-        lastEmitPercent: number;
-        pendingPatch: Partial<IDownloadTaskInfo> | null;
-    }>();
+    private prepareQueue: IPrepareTask[] = [];
+    private activePrepareCount = 0;
+    private readonly maxPrepareConcurrency = 3;
 
-    // Phase 1: 单飞调度状态
-    private scheduleRequested = false;
-    private scheduleInFlight = false;
+    private queueBusy = false;
+
+    private runtimeInfoByTaskId = new Map<string, IDownloadRuntimeInfo>();
+
+    injectDependencies(configService: IAppConfig, pluginManager: IPluginManager): void {
+        this.configService = configService;
+        this.pluginManagerService = pluginManager;
+
+        musicMetadataManager.injectPluginManager(pluginManager);
+        this.bindNativeEvents();
+        this.syncNativeConcurrency();
+        void this.hydrateNativeTasks();
+    }
+
+    private bindNativeEvents() {
+        if (this.nativeEventBound || !NativeDownloadEmitter) {
+            if (!NativeDownloadEmitter) {
+                devLog("warn", "⚠️[下载器] NativeDownloadEmitter 不可用，无法启用 Native 队列");
+            }
+            return;
+        }
+
+        NativeDownloadEmitter.addListener("NativeDownloadProgressBatch", (event: any) => {
+            this.handleNativeProgressBatch(event);
+        });
+        NativeDownloadEmitter.addListener("NativeDownloadTaskStatusChanged", (event: any) => {
+            void this.handleNativeTaskStatusChanged(event);
+        });
+        NativeDownloadEmitter.addListener("NativeDownloadQueueDrained", () => {
+            this.maybeEmitQueueCompleted();
+        });
+        this.nativeEventBound = true;
+    }
+
+    private async hydrateNativeTasks() {
+        try {
+            const nativeTasks = await Mp3Util.getAllDownloadTasks();
+            if (!Array.isArray(nativeTasks) || nativeTasks.length === 0) {
+                return;
+            }
+
+            const queueItems: IMusic.IMusicItem[] = [];
+            for (const nativeTask of nativeTasks) {
+                const extra = this.parseExtraPayload(nativeTask.extraJson);
+                if (!extra?.musicItem) {
+                    await Mp3Util.removeDownloadTask(nativeTask.taskId).catch(() => {});
+                    continue;
+                }
+
+                const key = getMediaUniqueKey(extra.musicItem);
+                if (key !== nativeTask.taskId) {
+                    await Mp3Util.removeDownloadTask(nativeTask.taskId).catch(() => {});
+                    continue;
+                }
+
+                const mappedStatus = this.mapNativeStatus(nativeTask.status);
+                if (nativeTask.status === "COMPLETED" || nativeTask.status === "CANCELED") {
+                    await Mp3Util.removeDownloadTask(nativeTask.taskId).catch(() => {});
+                    continue;
+                }
+
+                const task: IDownloadTaskInfo = {
+                    status: mappedStatus,
+                    filename: extra.filename ?? this.generateFilename(extra.musicItem, extra.quality),
+                    quality: extra.quality,
+                    fileSize: nativeTask.total > 0 ? nativeTask.total : undefined,
+                    downloadedSize: nativeTask.downloaded > 0 ? nativeTask.downloaded : undefined,
+                    progressText: nativeTask.progressText ?? undefined,
+                    musicItem: extra.musicItem,
+                    errorReason: nativeTask.status === "ERROR"
+                        ? this.mapNativeErrorToReason(nativeTask.error)
+                        : undefined,
+                };
+
+                downloadTasks.set(key, task);
+                this.runtimeInfoByTaskId.set(key, extra.runtimeInfo ?? {
+                    taskId: key,
+                    targetDownloadPath: nativeTask.destinationPath ?? "",
+                    tempEncryptedPath: nativeTask.destinationPath ?? "",
+                    willDownloadEncrypted: false,
+                    extension: this.getExtensionName(nativeTask.url ?? ""),
+                    encryptedExtension: "mflac",
+                });
+
+                queueItems.push(extra.musicItem);
+            }
+
+            if (queueItems.length > 0) {
+                getDefaultStore().set(downloadQueueAtom, queueItems);
+                this.queueBusy = true;
+            }
+        } catch (error) {
+            devLog("warn", "⚠️[下载器] 恢复 Native 任务失败", String(error));
+        }
+    }
+
+    private syncNativeConcurrency() {
+        const max = Math.max(1, Math.min(+(this.configService.getConfig("basic.maxDownload") || 3), 10));
+        Mp3Util.setDownloadMaxConcurrency(max).catch(error => {
+            devLog("warn", "⚠️[下载器] 设置 Native 并发失败", String(error));
+        });
+    }
 
     private generateFilename(musicItem: IMusic.IMusicItem, quality?: IMusic.IQualityKey): string {
-        // 获取文件命名配置
         const config: IFileNaming.IFileNamingConfig = {
             type: this.configService.getConfig("basic.fileNamingType") ?? DEFAULT_FILE_NAMING_CONFIG.type,
             preset: this.configService.getConfig("basic.fileNamingPreset") ?? DEFAULT_FILE_NAMING_CONFIG.preset,
@@ -139,11 +224,8 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
             keepExtension: DEFAULT_FILE_NAMING_CONFIG.keepExtension,
         };
 
-        // 使用新的文件命名格式化函数
         const result = generateFileNameFromConfig(musicItem, config, quality);
-        
         let filename: string;
-        // 如果格式化失败，回退到旧的命名方式
         if (!result.filename) {
             filename = `${escapeCharacter(musicItem.platform)}@${escapeCharacter(
                 musicItem.id,
@@ -153,239 +235,44 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
         } else {
             filename = result.filename;
         }
-        
-        // 额外的安全处理：确保文件名不包含路径分隔符和特殊字符
-        filename = escapeCharacter(filename);
-        
-        devLog('info', '📝[下载器] 生成文件名', {
-            originalTitle: musicItem.title,
-            originalArtist: musicItem.artist,
-            platform: musicItem.platform,
-            quality: quality,
-            generatedFilename: filename
-        });
-        
-        return filename;
+
+        return escapeCharacter(filename);
     }
 
-
-    injectDependencies(configService: IAppConfig, pluginManager: IPluginManager): void {
-        this.configService = configService;
-        this.pluginManagerService = pluginManager;
-        
-        // 注入插件管理器到音乐元数据管理器
-        musicMetadataManager.injectPluginManager(pluginManager);
-        
-        // 移除自定义通知管理器初始化
-        // this.initializeNotificationManager();
-
-        // 绑定原生下载进度事件（只绑定一次）
-        if (!this.nativeEventBound) {
-            try {
-                const { Mp3UtilEmitter } = require('@/native/mp3Util');
-                Mp3UtilEmitter.addListener('Mp3UtilDownloadProgress', (e: any) => {
-                    const key = this.internalIdToKey.get(e?.id);
-                    if (!key) return;
-                    const task = downloadTasks.get(key);
-                    if (!task) return;
-
-                    // Phase 1: 进度门控判断
-                    const now = Date.now();
-                    const downloaded = typeof e?.downloaded === 'number' ? e.downloaded : 0;
-                    const total = typeof e?.total === 'number' && e.total > 0 ? e.total : task.fileSize || 0;
-
-                    if (!this.shouldPublishProgress(key, downloaded, total, now)) {
-                        // 不满足门限，只更新内存快照（已在 shouldPublishProgress 中更新）
-                        return;
-                    }
-
-                    // 满足门限，更新任务并发布事件
-                    this.updateDownloadTask(task.musicItem, {
-                        downloadedSize: downloaded,
-                        fileSize: total,
-                        progressText: typeof e?.progressText === 'string' ? e.progressText : task.progressText,
-                    });
-                });
-
-                // Phase 2: 批量进度事件监听
-                Mp3UtilEmitter.addListener('Mp3UtilDownloadProgressBatch', (e: any) => {
-                    const batchEnabled = this.configService.getConfig("basic.downloadProgressBatchEnabled") ?? true;
-                    if (!batchEnabled) {
-                        return; // 批量处理关闭，忽略批量事件
-                    }
-
-                    const items = e?.items;
-                    if (!Array.isArray(items) || items.length === 0) {
-                        return;
-                    }
-
-                    devLog('info', `📦[下载器] 收到批量进度事件 (${items.length} 项)`);
-
-                    // 批量合并更新
-                    const patches = new Map<string, Partial<IDownloadTaskInfo>>();
-                    for (const item of items) {
-                        const key = this.internalIdToKey.get(item.id);
-                        if (!key) continue;
-                        const task = downloadTasks.get(key);
-                        if (!task) continue;
-
-                        patches.set(key, {
-                            downloadedSize: item.downloaded,
-                            fileSize: item.total > 0 ? item.total : task.fileSize,
-                            progressText: item.progressText,
-                        });
-                    }
-
-                    // 一次性应用所有补丁
-                    for (const [key, patch] of patches) {
-                        const task = downloadTasks.get(key);
-                        if (task) {
-                            const newValue = { ...task, ...patch } as IDownloadTaskInfo;
-                            downloadTasks.set(key, newValue);
-                            this.emit(DownloaderEvent.DownloadTaskUpdate, newValue);
-                        }
-                    }
-                });
-                Mp3UtilEmitter.addListener('Mp3UtilDownloadCancelled', (e: any) => {
-                    const key = this.internalIdToKey.get(e?.id);
-                    if (!key) return;
-                    const task = downloadTasks.get(key);
-                    if (!task) return;
-                    this.updateDownloadTask(task.musicItem, { status: DownloadStatus.Error });
-                    this.internalIdToKey.delete(e?.id);
-                });
-                Mp3UtilEmitter.addListener('Mp3UtilDownloadError', (e: any) => {
-                    const key = this.internalIdToKey.get(e?.id);
-                    if (!key) return;
-                    const task = downloadTasks.get(key);
-                    if (!task) return;
-                    this.updateDownloadTask(task.musicItem, { status: DownloadStatus.Error });
-                    this.internalIdToKey.delete(e?.id);
-                });
-                // Completed 事件在下载返回后也会处理，但提前更新不会有坏处
-                Mp3UtilEmitter.addListener('Mp3UtilDownloadCompleted', (e: any) => {
-                    const key = this.internalIdToKey.get(e?.id);
-                    if (key) {
-                        this.internalIdToKey.delete(e?.id);
-                    }
-                });
-                this.nativeEventBound = true;
-            } catch (err) {
-                devLog('warn', '⚠️[下载器] 绑定原生下载事件失败', String(err));
-            }
+    private mapNativeStatus(status?: string): DownloadStatus {
+        switch (status) {
+            case "PENDING":
+                return DownloadStatus.Pending;
+            case "PREPARING":
+                return DownloadStatus.Preparing;
+            case "DOWNLOADING":
+                return DownloadStatus.Downloading;
+            case "PAUSED":
+                return DownloadStatus.Pending;
+            case "COMPLETED":
+                return DownloadStatus.Completed;
+            case "ERROR":
+                return DownloadStatus.Error;
+            case "CANCELED":
+                return DownloadStatus.Error;
+            default:
+                return DownloadStatus.Error;
         }
-    }
-    
-    // 移除自定义通知管理器初始化方法
-    // private async initializeNotificationManager(): Promise<void> { ... }
-
-    // Phase 1: 进度门控函数
-    private shouldPublishProgress(taskKey: string, downloaded: number, total: number, now: number): boolean {
-        const throttleEnabled = this.configService.getConfig("basic.downloadProgressThrottleEnabled") ?? true;
-        if (!throttleEnabled) {
-            return true; // 节流关闭，直接发布
-        }
-
-        const minIntervalMs = this.configService.getConfig("basic.downloadProgressMinIntervalMs") ?? 400;
-        const minBytesDelta = this.configService.getConfig("basic.downloadProgressMinBytesDelta") ?? 262144; // 256KB
-        const minPercentDelta = this.configService.getConfig("basic.downloadProgressMinPercentDelta") ?? 1; // 1%
-
-        let gate = this.progressGates.get(taskKey);
-        if (!gate) {
-            gate = {
-                lastEmitTs: 0,
-                lastEmitBytes: 0,
-                lastEmitPercent: 0,
-                pendingPatch: null,
-            };
-            this.progressGates.set(taskKey, gate);
-        }
-
-        const timeDelta = now - gate.lastEmitTs;
-        const bytesDelta = downloaded - gate.lastEmitBytes;
-        const currentPercent = total > 0 ? (downloaded / total) * 100 : 0;
-        const percentDelta = currentPercent - gate.lastEmitPercent;
-
-        // 规则：时间间隔 >= minIntervalMs 且 (百分比增量 >= minPercentDelta 或 字节增量 >= minBytesDelta)
-        const shouldPublish = timeDelta >= minIntervalMs && (percentDelta >= minPercentDelta || bytesDelta >= minBytesDelta);
-
-        if (shouldPublish) {
-            gate.lastEmitTs = now;
-            gate.lastEmitBytes = downloaded;
-            gate.lastEmitPercent = currentPercent;
-        }
-
-        return shouldPublish;
     }
 
     private updateDownloadTask(musicItem: IMusic.IMusicItem, patch: Partial<IDownloadTaskInfo>) {
+        const key = getMediaUniqueKey(musicItem);
         const newValue = {
-            ...downloadTasks.get(getMediaUniqueKey(musicItem)),
+            ...downloadTasks.get(key),
             ...patch,
         } as IDownloadTaskInfo;
-        downloadTasks.set(getMediaUniqueKey(musicItem), newValue);
-        
-        devLog('info', '🔄[下载器] 触发下载任务更新事件', {
-            status: newValue.status,
-            musicTitle: newValue.musicItem?.title,
-            downloadedSize: newValue.downloadedSize,
-            fileSize: newValue.fileSize,
-            hasListeners: this.listenerCount(DownloaderEvent.DownloadTaskUpdate)
-        });
-        
+        downloadTasks.set(key, newValue);
         this.emit(DownloaderEvent.DownloadTaskUpdate, newValue);
         return newValue;
     }
 
-    // 开始下载
-    private markTaskAsStarted(musicItem: IMusic.IMusicItem) {
-        this.downloadingCount++;
-        devLog('info', '▶️[下载器] 任务开始', {
-            title: musicItem.title,
-            downloadingCount: this.downloadingCount
-        });
-        this.updateDownloadTask(musicItem, {
-            status: DownloadStatus.Preparing,
-        });
-
-        // 系统下载管理器会自动处理通知
-    }
-
-    private markTaskAsCompleted(musicItem: IMusic.IMusicItem, filePath?: string) {
-        this.downloadingCount--;
-        devLog('info', '✅[下载器] 任务完成', {
-            title: musicItem.title,
-            downloadingCount: this.downloadingCount,
-            filePath
-        });
-        this.updateDownloadTask(musicItem, {
-            status: DownloadStatus.Completed,
-        });
-
-        // 系统下载管理器会自动处理通知
-    }
-
-    private markTaskAsError(musicItem: IMusic.IMusicItem, reason: DownloadFailReason, error?: Error) {
-        this.downloadingCount--;
-        devLog('info', '❌[下载器] 任务失败', {
-            title: musicItem.title,
-            downloadingCount: this.downloadingCount,
-            reason,
-            error: error?.message
-        });
-        this.updateDownloadTask(musicItem, {
-            status: DownloadStatus.Error,
-            errorReason: reason,
-        });
-        this.emit(DownloaderEvent.DownloadTaskError, reason, musicItem, error);
-
-        // 系统下载管理器会自动处理通知
-    }
-
-    /** 匹配文件后缀 */
     private getExtensionName(url: string) {
         const regResult = url.match(
-            // eslint-disable-next-line no-useless-escape
             /^https?\:\/\/.+\.([^\?\.]+?$)|(?:([^\.]+?)\?.+$)/,
         );
         if (regResult) {
@@ -393,35 +280,16 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
         } else {
             return "mp3";
         }
-    };
+    }
 
-    /** 获取下载路径 */
     private getDownloadPath(fileName: string) {
         const dlPath = this.configService.getConfig("basic.downloadPath") ?? pathConst.downloadMusicPath;
-        
-        devLog('info', '📁[下载器] 获取下载路径', {
-            fileName,
-            configPath: this.configService.getConfig("basic.downloadPath"),
-            defaultPath: pathConst.downloadMusicPath,
-            finalPath: dlPath
-        });
-        
         if (!dlPath.endsWith("/")) {
             return `${dlPath}/${fileName ?? ""}`;
         }
         return fileName ? dlPath + fileName : dlPath;
-    };
-
-    /** 获取缓存的下载路径 */
-    private getCacheDownloadPath(fileName: string) {
-        const cachePath = pathConst.downloadCachePath;
-        if (!cachePath.endsWith("/")) {
-            return `${cachePath}/${fileName ?? ""}`;
-        }
-        return fileName ? cachePath + fileName : cachePath;
     }
 
-    /** 获取元数据写入配置 */
     private getMetadataConfig(): IDownloadMetadataConfig {
         return {
             enabled: this.configService.getConfig("basic.writeMetadata") ?? false,
@@ -433,25 +301,13 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
         };
     }
 
-    /** 写入音乐元数据到文件 */
     private async writeMetadataToFile(musicItem: IMusic.IMusicItem, filePath: string): Promise<void> {
         const config = this.getMetadataConfig();
-        devLog('info', '🔧[下载器] 元数据写入配置检查', {
-            enabled: config.enabled,
-            writeCover: config.writeCover,
-            writeLyric: config.writeLyric,
-            isAvailable: musicMetadataManager.isAvailable(),
-            musicTitle: musicItem.title,
-            filePath
-        });
-        
         if (!config.enabled) {
-            devLog('warn', '⚠️[下载器] 元数据写入功能未启用，请在设置中开启「音乐标签设置」');
             return;
         }
-        
+
         if (!musicMetadataManager.isAvailable()) {
-            devLog('error', '❌[下载器] 元数据管理器不可用');
             return;
         }
 
@@ -459,21 +315,12 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
             const taskMetadata: IDownloadTaskMetadata = {
                 musicItem,
                 filePath,
-                coverUrl: typeof musicItem.artwork === 'string' ? musicItem.artwork : undefined,
+                coverUrl: typeof musicItem.artwork === "string" ? musicItem.artwork : undefined,
             };
 
-            const success = await musicMetadataManager.writeMetadataForDownloadTask(taskMetadata, config);
-            
-            if (success) {
-                errorLog('音乐元数据写入成功', {
-                    title: musicItem.title,
-                    artist: musicItem.artist,
-                    filePath,
-                });
-            }
+            await musicMetadataManager.writeMetadataForDownloadTask(taskMetadata, config);
         } catch (error) {
-            // 元数据写入失败不影响下载任务完成
-            errorLog('音乐元数据写入失败', {
+            errorLog("音乐元数据写入失败", {
                 musicItem: {
                     id: musicItem.id,
                     title: musicItem.title,
@@ -486,7 +333,6 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
         }
     }
 
-    /** 下载歌词文件到与音乐文件同目录 */
     private async downloadLyricFile(musicItem: IMusic.IMusicItem, musicFilePath: string): Promise<void> {
         const downloadLyricFile = this.configService.getConfig("basic.downloadLyricFile") ?? false;
         if (!downloadLyricFile) {
@@ -497,690 +343,586 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
         const lyricOrder = this.configService.getConfig("basic.lyricOrder") ?? ["romanization", "original", "translation"];
         const enableWordByWord = this.configService.getConfig("basic.enableWordByWordLyric") ?? false;
 
-        devLog('info', '[下载器] 开始下载歌词文件', {
-            musicTitle: musicItem.title,
-            format: lyricFileFormat,
-            order: lyricOrder,
-            enableWordByWord
-        });
-
         try {
             const plugin = this.pluginManagerService.getByName(musicItem.platform);
             if (!plugin) {
-                devLog('warn', '[下载器] 无法获取插件，跳过歌词下载');
                 return;
             }
 
-            // 获取歌词
             const lyricSource = await plugin.methods.getLyric(musicItem);
             if (!lyricSource) {
-                devLog('warn', '[下载器] 无法获取歌词，跳过歌词文件下载');
                 return;
             }
 
-            // 解密歌词（QRC格式自动解密，支持逐字歌词）
             const rawLrc = lyricSource.rawLrc ? await autoDecryptLyric(lyricSource.rawLrc, enableWordByWord) : undefined;
             const translation = lyricSource.translation ? await autoDecryptLyric(lyricSource.translation, enableWordByWord) : undefined;
             const romanization = lyricSource.romanization ? await autoDecryptLyric(lyricSource.romanization, enableWordByWord) : undefined;
 
             if (!rawLrc) {
-                devLog('warn', '[下载器] 没有可用的原始歌词，跳过歌词文件下载');
                 return;
             }
 
-            // 使用 formatLyricsByTimestamp 格式化歌词（与播放时一致）
             const lyricContent = formatLyricsByTimestamp(
                 rawLrc,
                 translation,
                 romanization,
                 lyricOrder,
-                { enableWordByWord }
+                { enableWordByWord },
             );
 
             if (!lyricContent) {
-                devLog('warn', '[下载器] 格式化后的歌词为空，跳过歌词文件下载');
                 return;
             }
 
-            // 生成歌词文件路径（与音乐文件同名，不同后缀）
-            const musicFilePathWithoutExt = musicFilePath.replace(/\.[^.]+$/, '');
-            const lyricFilePath = `${musicFilePathWithoutExt}.${lyricFileFormat}`;
-
-            // 写入歌词文件
-            const { writeFile } = require('react-native-fs');
-            await writeFile(lyricFilePath.replace('file://', ''), lyricContent, 'utf8');
-
-            devLog('info', '[下载器] 歌词文件下载成功', {
-                path: lyricFilePath,
-                musicTitle: musicItem.title,
-                format: lyricFileFormat,
-                contentLength: lyricContent.length
-            });
-
+            const lyricFilePath = `${musicFilePath.replace(/\.[^.]+$/, "")}.${lyricFileFormat}`;
+            const { writeFile } = require("react-native-fs");
+            await writeFile(removeFileScheme(lyricFilePath), lyricContent, "utf8");
         } catch (error) {
-            // 歌词文件下载失败不影响主下载任务
-            errorLog('歌词文件下载失败', {
+            errorLog("歌词文件下载失败", {
                 musicItem: musicItem.title,
                 error: error instanceof Error ? error.message : String(error),
             });
         }
     }
 
-
-    // Phase 1: 单飞调度 - 请求调度
-    private requestSchedule(reason: string) {
-        const singleFlightEnabled = this.configService.getConfig("basic.downloadSchedulerSingleFlightEnabled") ?? true;
-        if (!singleFlightEnabled) {
-            // 单飞调度关闭，回退旧行为（使用 runScheduleLoop 作为兼容实现）
-            setTimeout(() => this.runScheduleLoop(), 0);
-            return;
+    private parseQualityFileSize(size: unknown): number {
+        if (typeof size === "number") {
+            return size;
         }
-
-        if (this.scheduleRequested) {
-            devLog('info', `🔄[下载器] 调度已请求，跳过重复请求 (${reason})`);
-            return;
+        if (typeof size !== "string" || size === "N/A") {
+            return 0;
         }
-
-        this.scheduleRequested = true;
-        devLog('info', `📌[下载器] 请求调度 (${reason})`);
-
-        // 使用 setImmediate 或 setTimeout(0) 触发调度循环
-        setTimeout(() => this.runScheduleLoop(), 0);
+        const match = size.match(/^([\d.]+)\s*(B|KB|MB|GB)$/i);
+        if (!match) {
+            return 0;
+        }
+        const value = parseFloat(match[1]);
+        const unit = match[2].toUpperCase();
+        switch (unit) {
+            case "B":
+                return value;
+            case "KB":
+                return value * 1024;
+            case "MB":
+                return value * 1024 * 1024;
+            case "GB":
+                return value * 1024 * 1024 * 1024;
+            default:
+                return 0;
+        }
     }
 
-    // Phase 1: 单飞调度 - 调度循环
-    private async runScheduleLoop() {
-        if (this.scheduleInFlight) {
-            devLog('info', '🔒[下载器] 调度循环已在运行，跳过');
-            return;
+    private mapNativeErrorToReason(error?: string | null): DownloadFailReason {
+        if (!error) {
+            return DownloadFailReason.Unknown;
         }
+        const normalized = error.toLowerCase();
+        if (normalized.includes("permission") || normalized.includes("parent directory")) {
+            return DownloadFailReason.NoWritePermission;
+        }
+        if (normalized.includes("source") || normalized.includes("url")) {
+            return DownloadFailReason.FailToFetchSource;
+        }
+        return DownloadFailReason.Unknown;
+    }
 
-        this.scheduleInFlight = true;
-        this.scheduleRequested = false;
-
+    private parseExtraPayload(extraJson?: string | null): IExtraPayload | null {
+        if (!extraJson) {
+            return null;
+        }
         try {
-            const maxDownloadCount = Math.max(1, Math.min(+(this.configService.getConfig("basic.maxDownload") || 3), 10));
-
-            // 循环补满并发槽位
-            while (this.downloadingCount < maxDownloadCount) {
-                const downloadQueue = getDefaultStore().get(downloadQueueAtom);
-
-                // 寻找下一个 pending task
-                let nextTask: IDownloadTaskInfo | null = null;
-                for (let i = 0; i < downloadQueue.length; i++) {
-                    const musicItem = downloadQueue[i];
-                    const key = getMediaUniqueKey(musicItem);
-                    const task = downloadTasks.get(key);
-                    if (task && task.status === DownloadStatus.Pending) {
-                        nextTask = task;
-                        break;
-                    }
-                }
-
-                if (!nextTask) {
-                    // 没有待处理任务了
-                    if (this.downloadingCount === 0) {
-                        this.emit(DownloaderEvent.DownloadQueueCompleted);
-                    }
-                    break;
-                }
-
-                // 启动下载任务（不等待完成）
-                this.downloadSingleTask(nextTask.musicItem).catch(err => {
-                    errorLog('下载任务执行失败', err);
-                });
+            const parsed = JSON.parse(extraJson);
+            if (!parsed || !parsed.musicItem) {
+                return null;
             }
-        } finally {
-            this.scheduleInFlight = false;
-
-            // 如果在循环期间又有新的调度请求，重新触发
-            if (this.scheduleRequested) {
-                setTimeout(() => this.runScheduleLoop(), 0);
-            }
+            return parsed;
+        } catch {
+            return null;
         }
     }
 
-    // Phase 1: 单个任务下载逻辑（从 downloadNextPendingTask 提取）
-    private async downloadSingleTask(musicItem: IMusic.IMusicItem) {
-        // 更新下载状态
-        this.markTaskAsStarted(musicItem);
+    private maybeEmitQueueCompleted() {
+        const hasProcessing = Array.from(downloadTasks.values()).some(task =>
+            task.status === DownloadStatus.Pending ||
+            task.status === DownloadStatus.Preparing ||
+            task.status === DownloadStatus.Downloading,
+        );
+        if (!hasProcessing && this.activePrepareCount === 0 && this.prepareQueue.length === 0 && this.queueBusy) {
+            this.queueBusy = false;
+            this.emit(DownloaderEvent.DownloadQueueCompleted);
+        }
+    }
 
+    private pushPrepareTask(task: IPrepareTask) {
+        this.prepareQueue.push(task);
+        this.queueBusy = true;
+        this.pumpPrepareQueue();
+    }
+
+    private pumpPrepareQueue() {
+        while (this.activePrepareCount < this.maxPrepareConcurrency && this.prepareQueue.length > 0) {
+            const next = this.prepareQueue.shift();
+            if (!next) {
+                break;
+            }
+            this.activePrepareCount++;
+            void this.prepareAndSubmitNativeTask(next.musicItem, next.quality).finally(() => {
+                this.activePrepareCount--;
+                this.pumpPrepareQueue();
+                this.maybeEmitQueueCompleted();
+            });
+        }
+    }
+
+    private async prepareAndSubmitNativeTask(musicItem: IMusic.IMusicItem, quality?: IMusic.IQualityKey) {
+        const key = getMediaUniqueKey(musicItem);
+        const task = downloadTasks.get(key);
+        if (!task) {
+            return;
+        }
+
+        this.updateDownloadTask(musicItem, {
+            status: DownloadStatus.Preparing,
+            errorReason: undefined,
+        });
+
+        let resolved: IResolveTaskResult;
+        try {
+            resolved = await this.resolveTaskForNative(musicItem, quality);
+        } catch (error) {
+            const reason = DownloadFailReason.Unknown;
+            this.updateDownloadTask(musicItem, {
+                status: DownloadStatus.Error,
+                errorReason: reason,
+            });
+            this.emit(DownloaderEvent.DownloadTaskError, reason, musicItem, error as Error);
+            return;
+        }
+
+        if (resolved.failReason) {
+            this.updateDownloadTask(musicItem, {
+                status: DownloadStatus.Error,
+                errorReason: resolved.failReason,
+            });
+            this.emit(DownloaderEvent.DownloadTaskError, resolved.failReason, musicItem);
+            return;
+        }
+
+        // The task may be removed by user while source resolving is still in progress.
+        if (!downloadTasks.has(key)) {
+            return;
+        }
+
+        if (resolved.localFilePath) {
+            LocalMusicSheet.addMusic({
+                ...musicItem,
+                [internalSerializeKey]: {
+                    localPath: resolved.localFilePath,
+                },
+            });
+            patchMediaExtra(musicItem, {
+                downloaded: true,
+                localPath: resolved.localFilePath,
+            });
+
+            this.updateDownloadTask(musicItem, {
+                status: DownloadStatus.Completed,
+                quality: resolved.quality,
+            });
+            this.cleanupTaskStateByKey(key, false);
+            this.maybeEmitQueueCompleted();
+            return;
+        }
+
+        if (!resolved.nativeParams || !resolved.runtimeInfo) {
+            this.updateDownloadTask(musicItem, {
+                status: DownloadStatus.Error,
+                errorReason: DownloadFailReason.Unknown,
+            });
+            this.emit(DownloaderEvent.DownloadTaskError, DownloadFailReason.Unknown, musicItem);
+            return;
+        }
+
+        const extraPayload: IExtraPayload = {
+            musicItem,
+            quality: resolved.quality,
+            filename: task.filename,
+            runtimeInfo: resolved.runtimeInfo,
+        };
+        resolved.nativeParams.extraJson = JSON.stringify(extraPayload);
+
+        this.runtimeInfoByTaskId.set(key, resolved.runtimeInfo);
+        const nativeAdded = await Mp3Util.addDownloadTask(resolved.nativeParams).catch(error => {
+            devLog("error", "❌[下载器] 添加 Native 任务失败", error);
+            return false;
+        });
+
+        if (!nativeAdded) {
+            this.updateDownloadTask(musicItem, {
+                status: DownloadStatus.Error,
+                errorReason: DownloadFailReason.Unknown,
+            });
+            this.emit(DownloaderEvent.DownloadTaskError, DownloadFailReason.Unknown, musicItem);
+            return;
+        }
+
+        this.updateDownloadTask(musicItem, {
+            status: DownloadStatus.Preparing,
+            quality: resolved.quality,
+            fileSize: resolved.expectedFileSize,
+        });
+    }
+
+    private async resolveTaskForNative(
+        musicItem: IMusic.IMusicItem,
+        quality?: IMusic.IQualityKey,
+    ): Promise<IResolveTaskResult> {
         let url = musicItem.url;
         let headers = musicItem.headers;
         let mflacEkey: string | undefined;
+        let actualQuality = quality ??
+            this.configService.getConfig("basic.defaultDownloadQuality") ??
+            "master";
 
         const plugin = this.pluginManagerService.getByName(musicItem.platform);
-        const taskKey = getMediaUniqueKey(musicItem);
-        const task = downloadTasks.get(taskKey);
-        if (!task) {
-            this.markTaskAsError(musicItem, DownloadFailReason.Unknown);
-            this.requestSchedule('task-not-found');
-            return;
-        }
+        if (plugin) {
+            const qualityOrder = getQualityOrder(
+                actualQuality,
+                this.configService.getConfig("basic.downloadQualityOrder") ?? "desc",
+            );
 
-        try {
-            if (plugin) {
-                const qualityOrder = getQualityOrder(
-                    task.quality ??
-                    this.configService.getConfig("basic.defaultDownloadQuality") ??
-                    "master",
-                    this.configService.getConfig("basic.downloadQualityOrder") ?? "desc",
-                );
-                let data: IPlugin.IMediaSourceResult | null = null;
-                const requestedQuality = task.quality ??
-                    this.configService.getConfig("basic.defaultDownloadQuality") ??
-                    "master";
-                let actualQuality: IMusic.IQualityKey | null = null;
-                
-                devLog('info', '📥[下载器] 开始音质获取', {
-                    requestedQuality,
-                    qualityOrder,
-                    title: musicItem.title,
-                    platform: musicItem.platform
-                });
-                
-                for (let quality of qualityOrder) {
-                    try {
-                        devLog('info', '📥[下载器] 尝试获取音质', {
-                            currentQuality: quality,
-                            title: musicItem.title,
-                            platform: musicItem.platform
-                        });
-                        
-                        data = await plugin.methods.getMediaSource(
-                            musicItem,
-                            quality,
-                            1,
-                            true,
-                        );
-                        
-                        if (!data?.url) {
-                            devLog('warn', '⚠️[下载器] 音质获取失败 - 无URL', {
-                                quality,
-                                title: musicItem.title,
-                                platform: musicItem.platform
-                            });
-                            continue; // 尝试下一个音质
-                        }
-                        
-                        // 获取成功
-                        actualQuality = quality;
-                        break; // 成功获取，跳出循环
-                        
-                    } catch (error: any) {
-                        devLog('warn', '⚠️[下载器] 音质获取异常', {
-                            quality,
-                            error: error?.message || String(error),
-                            title: musicItem.title,
-                            platform: musicItem.platform
-                        });
-                        // 继续尝试下一个音质
+            let data: IPlugin.IMediaSourceResult | null = null;
+            for (const currentQuality of qualityOrder) {
+                try {
+                    data = await plugin.methods.getMediaSource(
+                        musicItem,
+                        currentQuality,
+                        1,
+                        true,
+                    );
+                    if (!data?.url) {
+                        continue;
                     }
-                }
-                
-                // 检查是否发生了音质降级
-                if (actualQuality && actualQuality !== requestedQuality) {
-                    devLog('warn', '🔄[下载器] 音质降级', {
-                        requestedQuality,
-                        actualQuality,
-                        title: musicItem.title,
-                        platform: musicItem.platform,
-                        message: `用户请求${requestedQuality}音质，但插件只能提供${actualQuality}音质`
-                    });
-
-                    // 更新任务的实际音质
-                    task.quality = actualQuality;
-                } else if (actualQuality) {
-                    devLog('info', '✅[下载器] 音质获取成功', {
-                        quality: actualQuality,
-                        title: musicItem.title,
-                        platform: musicItem.platform
-                    });
-                }
-
-                url = data?.url ?? url;
-                headers = data?.headers;
-                // plugin may provide ekey for encrypted mflac
-                if (data?.ekey) {
-                    // raw ekey may include leading digits; normalize later
-                    // store for post-download decryption
-                    mflacEkey = data.ekey as string;
-                    devLog('info', '🔑[下载器] 从插件获取到 ekey', {
-                        ekeyLength: mflacEkey.length,
-                        platform: musicItem.platform,
-                        quality: nextTask.quality
-                    });
-                } else {
-                    devLog('warn', '⚠️[下载器] 未从插件获取到 ekey', {
-                        platform: musicItem.platform,
-                        quality: task.quality,
-                        dataKeys: data ? Object.keys(data) : []
-                    });
+                    url = data.url;
+                    headers = data.headers;
+                    mflacEkey = data.ekey as string | undefined;
+                    actualQuality = currentQuality;
+                    break;
+                } catch {
+                    continue;
                 }
             }
-            if (!url) {
-                throw new Error(DownloadFailReason.FailToFetchSource);
-            }
-
-            // 检查是否是本地文件URL（已下载的歌曲）
-            if (url.startsWith('file://') || url.startsWith('/')) {
-                devLog('warn', '⚠️[下载器] 检测到本地文件URL，歌曲可能已下载', {
-                    url,
-                    title: musicItem.title
-                });
-                // 本地文件不需要下载，标记为已完成
-                this.markTaskAsCompleted(musicItem, url.replace('file://', ''));
-                this.requestSchedule('local-file-completed');
-                return;
-            }
-        } catch (e: any) {
-            /** 无法下载，跳过 */
-            errorLog("下载失败-无法获取下载链接", {
-                item: {
-                    id: musicItem.id,
-                    title: musicItem.title,
-                    platform: musicItem.platform,
-                    quality: task.quality,
-                },
-                reason: e?.message ?? e,
-            });
-
-            if (e.message === DownloadFailReason.FailToFetchSource) {
-                this.markTaskAsError(musicItem, DownloadFailReason.FailToFetchSource, e);
-            } else {
-                this.markTaskAsError(musicItem, DownloadFailReason.Unknown, e);
-            }
-            // Trigger next task after error
-            this.requestSchedule('fetch-source-error');
-            return;
         }
 
-        // 从musicItem.qualities中获取预期文件大小
-        let expectedFileSize = 0;
-        let qualityInfo: { url?: string; size?: string | number } | null = null;
-        const taskQuality = task.quality ??
-            this.configService.getConfig("basic.defaultDownloadQuality") ??
-            "320k";
-        
-        if (musicItem.qualities && musicItem.qualities[taskQuality]) {
-            qualityInfo = musicItem.qualities[taskQuality];
-            // 如果插件提供了size信息且是数字，直接使用
-            if (typeof qualityInfo.size === 'number') {
-                expectedFileSize = qualityInfo.size;
-            } else if (typeof qualityInfo.size === 'string' && qualityInfo.size !== 'N/A') {
-                // 解析size字符串，如"3.2MB", "1024KB"等
-                const sizeStr = qualityInfo.size;
-                const match = sizeStr.match(/^([\d.]+)\s*(B|KB|MB|GB)$/i);
-                if (match) {
-                    const value = parseFloat(match[1]);
-                    const unit = match[2].toUpperCase();
-                    switch (unit) {
-                        case 'B':
-                            expectedFileSize = value;
-                            break;
-                        case 'KB':
-                            expectedFileSize = value * 1024;
-                            break;
-                        case 'MB':
-                            expectedFileSize = value * 1024 * 1024;
-                            break;
-                        case 'GB':
-                            expectedFileSize = value * 1024 * 1024 * 1024;
-                            break;
-                    }
-                }
-            }
-            
-            devLog('info', '📊[下载器] 从插件音质信息获取文件大小', {
-                quality: taskQuality,
-                sizeFromPlugin: qualityInfo.size,
-                parsedSize: expectedFileSize,
-                unit: 'bytes'
-            });
+        if (!url) {
+            return { failReason: DownloadFailReason.FailToFetchSource };
         }
 
-        // 下载逻辑 - 使用RNFetchBlob
-        // 根据URL和音质类型确定文件扩展名
-        let extension = "mp3"; // 默认扩展名
+        if (url.startsWith("file://") || url.startsWith("/")) {
+            return {
+                localFilePath: removeFileScheme(url),
+                quality: actualQuality,
+            };
+        }
 
-        // 首先检查URL是否是加密格式，根据加密格式确定解密后的扩展名
-        const urlLower = url.toLowerCase().split('?')[0];
-        if (urlLower.endsWith('.mgg')) {
-            // mgg 解密后是 ogg
+        const qualityInfo = musicItem.qualities?.[actualQuality];
+        const expectedFileSize = this.parseQualityFileSize(qualityInfo?.size);
+
+        const urlLower = url.toLowerCase().split("?")[0];
+        let extension = "mp3";
+        if (urlLower.endsWith(".mgg")) {
             extension = "ogg";
-        } else if (urlLower.endsWith('.mmp4')) {
-            // mmp4 解密后是 mp4
+        } else if (urlLower.endsWith(".mmp4")) {
             extension = "mp4";
-        } else if (urlLower.endsWith('.mflac')) {
-            // mflac 解密后是 flac
+        } else if (urlLower.endsWith(".mflac")) {
             extension = "flac";
-        } else if (taskQuality === "128k" || taskQuality === "320k" || taskQuality === "192k" || taskQuality === "96k") {
-            // 128k/192k/320k/96k 是 MP3/OGG 格式，尝试从URL推断扩展名
+        } else if (
+            actualQuality === "128k" ||
+            actualQuality === "320k" ||
+            actualQuality === "192k" ||
+            (actualQuality as string) === "96k"
+        ) {
             const urlExtension = this.getExtensionName(url);
-            if (supportLocalMediaType.some(item => item === ("." + urlExtension))) {
-                extension = urlExtension;
-            } else {
-                extension = "mp3";
-            }
+            extension = supportLocalMediaType.some(item => item === ("." + urlExtension))
+                ? urlExtension
+                : "mp3";
         } else {
-            // 其他所有音质（flac, hires, dolby, atmos 等）默认是 FLAC 格式
             extension = "flac";
         }
-        
-        devLog('info', '📁[下载器] 确定文件扩展名', {
-            quality: taskQuality,
-            extension: extension,
-            urlExtension: this.getExtensionName(url)
-        });
 
-        // 真实下载地址
-        const targetDownloadPath = this.getDownloadPath(`${task.filename}.${extension}`);
-        // detect encrypted mflac/mgg/mmp4 and route to temp file for post-decrypt
-        const { isMflacUrl, normalizeEkey } = require("@/utils/mflac");
+        const generatedFilename = this.generateFilename(musicItem, actualQuality);
+        const targetDownloadPath = this.getDownloadPath(`${generatedFilename}.${extension}`);
         const willDownloadEncrypted = !!mflacEkey || isMflacUrl(url);
 
-        // 根据URL确定加密文件的临时扩展名
         let encryptedExtension = "mflac";
-        if (urlLower.endsWith('.mgg')) {
+        if (urlLower.endsWith(".mgg")) {
             encryptedExtension = "mgg";
-        } else if (urlLower.endsWith('.mmp4')) {
+        } else if (urlLower.endsWith(".mmp4")) {
             encryptedExtension = "mmp4";
         }
 
-        devLog('info', '📋[下载器] 下载路径规划', {
-            targetPath: targetDownloadPath,
-            willDecrypt: willDownloadEncrypted,
-            hasMflacEkey: !!mflacEkey,
-            isMflacUrl: isMflacUrl(url),
-            extension,
-            encryptedExtension,
-            url: url?.substring(0, 100) + '...'
-        });
-
         const tempEncryptedPath = willDownloadEncrypted
-            ? this.getDownloadPath(`${task.filename}.${encryptedExtension}`)
+            ? this.getDownloadPath(`${generatedFilename}.${encryptedExtension}`)
             : targetDownloadPath;
 
-        // 检测下载位置是否存在
         try {
             const folder = path.dirname(targetDownloadPath);
             const folderExists = await exists(folder);
             if (!folderExists) {
-                const { mkdirR } = require("@/utils/fileUtils");
                 await mkdirR(folder);
             }
-        } catch (e: any) {
-            this.markTaskAsError(musicItem, DownloadFailReason.NoWritePermission, e);
-            this.requestSchedule('mkdir-error');
+        } catch {
+            return { failReason: DownloadFailReason.NoWritePermission };
+        }
+
+        const taskId = getMediaUniqueKey(musicItem);
+        const runtimeInfo: IDownloadRuntimeInfo = {
+            taskId,
+            targetDownloadPath,
+            tempEncryptedPath,
+            willDownloadEncrypted,
+            mflacEkey,
+            extension,
+            encryptedExtension,
+        };
+
+        const nativeParams: INativeDownloadTaskParams = {
+            taskId,
+            url,
+            destinationPath: removeFileScheme(tempEncryptedPath),
+            headers: headers ?? {},
+            title: generatedFilename,
+            description: "正在下载音乐文件...",
+            coverUrl: typeof (musicItem as any)?.artwork === "string" ? (musicItem as any).artwork : null,
+        };
+
+        return {
+            runtimeInfo,
+            nativeParams,
+            quality: actualQuality,
+            expectedFileSize,
+        };
+    }
+
+    private handleNativeProgressBatch(event: any) {
+        const items = Array.isArray(event?.items) ? event.items : [];
+        if (items.length === 0) {
             return;
         }
 
-        // 使用系统下载管理器或内置HTTP下载器进行下载
-        try {
-            const useInternal = true; // 统一使用内置HTTP下载器与原生通知
-            devLog('info', useInternal ? '📥[下载器] 开始使用内置HTTP下载器' : '📥[下载器] 开始使用系统下载管理器下载', {
-                title: musicItem.title,
-                artist: musicItem.artist,
-                targetPath: targetDownloadPath
-            });
-            
-            const destPath = tempEncryptedPath.replace('file://', '');
-            const downloadId = useInternal
-                ? await Mp3Util.downloadWithHttp({
-                    url,
-                    destinationPath: destPath,
-                    // 标题遵循文件命名设置（不含扩展名）
-                    title: task.filename,
-                    description: '正在下载音乐文件...',
-                    headers,
-                    showNotification: true,
-                    coverUrl: typeof (musicItem as any)?.artwork === 'string' ? (musicItem as any).artwork : null,
-                  })
-                : await Mp3Util.downloadWithSystemManager(
-                    url,
-                    destPath,
-                    `${musicItem.title} - ${musicItem.artist}`,
-                    '正在下载音乐文件...',
-                    headers
-                  );
-            
-            devLog('info', useInternal ? '✅[下载器] 内置下载任务创建成功' : '✅[下载器] 系统下载任务创建成功', {
-                downloadId,
-                title: musicItem.title
-            });
-            
-            // 保存downloadId以便取消下载
-            const numericId = Number.parseInt(String(downloadId), 10);
-            const updated = this.updateDownloadTask(musicItem, {
-                status: DownloadStatus.Downloading,
-                jobId: Number.isFinite(numericId) ? numericId : undefined,
-                internalTaskId: !Number.isFinite(numericId) ? String(downloadId) : undefined,
-                engine: useInternal ? 'internal' : 'system',
-            });
-            // 记录 internal id -> key 映射
-            if (updated.internalTaskId) {
-                this.internalIdToKey.set(updated.internalTaskId, getMediaUniqueKey(musicItem));
+        for (const item of items) {
+            const taskId = item?.taskId;
+            if (!taskId || !downloadTasks.has(taskId)) {
+                continue;
+            }
+            const task = downloadTasks.get(taskId);
+            if (!task) {
+                continue;
             }
 
-            // 基于插件提供的文件大小进行准确的下载完成检测
-            const checkDownloadStatus = async () => {
-                return new Promise<boolean>((resolve, reject) => {
-                    let lastFileSize = 0;
-                    let sameSizeCount = 0;
-                    
-                    // 设置最小文件大小和完成阈值
-                    const minFileSize = expectedFileSize > 0 ? expectedFileSize * 0.1 : 50 * 1024; // 至少10%或50KB
-                    const completeThreshold = expectedFileSize > 0 ? expectedFileSize * 0.98 : 100 * 1024; // 98%完成或100KB
-                    
-                    devLog('info', '📊[下载器] 开始文件大小监控', {
-                        expectedSize: expectedFileSize,
-                        minSize: minFileSize,
-                        completeThreshold: completeThreshold,
-                        hasExpectedSize: expectedFileSize > 0
-                    });
-                    
-                    const checkInterval = setInterval(async () => {
-                        try {
-                            // 检查实际下载的文件（可能是临时的.mflac文件）
-                            const filePath = tempEncryptedPath.replace('file://', '');
-                            const fileExists = await exists(filePath);
-
-                            if (!fileExists) {
-                                // 文件还未创建，继续等待
-                                return;
-                            }
-
-                            // 使用stat获取准确的文件大小
-                            const { stat } = require('react-native-fs');
-                            try {
-                                const fileStats = await stat(filePath);
-                                const currentSize = fileStats.size;
-                                
-                                devLog('info', '📊[下载器] 检查下载进度', {
-                                    currentSize,
-                                    expectedSize: expectedFileSize,
-                                    progress: expectedFileSize > 0 ? (currentSize / expectedFileSize * 100).toFixed(1) + '%' : 'N/A',
-                                    lastSize: lastFileSize,
-                                    sameSizeCount,
-                                    filePath: filePath,
-                                    isEncrypted: willDownloadEncrypted
-                                });
-                                
-                                // 更新下载进度
-                                this.updateDownloadTask(musicItem, {
-                                    downloadedSize: currentSize,
-                                    fileSize: expectedFileSize || currentSize
-                                });
-                                
-                                // 检查文件大小变化
-                                if (currentSize === lastFileSize) {
-                                    sameSizeCount++;
-                                    
-                                    // 如果有准确的预期大小，当达到98%且文件大小稳定时认为完成
-                                    if (expectedFileSize > 0 && currentSize >= completeThreshold && sameSizeCount >= 3) {
-                                        clearInterval(checkInterval);
-                                        devLog('info', '✅[下载器] 达到预期大小且文件稳定，下载完成', {
-                                            finalSize: currentSize,
-                                            expectedSize: expectedFileSize,
-                                            completionRate: (currentSize / expectedFileSize * 100).toFixed(1) + '%'
-                                        });
-                                        resolve(true);
-                                        return;
-                                    }
-                                    
-                                    // 如果没有预期大小，文件大小连续6次检查没有变化且超过最小大小，认为完成
-                                    if (expectedFileSize === 0 && sameSizeCount >= 6 && currentSize >= minFileSize) {
-                                        clearInterval(checkInterval);
-                                        devLog('info', '✅[下载器] 无预期大小，文件大小稳定且达到最小要求，下载完成', {
-                                            finalSize: currentSize,
-                                            stableChecks: sameSizeCount
-                                        });
-                                        resolve(true);
-                                        return;
-                                    }
-                                } else {
-                                    // 文件还在增长
-                                    lastFileSize = currentSize;
-                                    sameSizeCount = 0;
-                                    
-                                    // 如果文件大小已经超过预期大小的105%，可能是估算错误，直接完成
-                                    if (expectedFileSize > 0 && currentSize > expectedFileSize * 1.05) {
-                                        clearInterval(checkInterval);
-                                        devLog('info', '✅[下载器] 文件大小超过预期，直接完成', {
-                                            currentSize,
-                                            expectedSize: expectedFileSize,
-                                            overageRate: (currentSize / expectedFileSize * 100).toFixed(1) + '%'
-                                        });
-                                        resolve(true);
-                                        return;
-                                    }
-                                }
-                                
-                            } catch (statError: any) {
-                                // 文件可能正在写入或不可访问
-                                devLog('warn', '⚠️[下载器] 获取文件状态失败，可能正在写入', statError?.message);
-                            }
-                        } catch (error) {
-                            clearInterval(checkInterval);
-                            reject(error);
-                        }
-                    }, 2000); // 每2秒检查一次
-                    
-                    // 30分钟超时
-                    setTimeout(() => {
-                        clearInterval(checkInterval);
-                        reject(new Error('Download timeout - 30 minutes exceeded'));
-                    }, 30 * 60 * 1000);
+            if (task.status === DownloadStatus.Pending || task.status === DownloadStatus.Preparing || task.status === DownloadStatus.Downloading) {
+                this.updateDownloadTask(task.musicItem, {
+                    status: DownloadStatus.Downloading,
+                    downloadedSize: typeof item.downloaded === "number" ? item.downloaded : task.downloadedSize,
+                    fileSize: typeof item.total === "number" && item.total > 0 ? item.total : task.fileSize,
+                    progressText: typeof item.progressText === "string" ? item.progressText : task.progressText,
                 });
-            };
-
-            if (!useInternal) {
-                await checkDownloadStatus();
             }
-            if (willDownloadEncrypted) {
-                try {
-                    const cleaned = normalizeEkey(mflacEkey);
-                    devLog('info', '🔐[下载器] 开始解密加密文件', {
-                        input: tempEncryptedPath,
-                        output: targetDownloadPath,
-                        encryptedExtension,
-                        targetExtension: extension,
-                        hasEkey: !!cleaned,
-                        ekeyLength: cleaned?.length
-                    });
-                    await Mp3Util.decryptMflacToFlac(
-                        (require('@/utils/fileUtils').removeFileScheme(tempEncryptedPath)),
-                        (require('@/utils/fileUtils').removeFileScheme(targetDownloadPath)),
-                        cleaned,
-                    );
-                    devLog('info', '✅[下载器] 解密成功', {
-                        output: targetDownloadPath,
-                        title: musicItem.title
-                    });
-                    // 删除临时加密文件
-                    try {
-                        const { unlink } = require('react-native-fs');
-                        await unlink(require('@/utils/fileUtils').removeFileScheme(tempEncryptedPath));
-                        devLog('info', '🗑️[下载器] 已删除临时加密文件', {
-                            path: tempEncryptedPath
-                        });
-                    } catch (deleteError) {
-                        devLog('warn', '⚠️[下载器] 删除临时文件失败', deleteError);
-                    }
-                } catch (e: any) {
-                    devLog('error', '❌[下载器] mflac 解密失败', {
-                        error: e.message,
-                        input: tempEncryptedPath,
-                        output: targetDownloadPath
-                    });
-                    this.markTaskAsError(musicItem, DownloadFailReason.Unknown, e);
-                    this.requestSchedule('decrypt-error');
-                    return;
+        }
+    }
+
+    private async handleNativeTaskStatusChanged(rawTask: INativeDownloadTaskStatus) {
+        if (!rawTask?.taskId) {
+            return;
+        }
+        const taskId = rawTask.taskId;
+        let taskInfo = downloadTasks.get(taskId);
+
+        if (!taskInfo) {
+            const extra = this.parseExtraPayload(rawTask.extraJson);
+            if (extra?.musicItem) {
+                taskInfo = {
+                    status: this.mapNativeStatus(rawTask.status),
+                    filename: extra.filename ?? this.generateFilename(extra.musicItem, extra.quality),
+                    quality: extra.quality,
+                    fileSize: rawTask.total > 0 ? rawTask.total : undefined,
+                    downloadedSize: rawTask.downloaded > 0 ? rawTask.downloaded : undefined,
+                    progressText: rawTask.progressText ?? undefined,
+                    musicItem: extra.musicItem,
+                    errorReason: rawTask.status === "ERROR" ? this.mapNativeErrorToReason(rawTask.error) : undefined,
+                };
+                downloadTasks.set(taskId, taskInfo);
+                this.runtimeInfoByTaskId.set(taskId, extra.runtimeInfo ?? {
+                    taskId,
+                    targetDownloadPath: rawTask.destinationPath ?? "",
+                    tempEncryptedPath: rawTask.destinationPath ?? "",
+                    willDownloadEncrypted: false,
+                    extension: this.getExtensionName(rawTask.url ?? ""),
+                    encryptedExtension: "mflac",
+                });
+
+                const queue = getDefaultStore().get(downloadQueueAtom);
+                if (!queue.some(item => isSameMediaItem(item, extra.musicItem))) {
+                    getDefaultStore().set(downloadQueueAtom, [...queue, extra.musicItem]);
                 }
             }
-            devLog('info', '🎉[下载器] 系统下载完成', {
-                path: targetDownloadPath,
-                title: musicItem.title
-            });
+        }
 
-            // 异步写入音乐元数据（标签、歌词、封面）- 不阻塞下载完成
-            this.writeMetadataToFile(musicItem, targetDownloadPath).catch(error => {
-                errorLog('元数据写入失败，但不影响下载完成', {
-                    musicItem: musicItem.title,
-                    error: error.message
+        taskInfo = downloadTasks.get(taskId);
+        if (!taskInfo) {
+            return;
+        }
+
+        const musicItem = taskInfo.musicItem;
+        switch (rawTask.status) {
+            case "PENDING":
+                this.updateDownloadTask(musicItem, {
+                    status: DownloadStatus.Pending,
+                    downloadedSize: rawTask.downloaded > 0 ? rawTask.downloaded : taskInfo.downloadedSize,
+                    fileSize: rawTask.total > 0 ? rawTask.total : taskInfo.fileSize,
+                    progressText: rawTask.progressText ?? taskInfo.progressText,
+                });
+                break;
+            case "PREPARING":
+                this.updateDownloadTask(musicItem, {
+                    status: DownloadStatus.Preparing,
+                    progressText: rawTask.progressText ?? taskInfo.progressText,
+                });
+                break;
+            case "DOWNLOADING":
+                this.updateDownloadTask(musicItem, {
+                    status: DownloadStatus.Downloading,
+                    downloadedSize: rawTask.downloaded > 0 ? rawTask.downloaded : taskInfo.downloadedSize,
+                    fileSize: rawTask.total > 0 ? rawTask.total : taskInfo.fileSize,
+                    progressText: rawTask.progressText ?? taskInfo.progressText,
+                });
+                break;
+            case "PAUSED":
+                this.updateDownloadTask(musicItem, {
+                    status: DownloadStatus.Pending,
+                    downloadedSize: rawTask.downloaded > 0 ? rawTask.downloaded : taskInfo.downloadedSize,
+                    fileSize: rawTask.total > 0 ? rawTask.total : taskInfo.fileSize,
+                    progressText: rawTask.progressText ?? taskInfo.progressText,
+                });
+                break;
+            case "ERROR": {
+                const reason = this.mapNativeErrorToReason(rawTask.error);
+                this.updateDownloadTask(musicItem, {
+                    status: DownloadStatus.Error,
+                    errorReason: reason,
+                    progressText: rawTask.progressText ?? taskInfo.progressText,
+                });
+                this.emit(DownloaderEvent.DownloadTaskError, reason, musicItem);
+                break;
+            }
+            case "CANCELED":
+                this.cleanupTaskStateByKey(taskId, false);
+                break;
+            case "COMPLETED":
+                await this.completeTaskAfterNativeDownload(taskId);
+                break;
+            default:
+                break;
+        }
+
+        this.maybeEmitQueueCompleted();
+    }
+
+    private async completeTaskAfterNativeDownload(taskId: string) {
+        const task = downloadTasks.get(taskId);
+        if (!task) {
+            return;
+        }
+
+        const runtimeInfo = this.runtimeInfoByTaskId.get(taskId);
+        if (!runtimeInfo) {
+            this.updateDownloadTask(task.musicItem, {
+                status: DownloadStatus.Error,
+                errorReason: DownloadFailReason.Unknown,
+            });
+            return;
+        }
+
+        try {
+            if (runtimeInfo.willDownloadEncrypted) {
+                const cleaned = normalizeEkey(runtimeInfo.mflacEkey);
+                if (!cleaned) {
+                    throw new Error("missing ekey for encrypted media");
+                }
+                await Mp3Util.decryptMflacToFlac(
+                    removeFileScheme(runtimeInfo.tempEncryptedPath),
+                    removeFileScheme(runtimeInfo.targetDownloadPath),
+                    cleaned,
+                );
+                if (runtimeInfo.tempEncryptedPath !== runtimeInfo.targetDownloadPath) {
+                    try {
+                        await unlink(removeFileScheme(runtimeInfo.tempEncryptedPath));
+                    } catch {
+                    }
+                }
+            }
+
+            this.writeMetadataToFile(task.musicItem, runtimeInfo.targetDownloadPath).catch(err => {
+                errorLog("元数据写入失败，但不影响下载完成", {
+                    musicItem: task.musicItem.title,
+                    error: err instanceof Error ? err.message : String(err),
                 });
             });
-
-            // 异步下载歌词文件 - 不阻塞下载完成
-            this.downloadLyricFile(musicItem, targetDownloadPath).catch(error => {
-                errorLog('歌词文件下载失败，但不影响下载完成', {
-                    musicItem: musicItem.title,
-                    error: error.message
+            this.downloadLyricFile(task.musicItem, runtimeInfo.targetDownloadPath).catch(err => {
+                errorLog("歌词文件下载失败，但不影响下载完成", {
+                    musicItem: task.musicItem.title,
+                    error: err instanceof Error ? err.message : String(err),
                 });
             });
 
             LocalMusicSheet.addMusic({
-                ...musicItem,
+                ...task.musicItem,
                 [internalSerializeKey]: {
-                    localPath: targetDownloadPath,
+                    localPath: runtimeInfo.targetDownloadPath,
                 },
             });
 
-            patchMediaExtra(musicItem, {
+            patchMediaExtra(task.musicItem, {
                 downloaded: true,
-                localPath: targetDownloadPath,
+                localPath: runtimeInfo.targetDownloadPath,
             });
 
-            this.markTaskAsCompleted(musicItem, targetDownloadPath);
-            this.requestSchedule('task-completed');
-
-        } catch (e: any) {
-            devLog('error', '❌[下载器] 系统下载失败', {
-                error: e?.message || String(e),
-                title: musicItem.title
+            this.updateDownloadTask(task.musicItem, {
+                status: DownloadStatus.Completed,
+                downloadedSize: task.fileSize,
+                fileSize: task.fileSize,
+                progressText: task.progressText,
             });
-
-            // 检查是否是路径不支持错误，提供友好的用户提示
-            if (e?.code === 'UnsupportedPath') {
-                // 显示用户友好的提示
-                devLog('warn', '🚨[下载器] 路径不支持提示', {
-                    currentPath: this.configService.getConfig("basic.downloadPath") ?? pathConst.downloadMusicPath,
-                    suggestion: '请在设置中更改为系统支持的路径（如Music目录）'
-                });
-                this.markTaskAsError(musicItem, DownloadFailReason.NoWritePermission, e);
-            } else {
-                this.markTaskAsError(musicItem, DownloadFailReason.Unknown, e);
-            }
-            this.requestSchedule('task-error');
+        } catch (error) {
+            this.updateDownloadTask(task.musicItem, {
+                status: DownloadStatus.Error,
+                errorReason: DownloadFailReason.Unknown,
+            });
+            this.emit(DownloaderEvent.DownloadTaskError, DownloadFailReason.Unknown, task.musicItem, error as Error);
+            return;
+        } finally {
+            await Mp3Util.removeDownloadTask(taskId).catch(() => {});
         }
 
-        // 如果任务状态是完成，则从队列中移除
-        const key = getMediaUniqueKey(musicItem);
-        if (downloadTasks.get(key)?.status === DownloadStatus.Completed) {
-            downloadTasks.delete(key);
-            const currentQueue = getDefaultStore().get(downloadQueueAtom);
-            const newDownloadQueue = currentQueue.filter(item => !isSameMediaItem(item, musicItem));
-            getDefaultStore().set(downloadQueueAtom, newDownloadQueue);
+        this.cleanupTaskStateByKey(taskId, false);
+    }
+
+    private cleanupTaskStateByKey(taskId: string, removeNativeTask: boolean) {
+        const task = downloadTasks.get(taskId);
+        if (!task) {
+            return;
+        }
+
+        downloadTasks.delete(taskId);
+        this.runtimeInfoByTaskId.delete(taskId);
+        const queue = getDefaultStore().get(downloadQueueAtom);
+        getDefaultStore().set(
+            downloadQueueAtom,
+            queue.filter(item => !isSameMediaItem(item, task.musicItem)),
+        );
+
+        if (removeNativeTask) {
+            void Mp3Util.removeDownloadTask(taskId).catch(() => {});
         }
     }
 
@@ -1195,94 +937,55 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
             return;
         }
 
-        // 整理成数组
-        if (!Array.isArray(musicItems)) {
-            musicItems = [musicItems];
-        }
+        this.syncNativeConcurrency();
 
-        // 防止重复下载
-        musicItems = musicItems.filter(m => {
-            const key = getMediaUniqueKey(m);
-            // 如果存在下载任务
+        const normalized = Array.isArray(musicItems) ? musicItems : [musicItems];
+        const accepted: IMusic.IMusicItem[] = [];
+        for (const musicItem of normalized) {
+            const key = getMediaUniqueKey(musicItem);
             if (downloadTasks.has(key)) {
-                return false;
+                continue;
             }
 
-            // 设置下载任务
-            downloadTasks.set(getMediaUniqueKey(m), {
+            const task: IDownloadTaskInfo = {
                 status: DownloadStatus.Pending,
-                filename: this.generateFilename(m, quality),
-                quality: quality,
-                musicItem: m,
-            });
+                filename: this.generateFilename(musicItem, quality),
+                quality,
+                musicItem,
+            };
+            downloadTasks.set(key, task);
+            this.emit(DownloaderEvent.DownloadTaskUpdate, task);
+            accepted.push(musicItem);
+        }
 
-            return true;
-        });
-
-        if (!musicItems.length) {
+        if (accepted.length === 0) {
             return;
         }
 
-        // 添加进任务队列
-        const downloadQueue = getDefaultStore().get(downloadQueueAtom);
-        const newDownloadQueue = [...downloadQueue, ...musicItems];
-        getDefaultStore().set(downloadQueueAtom, newDownloadQueue);
+        this.queueBusy = true;
+        const queue = getDefaultStore().get(downloadQueueAtom);
+        getDefaultStore().set(downloadQueueAtom, [...queue, ...accepted]);
 
-        // 触发调度
-        this.requestSchedule('new-tasks-added');
+        for (const item of accepted) {
+            this.pushPrepareTask({ musicItem: item, quality });
+        }
     }
 
     remove(musicItem: IMusic.IMusicItem) {
-        // 删除下载任务
         const key = getMediaUniqueKey(musicItem);
         const task = downloadTasks.get(key);
         if (!task) {
             return false;
         }
-        
-        // 可以删除等待中、错误和正在下载的任务
-        if (task.status === DownloadStatus.Pending || 
-            task.status === DownloadStatus.Error ||
-            task.status === DownloadStatus.Preparing ||
-            task.status === DownloadStatus.Downloading) {
-            
-            // 如果正在下载，先停止下载
-            if (task.status === DownloadStatus.Downloading) {
-                if (task.engine === 'system' && task.jobId) {
-                    try { stopDownload(task.jobId); } catch (error) { errorLog("Failed to stop system download", error); }
-                } else if (task.engine === 'internal' && task.internalTaskId) {
-                    Mp3Util.cancelHttpDownload(task.internalTaskId).catch((error: any) => errorLog("Failed to cancel internal download", error));
-                }
-            }
-            
-            // 如果正在下载，需要减少下载计数
-            if (task.status === DownloadStatus.Downloading || task.status === DownloadStatus.Preparing) {
-                this.downloadingCount--;
-            }
-            
-            // 删除任务
-            downloadTasks.delete(key);
-            // 清理映射
-            if (task.internalTaskId) this.internalIdToKey.delete(task.internalTaskId);
-            const downloadQueue = getDefaultStore().get(downloadQueueAtom);
-            const newDownloadQueue = downloadQueue.filter(item => !isSameMediaItem(item, musicItem));
-            getDefaultStore().set(downloadQueueAtom, newDownloadQueue);
-            
-            // 调用简化版通知管理器取消通知（空实现，仅用于兼容性）
-            downloadNotificationManager.cancelNotification(key).catch(error => {
-                // 简化版本中此调用不会产生实际效果
-                devLog('info', '📢[下载器] 取消通知调用（简化版本）', error);
-            });
 
-            // 触发下一个任务
-            this.requestSchedule('task-removed');
-
-            return true;
-        }
-        return false;
+        this.prepareQueue = this.prepareQueue.filter(item => !isSameMediaItem(item.musicItem, musicItem));
+        void Mp3Util.cancelDownloadTask(key).catch(() => {});
+        void Mp3Util.removeDownloadTask(key).catch(() => {});
+        this.cleanupTaskStateByKey(key, false);
+        this.maybeEmitQueueCompleted();
+        return true;
     }
 }
-
 
 const downloader = new Downloader();
 export default downloader;

@@ -205,7 +205,6 @@ class LyricManager implements IInjectable {
                     color: this.appConfig.getConfig("lyric.color"),
                     backgroundColor: this.appConfig.getConfig("lyric.backgroundColor"),
                     sungColor: this.appConfig.getConfig("lyric.sungColor"),
-                    widthPercent: this.appConfig.getConfig("lyric.widthPercent"),
                     fontSize: this.appConfig.getConfig("lyric.fontSize"),
                     presetIndex: this.appConfig.getConfig("lyric.presetIndex") ?? 0,
                     presets: resolveLyricPresets(),

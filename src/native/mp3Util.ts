@@ -15,9 +15,49 @@ export interface IMp3UtilDownloadProgressBatch {
   items: IMp3UtilProgressItem[];
 }
 
+export interface INativeDownloadTaskStatus {
+  taskId: string;
+  status: "PENDING" | "PREPARING" | "DOWNLOADING" | "PAUSED" | "COMPLETED" | "CANCELED" | "ERROR";
+  downloaded: number;
+  total: number;
+  progressText?: string;
+  error?: string | null;
+  url?: string;
+  destinationPath?: string;
+  title?: string;
+  description?: string;
+  coverUrl?: string | null;
+  extraJson?: string | null;
+  createdAt?: number;
+  updatedAt?: number;
+}
+
+export interface INativeDownloadTaskParams {
+  taskId: string;
+  url: string;
+  destinationPath: string;
+  headers?: Record<string, string>;
+  title?: string;
+  description?: string;
+  coverUrl?: string | null;
+  extraJson?: string | null;
+}
+
+export interface INativeDownloadProgressItem {
+  taskId: string;
+  downloaded: number;
+  total: number;
+  percent: number;
+  progressText: string;
+}
+
 // 获取原生Mp3Util模块
 const { Mp3Util: NativeMp3Util } = NativeModules;
+const { NativeDownload: NativeDownloadModule } = NativeModules;
 export const Mp3UtilEmitter = new NativeEventEmitter(NativeMp3Util);
+export const NativeDownloadEmitter = NativeDownloadModule
+  ? new NativeEventEmitter(NativeDownloadModule)
+  : null;
 
 // 监听原生日志输出并转发到devLog系统
 if (NativeMp3Util && __DEV__) {
@@ -49,6 +89,7 @@ if (NativeMp3Util && __DEV__) {
  */
 class Mp3UtilManager implements IMp3Util {
   private nativeModule = NativeMp3Util;
+  private nativeDownloadModule = NativeDownloadModule;
 
   async getBasicMeta(filePath: string) {
     return this.nativeModule.getBasicMeta(filePath);
@@ -232,6 +273,71 @@ class Mp3UtilManager implements IMp3Util {
       throw new Error('registerMflacStream not available');
     }
     return this.nativeModule.registerMflacStream(src, ekey, headers ?? null);
+  }
+
+  async addDownloadTask(params: INativeDownloadTaskParams): Promise<boolean> {
+    if (!this.nativeDownloadModule?.addDownloadTask) {
+      throw new Error("NativeDownload.addDownloadTask not available");
+    }
+    return this.nativeDownloadModule.addDownloadTask({
+      taskId: params.taskId,
+      url: params.url,
+      destinationPath: params.destinationPath,
+      headers: params.headers ?? {},
+      title: params.title ?? "MusicFree",
+      description: params.description ?? "正在下载音乐文件...",
+      coverUrl: params.coverUrl ?? null,
+      extraJson: params.extraJson ?? null,
+    });
+  }
+
+  async pauseDownloadTask(taskId: string): Promise<boolean> {
+    if (!this.nativeDownloadModule?.pauseDownloadTask) {
+      return false;
+    }
+    return this.nativeDownloadModule.pauseDownloadTask(taskId);
+  }
+
+  async resumeDownloadTask(taskId: string): Promise<boolean> {
+    if (!this.nativeDownloadModule?.resumeDownloadTask) {
+      return false;
+    }
+    return this.nativeDownloadModule.resumeDownloadTask(taskId);
+  }
+
+  async cancelDownloadTask(taskId: string): Promise<boolean> {
+    if (!this.nativeDownloadModule?.cancelDownloadTask) {
+      return false;
+    }
+    return this.nativeDownloadModule.cancelDownloadTask(taskId);
+  }
+
+  async removeDownloadTask(taskId: string): Promise<boolean> {
+    if (!this.nativeDownloadModule?.removeDownloadTask) {
+      return false;
+    }
+    return this.nativeDownloadModule.removeDownloadTask(taskId);
+  }
+
+  async getDownloadTaskStatus(taskId: string): Promise<INativeDownloadTaskStatus | null> {
+    if (!this.nativeDownloadModule?.getDownloadTaskStatus) {
+      return null;
+    }
+    return this.nativeDownloadModule.getDownloadTaskStatus(taskId);
+  }
+
+  async getAllDownloadTasks(): Promise<INativeDownloadTaskStatus[]> {
+    if (!this.nativeDownloadModule?.getAllDownloadTasks) {
+      return [];
+    }
+    return this.nativeDownloadModule.getAllDownloadTasks();
+  }
+
+  async setDownloadMaxConcurrency(max: number): Promise<boolean> {
+    if (!this.nativeDownloadModule?.setDownloadMaxConcurrency) {
+      return false;
+    }
+    return this.nativeDownloadModule.setDownloadMaxConcurrency(max);
   }
 }
 

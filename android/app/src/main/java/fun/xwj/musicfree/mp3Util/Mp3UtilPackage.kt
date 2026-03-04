@@ -6,6 +6,7 @@ import com.facebook.react.bridge.NativeModule
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.uimanager.ReactShadowNode
 import com.facebook.react.uimanager.ViewManager
+import `fun`.xwj.musicfree.download.NativeDownloadModule
 
 class Mp3UtilPackage : ReactPackage {
 
@@ -15,5 +16,8 @@ class Mp3UtilPackage : ReactPackage {
 
     override fun createNativeModules(
         reactContext: ReactApplicationContext
-    ): MutableList<NativeModule> = listOf(Mp3UtilModule(reactContext)).toMutableList()
+    ): MutableList<NativeModule> = listOf(
+        Mp3UtilModule(reactContext),
+        NativeDownloadModule(reactContext),
+    ).toMutableList()
 }
