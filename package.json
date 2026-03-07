@@ -42,6 +42,8 @@
     "deepmerge": "^4.3.1",
     "eventemitter3": "^5.0.1",
     "expo": "~53.0.27",
+    "expo-asset": "~11.1.7",
+    "expo-constants": "~17.1.8",
     "expo-document-picker": "~13.1.6",
     "expo-file-system": "~18.1.11",
     "expo-keep-awake": "~14.1.4",
