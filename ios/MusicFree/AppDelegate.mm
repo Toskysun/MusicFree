@@ -251,10 +251,11 @@ static void MusicFreeInstallNativeStartupHooks(void)
 
 @end
 
-@interface AppDelegate ()
-@property (nonatomic, strong) UIWindow *window;
-@property (nonatomic, strong) RCTReactNativeFactory *reactNativeFactory;
-@property (nonatomic, strong) MusicFreeReactNativeFactoryDelegate *reactNativeFactoryDelegate;
+@interface AppDelegate () {
+  UIWindow *_musicFreeWindow;
+  RCTReactNativeFactory *_musicFreeReactNativeFactory;
+  MusicFreeReactNativeFactoryDelegate *_musicFreeReactNativeFactoryDelegate;
+}
 @end
 
 @implementation AppDelegate
@@ -273,15 +274,15 @@ static void MusicFreeInstallNativeStartupHooks(void)
     @"moduleName" : self.moduleName ?: @"",
   });
 
-  self.window = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
-  self.reactNativeFactoryDelegate = [MusicFreeReactNativeFactoryDelegate new];
+  _musicFreeWindow = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
+  _musicFreeReactNativeFactoryDelegate = [MusicFreeReactNativeFactoryDelegate new];
   MusicFreeAppendNativeStartupLog(@"react-factory-delegate-ready", nil);
 
   Class dependencyProviderClass = NSClassFromString(@"RCTAppDependencyProvider");
   if (dependencyProviderClass != Nil) {
     id dependencyProvider = [dependencyProviderClass new];
     if ([dependencyProvider conformsToProtocol:@protocol(RCTDependencyProvider)]) {
-      self.reactNativeFactoryDelegate.dependencyProvider = dependencyProvider;
+      _musicFreeReactNativeFactoryDelegate.dependencyProvider = dependencyProvider;
       MusicFreeAppendNativeStartupLog(@"react-dependency-provider-ready", @{
         @"class" : NSStringFromClass(dependencyProviderClass),
       });
@@ -294,22 +295,22 @@ static void MusicFreeInstallNativeStartupHooks(void)
     MusicFreeAppendNativeStartupLog(@"react-dependency-provider-missing", nil);
   }
 
-  self.reactNativeFactory = [[RCTReactNativeFactory alloc] initWithDelegate:self.reactNativeFactoryDelegate];
+  _musicFreeReactNativeFactory = [[RCTReactNativeFactory alloc] initWithDelegate:_musicFreeReactNativeFactoryDelegate];
   MusicFreeAppendNativeStartupLog(@"react-factory-ready", nil);
 
   SEL bindFactorySelector = NSSelectorFromString(@"bindReactNativeFactory:");
   if ([self respondsToSelector:bindFactorySelector]) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Warc-performSelector-leaks"
-    [self performSelector:bindFactorySelector withObject:self.reactNativeFactory];
+    [self performSelector:bindFactorySelector withObject:_musicFreeReactNativeFactory];
 #pragma clang diagnostic pop
     MusicFreeAppendNativeStartupLog(@"react-factory-bound", nil);
   } else {
     MusicFreeAppendNativeStartupLog(@"react-factory-bind-missing", nil);
   }
 
-  [self.reactNativeFactory startReactNativeWithModuleName:self.moduleName ?: @"main"
-                                                inWindow:self.window
+  [_musicFreeReactNativeFactory startReactNativeWithModuleName:self.moduleName ?: @"main"
+                                                inWindow:_musicFreeWindow
                                        initialProperties:self.initialProps
                                            launchOptions:launchOptions];
   MusicFreeAppendNativeStartupLog(@"react-native-started", nil);
