@@ -1,21 +1,27 @@
-module.exports = {
-    presets: ['babel-preset-expo'],
-    plugins: [
+module.exports = api => {
+    const isProduction = api.env("production");
+    const plugins = [
         [
-            'module-resolver',
+            "module-resolver",
             {
-                root: ['./'],
+                root: ["./"],
                 alias: {
-                    '^@/(.+)': './src/\\1',
-                    'webdav': "webdav/dist/react-native"
+                    "^@/(.+)": "./src/\\1",
+                    webdav: "webdav/dist/react-native",
                 },
             },
         ],
-        'react-native-reanimated/plugin',
-    ],
-    env: {
-        production: {
-            plugins: ['transform-remove-console'],
-        },
-    },
+    ];
+
+    if (isProduction) {
+        plugins.push("transform-remove-console");
+    }
+
+    // Reanimated must stay last in every environment, including production.
+    plugins.push("react-native-reanimated/plugin");
+
+    return {
+        presets: [["babel-preset-expo", { unstable_transformImportMeta: true }]],
+        plugins,
+    };
 };

@@ -85,7 +85,7 @@ export default function Body(props: IBodyProps) {
     const { loading } = props;
     const playList = usePlayList();
     const currentMusicItem = useCurrentMusic();
-    const listRef = useRef<FlashList<IMusic.IMusicItem> | null>();
+    const listRef = useRef<FlashList<IMusic.IMusicItem> | null>(null);
     const safeAreaInsets = useSafeAreaInsets();
 
     const initIndex = useMemo(() => {

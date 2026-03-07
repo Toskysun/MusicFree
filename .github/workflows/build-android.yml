@@ -1,438 +1,441 @@
 name: Build Android APK
 
 on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version to build (e.g., v0.6.2)'
-        required: true
-        default: 'v0.6.2'
-        type: string
-  push:
-    tags:
-      - 'v*'
+    workflow_dispatch:
+        inputs:
+            version:
+                description: 'Version to build (e.g., v0.6.48)'
+                required: true
+                default: 'v0.6.48'
+                type: string
+    push:
+        tags:
+            - 'v*'
+
+permissions:
+    contents: write
 
 jobs:
-  build-android:
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    # 🚀 Node.js 设置
-    - name: Setup Node.js with built-in caching
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-        cache: 'npm'
-        cache-dependency-path: 'package-lock.json'
-    
-    # ☕ Java 工具链设置
-    - name: Setup Java with caching
-      uses: actions/setup-java@v4
-      with:
-        distribution: 'temurin'
-        java-version: '17'
-    
-    # 📱 Android SDK 设置
-    - name: Setup Android SDK with caching
-      uses: android-actions/setup-android@v3
-    
-    - name: Cache Android SDK
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.android/sdk
-          ~/.android/avd/*.ini
-          ~/.android/avd/*/snapshots
-        key: ${{ runner.os }}-android-sdk-${{ hashFiles('android/app/build.gradle', 'android/build.gradle') }}
-        restore-keys: |
-          ${{ runner.os }}-android-sdk-
-    
-    # 🎯 Gradle 构建缓存
-    - name: Cache Gradle
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.gradle/caches
-          ~/.gradle/wrapper
-          ~/.gradle/daemon
-          android/.gradle
-        key: ${{ runner.os }}-gradle-${{ hashFiles('android/**/*.gradle*', 'android/**/gradle-wrapper.properties') }}
-        restore-keys: |
-          ${{ runner.os }}-gradle-
-    
-    # 🚄 Metro Bundler 缓存
-    - name: Cache Metro Bundler
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.metro
-          node_modules/.cache/metro
-          android/app/build/generated/res/react
-        key: ${{ runner.os }}-metro-${{ hashFiles('metro.config.js', 'babel.config.js', 'package-lock.json') }}
-        restore-keys: |
-          ${{ runner.os }}-metro-${{ hashFiles('metro.config.js', 'babel.config.js') }}-
-          ${{ runner.os }}-metro-
-    
-    # 📦 安装依赖
-    - name: Install dependencies with cache optimization
-      run: |
-        # 使用npm ci进行更快的安装
-        npm ci --prefer-offline --no-audit --progress=false
-    
-    # 🔄 从tag同步版本号到package.json和version.json
-    - name: Update version from tag
-      if: startsWith(github.ref, 'refs/tags/')
-      run: |
-        TAG_VERSION="${{ github.ref_name }}"
-        # 移除v前缀，获取纯版本号
-        VERSION=${TAG_VERSION#v}
-        echo "📝 Updating version to $VERSION from tag $TAG_VERSION..."
+    build-android:
+        runs-on: ubuntu-latest
 
-        # 更新package.json版本
-        node -e "
-          const fs = require('fs');
-          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-          pkg.version = '$VERSION';
-          fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
-          console.log('✅ Updated package.json version to:', pkg.version);
-        "
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
 
-        # 更新release/version.json
-        node -e "
-          const fs = require('fs');
-          const version = '$VERSION';
-          const tagVersion = '${{ github.ref_name }}';
+            # 🚀 Node.js 设置
+            - name: Setup Node.js with built-in caching
+              uses: actions/setup-node@v4
+              with:
+                  node-version: '20'
+                  cache: 'npm'
+                  cache-dependency-path: 'package-lock.json'
 
-          // 读取现有的 version.json，保留 changeLog
-          let existingChangeLog = [];
-          try {
-            const existingData = JSON.parse(fs.readFileSync('release/version.json', 'utf8'));
-            existingChangeLog = existingData.changeLog || [];
-            console.log('📖 Preserving existing changeLog:', existingChangeLog);
-          } catch (e) {
-            console.log('⚠️ Could not read existing version.json, will use empty changeLog');
-            existingChangeLog = [];
-          }
+            # �?Java 工具链设�?
+            - name: Setup Java with caching
+              uses: actions/setup-java@v4
+              with:
+                  distribution: 'temurin'
+                  java-version: '17'
 
-          // 生成下载链接（使用新的文件名格式）
-          const downloadUrls = [
-            'https://github.com/${{ github.repository }}/releases/download/' + tagVersion + '/MusicFree-v' + version + '-arm64-v8a-release.apk',
-            'https://github.com/${{ github.repository }}/releases/download/' + tagVersion + '/MusicFree-v' + version + '-universal-release.apk'
-          ];
+            # 📱 Android SDK 设置
+            - name: Setup Android SDK with caching
+              uses: android-actions/setup-android@v3
 
-          // 只更新 version 和 download，保留现有的 changeLog
-          const versionInfo = {
-            version: version,
-            changeLog: existingChangeLog,
-            download: downloadUrls
-          };
+            - name: Cache Android SDK
+              uses: actions/cache@v4
+              with:
+                  path: |
+                      ~/.android/sdk
+                      ~/.android/avd/*.ini
+                      ~/.android/avd/*/snapshots
+                  key: ${{ runner.os }}-android-sdk-${{ hashFiles('android/app/build.gradle', 'android/build.gradle') }}
+                  restore-keys: |
+                      ${{ runner.os }}-android-sdk-
 
-          fs.writeFileSync('release/version.json', JSON.stringify(versionInfo, null, 2) + '\n');
-          console.log('✅ Updated version.json:', JSON.stringify(versionInfo, null, 2));
-        "
+            # 🎯 Gradle 构建缓存
+            - name: Cache Gradle
+              uses: actions/cache@v4
+              with:
+                  path: |
+                      ~/.gradle/caches
+                      ~/.gradle/wrapper
+                      ~/.gradle/daemon
+                      android/.gradle
+                  key: ${{ runner.os }}-gradle-${{ hashFiles('android/**/*.gradle*', 'android/**/gradle-wrapper.properties') }}
+                  restore-keys: |
+                      ${{ runner.os }}-gradle-
 
-    # 🔨 生成构建信息
-    - name: Generate build info
-      id: build-info
-      run: |
-        echo "📝 Generating build info..."
-        npm run generate-build-info
-        BUILD_TIME=$(node -e "console.log(require('./src/constants/buildInfo.ts').buildInfo.buildTime)")
-        echo "build-time=$BUILD_TIME" >> $GITHUB_OUTPUT
-        echo "✅ Build info generated"
-    
-    # 🔧 Gradle 权限和缓存预热
-    - name: Setup Gradle with permissions and cache warmup
-      run: |
-        chmod +x android/gradlew
-        # Gradle daemon预热
-        cd android && ./gradlew --version
-        
-        # 预构建React Native依赖以避免超时
-        echo "🚀 Pre-building React Native native modules..."
-        cd android && ./gradlew :app:preBuild \
-          --build-cache \
-          --parallel \
-          --daemon \
-          --no-scan \
-          --max-workers=2 \
-          --quiet \
-          || echo "⚠️  Pre-build completed with warnings"
-    
-    # 🔐 设置签名证书
-    - name: Setup keystore
-      run: |
-        # Create secure temporary directory
-        TEMP_DIR=$(mktemp -d)
-        KEYSTORE_PATH="$TEMP_DIR/release.keystore"
-        KEYSTORE_PROPS="$TEMP_DIR/keystore.properties"
-        
-        # Create keystore from base64 secret in secure temp directory
-        echo "${{ secrets.KEYSTORE_FILE }}" | base64 -d > "$KEYSTORE_PATH"
-        
-        # Create keystore.properties file in temp directory
-        cat > "$KEYSTORE_PROPS" << EOF
-        RELEASE_STORE_FILE=release.keystore
-        RELEASE_STORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}
-        RELEASE_KEY_ALIAS=${{ secrets.KEY_ALIAS }}
-        RELEASE_KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}
-        EOF
-        
-        # Move to android directory for gradle access
-        mv "$KEYSTORE_PATH" android/app/release.keystore
-        mv "$KEYSTORE_PROPS" android/keystore.properties
-        
-        # Set restrictive permissions
-        chmod 600 android/app/release.keystore
-        chmod 600 android/keystore.properties
-        
-        echo "🔐 Keystore configured securely"
-    
-    # 🚀 构建 Android APK
-    - name: Build Android APK
-      timeout-minutes: 45
-      run: |
-        cd android
-        
-        echo "📱 Starting Android APK build..."
-        
-        # Pre-build validation
-        if [[ ! -f "keystore.properties" ]]; then
-          echo "❌ ERROR: keystore.properties not found!"
-          exit 1
-        fi
-        
-        if [[ ! -f "app/release.keystore" ]]; then
-          echo "❌ ERROR: release.keystore not found!"
-          exit 1
-        fi
-        
-        # Build with comprehensive error handling
-        set +e  # Don't exit immediately on error so we can capture logs
-        
-        ./gradlew assembleRelease \
-          --build-cache \
-          --parallel \
-          --daemon \
-          --no-scan \
-          --stacktrace \
-          --max-workers=3 \
-          2>&1 | tee build.log
-        
-        BUILD_EXIT_CODE=${PIPESTATUS[0]}
-        
-        # Check if build failed
-        if [ $BUILD_EXIT_CODE -ne 0 ]; then
-          echo "❌ Gradle build failed with exit code $BUILD_EXIT_CODE!"
-          echo "=============== EXTRACTING ERROR DETAILS ==============="
-          # Extract Kotlin compilation errors
-          echo "--- Searching for Kotlin errors (e:) ---"
-          grep -E "^e: " build.log || echo "No 'e:' errors found"
-          echo ""
-          echo "--- Searching for compilation failures ---"
-          grep -B 5 -A 10 "compileReleaseKotlin" build.log | grep -E "e: |error:|FAILED" || echo "No compilation errors found"
-          echo ""
-          echo "--- Last 100 lines with 'error' keyword ---"
-          tail -100 build.log | grep -i "error" || echo "No error keyword found"
-          echo "========================================================="
-          exit $BUILD_EXIT_CODE
-        fi
-        
-        echo "✅ Android APK build completed successfully"
-        
-        # Post-build verification
-        APK_DIR="app/build/outputs/apk/release"
-        echo "📦 Verifying build outputs in $APK_DIR..."
-        
-        if [[ ! -d "$APK_DIR" ]]; then
-          echo "❌ ERROR: APK output directory not found!"
-          exit 1
-        fi
-        
-        APK_COUNT=$(find "$APK_DIR" -name "*.apk" | wc -l)
-        echo "🎯 Found $APK_COUNT APK files"
-        
-        if [[ $APK_COUNT -eq 0 ]]; then
-          echo "❌ ERROR: No APK files were generated!"
-          exit 1
-        fi
-        
-        # List all generated APKs with sizes
-        echo "📋 Generated APK files:"
-        find "$APK_DIR" -name "*.apk" -exec ls -lh {} \;
-      env:
-        # Gradle优化环境变量
-        GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -XX:+HeapDumpOnOutOfMemoryError -Dfile.encoding=UTF-8"
-        ANDROID_COMPILE_SDK: "34"
-        ANDROID_BUILD_TOOLS: "34.0.0"
-        ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
-    
-    # 📤 上传构建产物
-    - name: Upload All APKs as artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: musicfree-${{ github.event.inputs.version || github.ref_name }}-all-apks
-        path: android/app/build/outputs/apk/release/*.apk
-        retention-days: 30
-        compression-level: 9
-    
-    # ✅ 验证APK文件存在性
-    - name: Verify APK files exist
-      if: startsWith(github.ref, 'refs/tags/')
-      run: |
-        echo "🔍 Checking APK files..."
-        APK_DIR="android/app/build/outputs/apk/release"
-        ls -la $APK_DIR/
+            # 🚄 Metro Bundler 缓存
+            - name: Cache Metro Bundler
+              uses: actions/cache@v4
+              with:
+                  path: |
+                      ~/.metro
+                      node_modules/.cache/metro
+                      android/app/build/generated/res/react
+                  key: ${{ runner.os }}-metro-${{ hashFiles('metro.config.js', 'babel.config.js', 'package-lock.json') }}
+                  restore-keys: |
+                      ${{ runner.os }}-metro-${{ hashFiles('metro.config.js', 'babel.config.js') }}-
+                      ${{ runner.os }}-metro-
 
-        # 从tag获取版本号（去掉v前缀）
-        TAG_VERSION="${{ github.ref_name }}"
-        VERSION=${TAG_VERSION#v}
+            # 📦 安装依赖
+            - name: Install dependencies with cache optimization
+              run: |
+                  # 使用npm ci进行更快的安�?
+                  npm ci --legacy-peer-deps --prefer-offline --no-audit --progress=false
 
-        # Verify all expected APK files exist
-        MISSING_FILES=()
-        EXPECTED_FILES=(
-          "MusicFree-v${VERSION}-universal-release.apk"
-          "MusicFree-v${VERSION}-arm64-v8a-release.apk"
-          "MusicFree-v${VERSION}-armeabi-v7a-release.apk"
-          "MusicFree-v${VERSION}-x86_64-release.apk"
-          "MusicFree-v${VERSION}-x86-release.apk"
-        )
+            # 🔄 从tag同步版本号到package.json和version.json
+            - name: Update version from tag
+              if: startsWith(github.ref, 'refs/tags/')
+              run: |
+                  TAG_VERSION="${{ github.ref_name }}"
+                  # 移除v前缀，获取纯版本�?
+                  VERSION=${TAG_VERSION#v}
+                  echo "📝 Updating version to $VERSION from tag $TAG_VERSION..."
 
-        for file in "${EXPECTED_FILES[@]}"; do
-          if [[ ! -f "$APK_DIR/$file" ]]; then
-            MISSING_FILES+=("$file")
-            echo "❌ Missing: $file"
-          else
-            echo "✅ Found: $file"
-          fi
-        done
+                  # 更新package.json版本
+                  node -e "
+                    const fs = require('fs');
+                    const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+                    pkg.version = '$VERSION';
+                    fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+                    console.log('�?Updated package.json version to:', pkg.version);
+                  "
 
-        if [[ ${#MISSING_FILES[@]} -gt 0 ]]; then
-          echo "🚨 ERROR: ${#MISSING_FILES[@]} APK files are missing!"
-          exit 1
-        else
-          echo "🎉 All APK files are present!"
-        fi
+                  # 更新release/version.json
+                  node -e "
+                    const fs = require('fs');
+                    const version = '$VERSION';
+                    const tagVersion = '${{ github.ref_name }}';
 
-    # 📝 生成Release描述
-    - name: Generate Release Body
-      if: startsWith(github.ref, 'refs/tags/')
-      id: release-body
-      run: |
-        echo "📝 Generating release body from version.json..."
+                    // 读取现有�?version.json，保�?changeLog
+                    let existingChangeLog = [];
+                    try {
+                      const existingData = JSON.parse(fs.readFileSync('release/version.json', 'utf8'));
+                      existingChangeLog = existingData.changeLog || [];
+                      console.log('📖 Preserving existing changeLog:', existingChangeLog);
+                    } catch (e) {
+                      console.log('⚠️ Could not read existing version.json, will use empty changeLog');
+                      existingChangeLog = [];
+                    }
 
-        # 从tag获取版本号
-        TAG_VERSION="${{ github.ref_name }}"
-        VERSION=${TAG_VERSION#v}
+                    // 生成下载链接（使用新的文件名格式�?
+                    const downloadUrls = [
+                      'https://github.com/${{ github.repository }}/releases/download/' + tagVersion + '/MusicFree-v' + version + '-arm64-v8a-release.apk',
+                      'https://github.com/${{ github.repository }}/releases/download/' + tagVersion + '/MusicFree-v' + version + '-universal-release.apk'
+                    ];
 
-        # 读取 changeLog 并格式化
-        CHANGELOG=$(node -e "
-          const fs = require('fs');
-          const versionData = JSON.parse(fs.readFileSync('release/version.json', 'utf8'));
-          const changeLog = versionData.changeLog || [];
+                    // 只更�?version �?download，保留现有的 changeLog
+                    const versionInfo = {
+                      version: version,
+                      changeLog: existingChangeLog,
+                      download: downloadUrls
+                    };
 
-          // 格式化为 markdown 列表
-          const formattedLog = changeLog.map((item, index) => \`\${index + 1}. \${item}\`).join('\n');
+                    fs.writeFileSync('release/version.json', JSON.stringify(versionInfo, null, 2) + '\n');
+                    console.log('�?Updated version.json:', JSON.stringify(versionInfo, null, 2));
+                  "
 
-          console.log(formattedLog);
-        ")
+            # 🔨 生成构建信息
+            - name: Generate build info
+              id: build-info
+              run: |
+                  echo "📝 Generating build info..."
+                  npm run generate-build-info
+                  BUILD_TIME=$(node -e "console.log(require('./src/constants/buildInfo.ts').buildInfo.buildTime)")
+                  echo "build-time=$BUILD_TIME" >> $GITHUB_OUTPUT
+                  echo "�?Build info generated"
 
-        # 创建完整的 Release 描述
-        cat > release_body.md << EOF
-        ## 🎵 MusicFree ${{ github.ref_name }}
+            # 🔧 Gradle 权限和缓存预�?
+            - name: Setup Gradle with permissions and cache warmup
+              run: |
+                  chmod +x android/gradlew
+                  # Gradle daemon预热
+                  cd android && ./gradlew --version
 
-        ### 📱 下载选项
+                  # 预构建React Native依赖以避免超�?
+                  echo "🚀 Pre-building React Native native modules..."
+                  cd android && ./gradlew :app:preBuild \
+                    --build-cache \
+                    --parallel \
+                    --daemon \
+                    --no-scan \
+                    --max-workers=2 \
+                    --quiet \
+                    || echo "⚠️  Pre-build completed with warnings"
 
-        **推荐下载 (适用于所有设备):**
-        - **Universal APK**: [MusicFree-v${VERSION}-universal-release.apk](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/MusicFree-v${VERSION}-universal-release.apk)
+            # 🔐 设置签名证书
+            - name: Setup keystore
+              run: |
+                  # Create secure temporary directory
+                  TEMP_DIR=$(mktemp -d)
+                  KEYSTORE_PATH="$TEMP_DIR/release.keystore"
+                  KEYSTORE_PROPS="$TEMP_DIR/keystore.properties"
 
-        **按设备架构下载 (体积更小):**
-        - **ARM64 (推荐)**: [MusicFree-v${VERSION}-arm64-v8a-release.apk](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/MusicFree-v${VERSION}-arm64-v8a-release.apk) - 适用于大部分现代Android设备
-        - **ARM32**: [MusicFree-v${VERSION}-armeabi-v7a-release.apk](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/MusicFree-v${VERSION}-armeabi-v7a-release.apk) - 适用于老版本Android设备
-        - **x86_64**: [MusicFree-v${VERSION}-x86_64-release.apk](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/MusicFree-v${VERSION}-x86_64-release.apk) - 适用于x86_64模拟器
-        - **x86**: [MusicFree-v${VERSION}-x86-release.apk](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/MusicFree-v${VERSION}-x86-release.apk) - 适用于x86模拟器
+                  # Create keystore from base64 secret in secure temp directory
+                  echo "${{ secrets.KEYSTORE_FILE }}" | base64 -d > "$KEYSTORE_PATH"
 
-        ### 🔄 更新内容
+                  # Create keystore.properties file in temp directory
+                  cat > "$KEYSTORE_PROPS" << EOF
+                  RELEASE_STORE_FILE=release.keystore
+                  RELEASE_STORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}
+                  RELEASE_KEY_ALIAS=${{ secrets.KEY_ALIAS }}
+                  RELEASE_KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}
+                  EOF
 
-        $CHANGELOG
+                  # Move to android directory for gradle access
+                  mv "$KEYSTORE_PATH" android/app/release.keystore
+                  mv "$KEYSTORE_PROPS" android/keystore.properties
 
-        ### ⚡ 构建信息
-        - 构建时间: ${{ steps.build-info.outputs.build-time }}
-        - 提交SHA: ${{ github.sha }}
-        EOF
+                  # Set restrictive permissions
+                  chmod 600 android/app/release.keystore
+                  chmod 600 android/keystore.properties
 
-        echo "✅ Release body generated"
+                  echo "🔐 Keystore configured securely"
 
-    # 🎉 创建Release并上传所有APK
-    - name: Create Release and Upload APKs
-      if: startsWith(github.ref, 'refs/tags/')
-      uses: softprops/action-gh-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        TZ: Asia/Shanghai
-      with:
-        tag_name: ${{ github.ref_name }}
-        name: MusicFree ${{ github.ref_name }}
-        body_path: release_body.md
-        draft: false
-        prerelease: false
-        files: |
-          android/app/build/outputs/apk/release/MusicFree-*.apk
+            # 🚀 构建 Android APK
+            - name: Build Android APK
+              timeout-minutes: 45
+              run: |
+                  cd android
 
-    # 📤 提交更新的版本文件回到仓库
-    - name: Commit updated version files
-      if: startsWith(github.ref, 'refs/tags/')
-      run: |
-        echo "📝 Committing updated version files..."
+                  echo "📱 Starting Android APK build..."
 
-        # 配置Git用户信息
-        git config --local user.email "3ssa@163.com"
-        git config --local user.name "Toskysun"
+                  # Pre-build validation
+                  if [[ ! -f "keystore.properties" ]]; then
+                    echo "�?ERROR: keystore.properties not found!"
+                    exit 1
+                  fi
 
-        # 检查是否有变更需要提交
-        CHANGED_FILES=""
-        if ! git diff --quiet package.json; then
-          CHANGED_FILES="$CHANGED_FILES package.json"
-        fi
-        if ! git diff --quiet release/version.json; then
-          CHANGED_FILES="$CHANGED_FILES release/version.json"
-        fi
+                  if [[ ! -f "app/release.keystore" ]]; then
+                    echo "�?ERROR: release.keystore not found!"
+                    exit 1
+                  fi
 
-        if [ -z "$CHANGED_FILES" ]; then
-          echo "ℹ️ No changes to version files, skipping commit"
-        else
-          echo "📝 Changes detected in: $CHANGED_FILES"
-          git add package.json release/version.json
-          git commit -m "chore: update version to ${{ github.ref_name }} [skip ci]"
+                  # Build with comprehensive error handling
+                  set +e  # Don't exit immediately on error so we can capture logs
 
-          # Push to master branch directly
-          echo "📤 Pushing version files to master..."
-          git push origin HEAD:master
-          echo "✅ Version files updated and pushed to master branch"
-        fi
+                  ./gradlew assembleRelease \
+                    --build-cache \
+                    --parallel \
+                    --daemon \
+                    --no-scan \
+                    --stacktrace \
+                    --max-workers=3 \
+                    2>&1 | tee build.log
 
-    # 🧹 安全清理步骤
-    - name: Security cleanup
-      if: always()
-      run: |
-        echo "🧹 Performing security cleanup..."
-        
-        # Remove sensitive files regardless of build outcome
-        if [[ -f "android/app/release.keystore" ]]; then
-          shred -vfz -n 3 android/app/release.keystore 2>/dev/null || rm -f android/app/release.keystore
-          echo "✅ Keystore file cleaned"
-        fi
-        
-        if [[ -f "android/keystore.properties" ]]; then
-          shred -vfz -n 3 android/keystore.properties 2>/dev/null || rm -f android/keystore.properties
-          echo "✅ Keystore properties cleaned"
-        fi
-        
-        # Clean any temporary keystore files
-        find . -name "*.keystore" -type f -delete 2>/dev/null || true
-        find . -name "keystore.properties" -type f -delete 2>/dev/null || true
-        
-        echo "🔐 Security cleanup completed"
+                  BUILD_EXIT_CODE=${PIPESTATUS[0]}
+
+                  # Check if build failed
+                  if [ $BUILD_EXIT_CODE -ne 0 ]; then
+                    echo "�?Gradle build failed with exit code $BUILD_EXIT_CODE!"
+                    echo "=============== EXTRACTING ERROR DETAILS ==============="
+                    # Extract Kotlin compilation errors
+                    echo "--- Searching for Kotlin errors (e:) ---"
+                    grep -E "^e: " build.log || echo "No 'e:' errors found"
+                    echo ""
+                    echo "--- Searching for compilation failures ---"
+                    grep -B 5 -A 10 "compileReleaseKotlin" build.log | grep -E "e: |error:|FAILED" || echo "No compilation errors found"
+                    echo ""
+                    echo "--- Last 100 lines with 'error' keyword ---"
+                    tail -100 build.log | grep -i "error" || echo "No error keyword found"
+                    echo "========================================================="
+                    exit $BUILD_EXIT_CODE
+                  fi
+
+                  echo "�?Android APK build completed successfully"
+
+                  # Post-build verification
+                  APK_DIR="app/build/outputs/apk/release"
+                  echo "📦 Verifying build outputs in $APK_DIR..."
+
+                  if [[ ! -d "$APK_DIR" ]]; then
+                    echo "�?ERROR: APK output directory not found!"
+                    exit 1
+                  fi
+
+                  APK_COUNT=$(find "$APK_DIR" -name "*.apk" | wc -l)
+                  echo "🎯 Found $APK_COUNT APK files"
+
+                  if [[ $APK_COUNT -eq 0 ]]; then
+                    echo "�?ERROR: No APK files were generated!"
+                    exit 1
+                  fi
+
+                  # List all generated APKs with sizes
+                  echo "📋 Generated APK files:"
+                  find "$APK_DIR" -name "*.apk" -exec ls -lh {} \;
+              env:
+                  # Gradle优化环境变量
+                  GRADLE_OPTS: '-Dorg.gradle.jvmargs=-Xmx4g -XX:+HeapDumpOnOutOfMemoryError -Dfile.encoding=UTF-8'
+                  ANDROID_COMPILE_SDK: '34'
+                  ANDROID_BUILD_TOOLS: '34.0.0'
+                  ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
+
+            # 📤 上传构建产物
+            - name: Upload All APKs as artifacts
+              uses: actions/upload-artifact@v4
+              with:
+                  name: musicfree-${{ github.event.inputs.version || github.ref_name }}-all-apks
+                  path: android/app/build/outputs/apk/release/*.apk
+                  retention-days: 30
+                  compression-level: 9
+
+            # �?验证APK文件存在�?
+            - name: Verify APK files exist
+              if: startsWith(github.ref, 'refs/tags/')
+              run: |
+                  echo "🔍 Checking APK files..."
+                  APK_DIR="android/app/build/outputs/apk/release"
+                  ls -la $APK_DIR/
+
+                  # 从tag获取版本号（去掉v前缀�?
+                  TAG_VERSION="${{ github.ref_name }}"
+                  VERSION=${TAG_VERSION#v}
+
+                  # Verify all expected APK files exist
+                  MISSING_FILES=()
+                  EXPECTED_FILES=(
+                    "MusicFree-v${VERSION}-universal-release.apk"
+                    "MusicFree-v${VERSION}-arm64-v8a-release.apk"
+                    "MusicFree-v${VERSION}-armeabi-v7a-release.apk"
+                    "MusicFree-v${VERSION}-x86_64-release.apk"
+                    "MusicFree-v${VERSION}-x86-release.apk"
+                  )
+
+                  for file in "${EXPECTED_FILES[@]}"; do
+                    if [[ ! -f "$APK_DIR/$file" ]]; then
+                      MISSING_FILES+=("$file")
+                      echo "�?Missing: $file"
+                    else
+                      echo "�?Found: $file"
+                    fi
+                  done
+
+                  if [[ ${#MISSING_FILES[@]} -gt 0 ]]; then
+                    echo "🚨 ERROR: ${#MISSING_FILES[@]} APK files are missing!"
+                    exit 1
+                  else
+                    echo "🎉 All APK files are present!"
+                  fi
+
+            # 📝 生成Release描述
+            - name: Generate Release Body
+              if: startsWith(github.ref, 'refs/tags/')
+              id: release-body
+              run: |
+                  echo "📝 Generating release body from version.json..."
+
+                  # 从tag获取版本�?
+                  TAG_VERSION="${{ github.ref_name }}"
+                  VERSION=${TAG_VERSION#v}
+
+                  # 读取 changeLog 并格式化
+                  CHANGELOG=$(node -e "
+                    const fs = require('fs');
+                    const versionData = JSON.parse(fs.readFileSync('release/version.json', 'utf8'));
+                    const changeLog = versionData.changeLog || [];
+
+                    // 格式化为 markdown 列表
+                    const formattedLog = changeLog.map((item, index) => \`\${index + 1}. \${item}\`).join('\n');
+
+                    console.log(formattedLog);
+                  ")
+
+                  # 创建完整�?Release 描述
+                  cat > release_body.md << EOF
+                  ## 🎵 MusicFree ${{ github.ref_name }}
+
+                  ### 📱 下载选项
+
+                  **推荐下载 (适用于所有设�?:**
+                  - **Universal APK**: [MusicFree-v${VERSION}-universal-release.apk](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/MusicFree-v${VERSION}-universal-release.apk)
+
+                  **按设备架构下�?(体积更小):**
+                  - **ARM64 (推荐)**: [MusicFree-v${VERSION}-arm64-v8a-release.apk](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/MusicFree-v${VERSION}-arm64-v8a-release.apk) - 适用于大部分现代Android设备
+                  - **ARM32**: [MusicFree-v${VERSION}-armeabi-v7a-release.apk](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/MusicFree-v${VERSION}-armeabi-v7a-release.apk) - 适用于老版本Android设备
+                  - **x86_64**: [MusicFree-v${VERSION}-x86_64-release.apk](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/MusicFree-v${VERSION}-x86_64-release.apk) - 适用于x86_64模拟�?
+                  - **x86**: [MusicFree-v${VERSION}-x86-release.apk](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/MusicFree-v${VERSION}-x86-release.apk) - 适用于x86模拟�?
+
+                  ### 🔄 更新内容
+
+                  $CHANGELOG
+
+                  ### �?构建信息
+                  - 构建时间: ${{ steps.build-info.outputs.build-time }}
+                  - 提交SHA: ${{ github.sha }}
+                  EOF
+
+                  echo "�?Release body generated"
+
+            # 🎉 创建Release并上传所有APK
+            - name: Create Release and Upload APKs
+              if: startsWith(github.ref, 'refs/tags/')
+              uses: softprops/action-gh-release@v1
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  TZ: Asia/Shanghai
+              with:
+                  tag_name: ${{ github.ref_name }}
+                  name: MusicFree ${{ github.ref_name }}
+                  body_path: release_body.md
+                  draft: false
+                  prerelease: false
+                  files: |
+                      android/app/build/outputs/apk/release/MusicFree-*.apk
+
+            # 📤 提交更新的版本文件回到仓�?
+            - name: Commit updated version files
+              if: startsWith(github.ref, 'refs/tags/')
+              run: |
+                  echo "📝 Committing updated version files..."
+
+                  # 配置Git用户信息
+                  git config --local user.email "3ssa@163.com"
+                  git config --local user.name "Toskysun"
+
+                  # 检查是否有变更需要提�?
+                  CHANGED_FILES=""
+                  if ! git diff --quiet package.json; then
+                    CHANGED_FILES="$CHANGED_FILES package.json"
+                  fi
+                  if ! git diff --quiet release/version.json; then
+                    CHANGED_FILES="$CHANGED_FILES release/version.json"
+                  fi
+
+                  if [ -z "$CHANGED_FILES" ]; then
+                    echo "ℹ️ No changes to version files, skipping commit"
+                  else
+                    echo "📝 Changes detected in: $CHANGED_FILES"
+                    git add package.json app.json release/version.json
+                    git commit -m "chore: update version to ${{ github.ref_name }} [skip ci]"
+
+                    # Push to master branch directly
+                    echo "📤 Pushing version files to master..."
+                    git push origin HEAD:master
+                    echo "�?Version files updated and pushed to master branch"
+                  fi
+
+            # 🧹 安全清理步骤
+            - name: Security cleanup
+              if: always()
+              run: |
+                  echo "🧹 Performing security cleanup..."
+
+                  # Remove sensitive files regardless of build outcome
+                  if [[ -f "android/app/release.keystore" ]]; then
+                    shred -vfz -n 3 android/app/release.keystore 2>/dev/null || rm -f android/app/release.keystore
+                    echo "�?Keystore file cleaned"
+                  fi
+
+                  if [[ -f "android/keystore.properties" ]]; then
+                    shred -vfz -n 3 android/keystore.properties 2>/dev/null || rm -f android/keystore.properties
+                    echo "�?Keystore properties cleaned"
+                  fi
+
+                  # Clean any temporary keystore files
+                  find . -name "*.keystore" -type f -delete 2>/dev/null || true
+                  find . -name "keystore.properties" -type f -delete 2>/dev/null || true
+
+                  echo "🔐 Security cleanup completed"

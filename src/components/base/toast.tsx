@@ -3,7 +3,7 @@ import { fontSizeConst } from "@/constants/uiConst";
 import useColors from "@/hooks/useColors";
 import rpx from "@/utils/rpx";
 import { GlobalState } from "@/utils/stateMapper";
-import { nanoid } from "nanoid";
+import { nanoid } from "@/utils/nanoid";
 import React, { useCallback, useEffect } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import {

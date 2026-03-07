@@ -16,7 +16,7 @@ const routes = results;
 const getRouterScene = (
     routeList: Array<{ key: ICommon.SupportMediaType; title: string }>,
 ) => {
-    const scene: Record<string, () => JSX.Element> = {};
+    const scene: Record<string, React.ComponentType<any>> = {};
     routeList.forEach(r => {
         scene[r.key] = () => <ResultSubPanel tab={r.key} />;
     });

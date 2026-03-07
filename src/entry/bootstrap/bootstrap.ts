@@ -16,7 +16,7 @@ import Theme from "@/core/theme";
 import TrackPlayer from "@/core/trackPlayer";
 import NativeUtils from "@/native/utils";
 import { checkAndCreateDir } from "@/utils/fileUtils";
-import { errorLog, trace, devLog } from "@/utils/log";
+import { appendStartupBreadcrumb, errorLog, markStartupSession, trace, devLog } from "@/utils/log";
 import { IPerfLogger, perfLogger } from "@/utils/perfLogger";
 import PersistStatus from "@/utils/persistStatus";
 import Toast from "@/utils/toast";
@@ -41,44 +41,72 @@ MusicSheet.injectDependencies(Config);
 
 devLog('info', '🚀[Bootstrap] 所有依赖注入完成');
 
+function registerEarlyGlobalErrorHandlers() {
+    try {
+        ErrorUtils.setGlobalHandler((error, isFatal) => {
+            void appendStartupBreadcrumb("global-error", {
+                isFatal,
+                message: error?.message,
+                name: error?.name,
+            });
+            errorLog("未捕获的错误", {
+                isFatal,
+                message: error?.message,
+                stack: error?.stack,
+                name: error?.name,
+            });
+        });
+    } catch {
+    }
+}
+
 
 async function bootstrapImpl() {
+    await appendStartupBreadcrumb("bootstrap-start");
+    registerEarlyGlobalErrorHandlers();
+    await appendStartupBreadcrumb("global-handler-registered");
+
     await SplashScreen.preventAutoHideAsync()
         .then(result =>
             devLog('info', '✅[Bootstrap] SplashScreen防自动隐藏成功', { result }),
         )
         .catch((error) => devLog('warn', '⚠️[Bootstrap] SplashScreen防自动隐藏失败', error)); // it's good to explicitly catch and inspect any error
+    await appendStartupBreadcrumb("splashscreen-prevented");
     const logger = perfLogger();
     // 1. 检查权限
-    if (Platform.OS === "android" && Platform.Version >= 30) {
-        const hasPermission = await NativeUtils.checkStoragePermission();
-        if (
-            !hasPermission &&
-            !PersistStatus.get("app.skipBootstrapStorageDialog")
-        ) {
-            showDialog("CheckStorage");
-        }
-    } else {
-        const [readStoragePermission, writeStoragePermission] =
-            await Promise.all([
-                check(PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE),
-                check(PERMISSIONS.ANDROID.WRITE_EXTERNAL_STORAGE),
-            ]);
-        if (
-            !(
-                readStoragePermission === "granted" &&
-                writeStoragePermission === "granted"
-            )
-        ) {
-            await request(PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE);
-            await request(PERMISSIONS.ANDROID.WRITE_EXTERNAL_STORAGE);
+    if (Platform.OS === "android") {
+        if (Platform.Version >= 30) {
+            const hasPermission = await NativeUtils.checkStoragePermission();
+            if (
+                !hasPermission &&
+                !PersistStatus.get("app.skipBootstrapStorageDialog")
+            ) {
+                showDialog("CheckStorage");
+            }
+        } else {
+            const [readStoragePermission, writeStoragePermission] =
+                await Promise.all([
+                    check(PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE),
+                    check(PERMISSIONS.ANDROID.WRITE_EXTERNAL_STORAGE),
+                ]);
+            if (
+                !(
+                    readStoragePermission === "granted" &&
+                    writeStoragePermission === "granted"
+                )
+            ) {
+                await request(PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE);
+                await request(PERMISSIONS.ANDROID.WRITE_EXTERNAL_STORAGE);
+            }
         }
     }
+    await appendStartupBreadcrumb("permissions-checked", { platform: Platform.OS });
     logger.mark("权限检查完成");
 
     // 2. 数据初始化
     /** 初始化路径 */
     await setupFolder();
+    await appendStartupBreadcrumb("folders-ready");
     trace("文件夹初始化完成");
     logger.mark("文件夹初始化完成");
 
@@ -96,6 +124,7 @@ async function bootstrapImpl() {
             logger.mark("musicHistory");
         }),
     ]);
+    await appendStartupBreadcrumb("config-loaded");
     trace("配置初始化完成");
     logger.mark("配置初始化完成");
 
@@ -108,11 +137,20 @@ async function bootstrapImpl() {
 
     // 加载插件
     await PluginManager.setup();
+    await appendStartupBreadcrumb("plugins-ready");
     logger.mark("插件初始化完成");
     trace("插件初始化完成");
 
-    await initTrackPlayer(logger).catch(err => {
-        // 初始化播放器出错，延迟初始化
+    await appendStartupBreadcrumb("trackplayer-init-start");
+    try {
+        await initTrackPlayer(logger);
+        await appendStartupBreadcrumb("trackplayer-init-finished");
+    } catch (err: any) {
+        await appendStartupBreadcrumb("trackplayer-setup-error", {
+            message: err?.message,
+            name: err?.name,
+        });
+        // Initialize player later if startup restore fails.
         const bootstrapState = getDefaultStore().get(bootstrapAtom);
 
         if (bootstrapState.state === "Loading") {
@@ -121,7 +159,7 @@ async function bootstrapImpl() {
                 reason: err,
             });
         }
-    });
+    }
 
     await LocalMusicSheet.setup();
     trace("本地音乐初始化完成");
@@ -131,108 +169,126 @@ async function bootstrapImpl() {
     trace("主题初始化完成");
     logger.mark("主题初始化完成");
 
-    extraMakeup();
+    void extraMakeup().catch((error: any) => {
+        void appendStartupBreadcrumb("extra-makeup-error", {
+            message: error?.message,
+            name: error?.name,
+        });
+        errorLog("extra makeup failed", error);
+    });
+    await appendStartupBreadcrumb("extra-makeup-triggered");
 
     i18n.setup();
+    await appendStartupBreadcrumb("i18n-ready");
     logger.mark("语言模块初始化完成");
     
     // 初始化下载通知管理器
     devLog('info', '📲[Bootstrap] 开始初始化下载通知管理器');
     try {
         await downloadNotificationManager.initialize();
+        await appendStartupBreadcrumb("download-notification-ready");
         devLog('info', '✅[Bootstrap] 下载通知管理器初始化成功');
-    } catch (error) {
+    } catch (error: any) {
+        await appendStartupBreadcrumb("download-notification-error", {
+            message: error?.message,
+            name: error?.name,
+        });
         devLog('error', '❌[Bootstrap] 下载通知管理器初始化失败', error);
         errorLog("Failed to initialize download notification manager during bootstrap", error);
     }
     logger.mark("下载通知管理器初始化完成");
 
     // 检查公告（等待网络连通后再进行首次检查）
-    devLog('info', '📢[Bootstrap] 开始检查在线公告');
-    try {
-        // 等待网络连通，最多等待 7 秒，避免首次安装/冷启动网络尚未就绪
-        await (async function waitForConnectivity(timeoutMs = 7000) {
-            try {
-                const first = await NetInfo.fetch();
-                if (first.isConnected && (first.isInternetReachable ?? true)) {
-                    return;
-                }
-            } catch {}
-            await new Promise<void>(resolve => {
-                let resolved = false;
-                const timer = setTimeout(() => {
-                    if (!resolved) {
-                        resolved = true;
-                        unsubscribe?.();
-                        devLog('info', '⌛[Bootstrap] 等待网络超时，继续尝试公告检查');
-                        resolve();
+    if (Platform.OS === "ios") {
+        await appendStartupBreadcrumb("announcement-skip-ios");
+        devLog('info', '⏭️[Bootstrap] iOS 启动阶段跳过公告联网检查');
+    } else {
+        devLog('info', '📢[Bootstrap] 开始检查在线公告');
+        try {
+            // 等待网络连通，最多等待 7 秒，避免首次安装/冷启动网络尚未就绪
+            await (async function waitForConnectivity(timeoutMs = 7000) {
+                try {
+                    const first = await NetInfo.fetch();
+                    if (first.isConnected && (first.isInternetReachable ?? true)) {
+                        return;
                     }
-                }, timeoutMs);
-                const unsubscribe = NetInfo.addEventListener(state => {
-                    if (!resolved && state.isConnected && (state.isInternetReachable ?? true)) {
-                        resolved = true;
-                        clearTimeout(timer);
-                        unsubscribe?.();
-                        devLog('info', '🌐[Bootstrap] 网络已连通，开始公告检查');
-                        resolve();
-                    }
+                } catch {}
+                await new Promise<void>(resolve => {
+                    let resolved = false;
+                    const timer = setTimeout(() => {
+                        if (!resolved) {
+                            resolved = true;
+                            unsubscribe?.();
+                            devLog('info', '⌛[Bootstrap] 等待网络超时，继续尝试公告检查');
+                            resolve();
+                        }
+                    }, timeoutMs);
+                    const unsubscribe = NetInfo.addEventListener(state => {
+                        if (!resolved && state.isConnected && (state.isInternetReachable ?? true)) {
+                            resolved = true;
+                            clearTimeout(timer);
+                            unsubscribe?.();
+                            devLog('info', '🌐[Bootstrap] 网络已连通，开始公告检查');
+                            resolve();
+                        }
+                    });
                 });
-            });
-        })();
+            })();
 
-        // 封装一个“安全显示公告”的方法：若有权限对话框等正在显示，则等待其关闭
-        const showAnnouncementSafely = (announcement: IAnnouncement.IAnnouncementItem) => {
-            const tryShow = () => {
-                const current = getCurrentDialog();
-                if (!current?.name) {
-                    showDialog("AnnouncementDialog", { announcement });
-                    return true;
-                }
-                return false;
+            // 封装一个“安全显示公告”的方法：若有权限对话框等正在显示，则等待其关闭
+            const showAnnouncementSafely = (announcement: IAnnouncement.IAnnouncementItem) => {
+                const tryShow = () => {
+                    const current = getCurrentDialog();
+                    if (!current?.name) {
+                        showDialog("AnnouncementDialog", { announcement });
+                        return true;
+                    }
+                    return false;
+                };
+
+                if (tryShow()) return;
+                let attempts = 0;
+                const maxAttempts = 40; // 最长等待 ~20s (500ms * 40)
+                const timer = setInterval(() => {
+                    attempts += 1;
+                    if (tryShow() || attempts >= maxAttempts) {
+                        clearInterval(timer);
+                    }
+                }, 500);
             };
 
-            if (tryShow()) return;
-            let attempts = 0;
-            const maxAttempts = 40; // 最长等待 ~20s (500ms * 40)
-            const timer = setInterval(() => {
-                attempts += 1;
-                if (tryShow() || attempts >= maxAttempts) {
-                    clearInterval(timer);
-                }
-            }, 500);
-        };
-
-        const announcement = await announcementService.checkAnnouncements();
-        if (announcement) {
-            // 延迟显示公告，等待界面完全加载
-            setTimeout(() => {
-                showAnnouncementSafely(announcement);
-            }, 1500);
-        } else {
-            // 首次检查未命中时，延迟进行一次强制重试（网络未就绪等场景）
-            setTimeout(async () => {
-                try {
-                    const retryAnnouncement = await announcementService.checkAnnouncements(true);
-                    if (retryAnnouncement) {
-                        showAnnouncementSafely(retryAnnouncement);
-                        devLog('info', '✅[Bootstrap] 二次公告检查命中');
-                    } else {
-                        devLog('info', 'ℹ️[Bootstrap] 二次公告检查无可显示内容');
+            const announcement = await announcementService.checkAnnouncements();
+            if (announcement) {
+                // 延迟显示公告，等待界面完全加载
+                setTimeout(() => {
+                    showAnnouncementSafely(announcement);
+                }, 1500);
+            } else {
+                // 首次检查未命中时，延迟进行一次强制重试（网络未就绪等场景）
+                setTimeout(async () => {
+                    try {
+                        const retryAnnouncement = await announcementService.checkAnnouncements(true);
+                        if (retryAnnouncement) {
+                            showAnnouncementSafely(retryAnnouncement);
+                            devLog('info', '✅[Bootstrap] 二次公告检查命中');
+                        } else {
+                            devLog('info', 'ℹ️[Bootstrap] 二次公告检查无可显示内容');
+                        }
+                    } catch (e) {
+                        devLog('warn', '⚠️[Bootstrap] 二次公告检查失败', e);
                     }
-                } catch (e) {
-                    devLog('warn', '⚠️[Bootstrap] 二次公告检查失败', e);
-                }
-            }, 8000);
+                }, 8000);
+            }
+            devLog('info', '✅[Bootstrap] 公告检查完成');
+        } catch (error) {
+            devLog('warn', '⚠️[Bootstrap] 公告检查失败', error);
         }
-        devLog('info', '✅[Bootstrap] 公告检查完成');
-    } catch (error) {
-        devLog('warn', '⚠️[Bootstrap] 公告检查失败', error);
     }
     logger.mark("公告检查完成");
     
-    ErrorUtils.setGlobalHandler(error => {
-        errorLog("未捕获的错误", error);
-    });
+    await appendStartupBreadcrumb("bootstrap-impl-finished");
+
+    registerEarlyGlobalErrorHandlers();
 }
 
 /** 初始化 */
@@ -311,7 +367,7 @@ export async function initTrackPlayer(logger?: IPerfLogger) {
 async function extraMakeup() {
     // 自动更新
     try {
-        if (Config.getConfig("basic.autoUpdatePlugin")) {
+        if (Platform.OS === "android" && Config.getConfig("basic.autoUpdatePlugin")) {
             const lastUpdated = PersistStatus.get("app.pluginUpdateTime") || 0;
             const now = Date.now();
             if (Math.abs(now - lastUpdated) > 86400000) {
@@ -325,6 +381,8 @@ async function extraMakeup() {
                     }
                 }
             }
+        } else if (Platform.OS === "ios") {
+            devLog('info', '⏭️[Bootstrap] iOS 启动阶段跳过插件自动更新');
         }
     } catch { }
 
@@ -410,16 +468,24 @@ function bindEvents() {
 }
 
 export default async function () {
+    await markStartupSession("bootstrap-entry");
+
     try {
         getDefaultStore().set(bootstrapAtom, {
             "state": "Loading",
         });
         await bootstrapImpl();
         bindEvents();
+        await appendStartupBreadcrumb("bootstrap-bind-events");
         getDefaultStore().set(bootstrapAtom, {
             "state": "Done",
         });
+        await appendStartupBreadcrumb("bootstrap-done");
     } catch (e: any) {
+        await appendStartupBreadcrumb("bootstrap-fatal", {
+            message: e?.message,
+            name: e?.name,
+        });
         errorLog("初始化出错", e);
         if (getDefaultStore().get(bootstrapAtom).state === "Loading") {
             getDefaultStore().set(bootstrapAtom, {
@@ -430,5 +496,6 @@ export default async function () {
     }
     // 隐藏开屏动画
     devLog('info', '🎯[Bootstrap] 隐藏启动屏幕');
+    await appendStartupBreadcrumb("splashscreen-hide");
     await SplashScreen.hideAsync();
 }

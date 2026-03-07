@@ -1,99 +1,136 @@
 name: Build iOS IPA
 
 on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version to build (e.g., v0.6.2)'
-        required: true
-        default: 'v0.6.2'
-        type: string
-  push:
-    tags:
-      - 'v*'
+    workflow_dispatch:
+        inputs:
+            version:
+                description: 'Version to build (e.g., v0.6.48)'
+                required: true
+                default: 'v0.6.48'
+                type: string
+    push:
+        tags:
+            - 'v*'
+
+permissions:
+    contents: write
 
 jobs:
-  build-ios:
-    runs-on: macos-14
+    build-ios:
+        runs-on: macos-15
+        env:
+            RCT_NEW_ARCH_ENABLED: '0'
 
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-        cache: 'npm'
-        cache-dependency-path: 'package-lock.json'
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: '20'
+                  cache: 'npm'
+                  cache-dependency-path: 'package-lock.json'
 
-    - name: Cache CocoaPods
-      uses: actions/cache@v4
-      with:
-        path: |
-          ios/Pods
-          ~/Library/Caches/CocoaPods
-        key: ${{ runner.os }}-pods-${{ hashFiles('ios/Podfile.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-pods-
+            - name: Resolve build version
+              id: build-version
+              run: |
+                  if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+                    RAW_VERSION="${GITHUB_REF_NAME}"
+                  else
+                    RAW_VERSION="${{ github.event.inputs.version }}"
+                  fi
+                  VERSION="${RAW_VERSION#v}"
+                  echo "raw=${RAW_VERSION}" >> "$GITHUB_OUTPUT"
+                  echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+                  echo "build_number=${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
 
-    - name: Install dependencies
-      run: npm ci --prefer-offline --no-audit --progress=false
+            - name: Select Xcode 26
+              run: |
+                  set -euo pipefail
+                  XCODE_APP=$(find /Applications -maxdepth 1 -type d -name 'Xcode_26*.app' | sort -V | tail -n 1)
+                  if [[ -z "${XCODE_APP}" ]]; then
+                    echo "Expected an installed Xcode 26.x on the macOS 15 runner."
+                    ls -1 /Applications | grep Xcode || true
+                    exit 1
+                  fi
+                  sudo xcode-select -s "${XCODE_APP}/Contents/Developer"
+                  xcodebuild -version
+                  pod --version
+                  node -v
+                  npm -v
 
-    - name: Update version from tag
-      if: startsWith(github.ref, 'refs/tags/')
-      run: |
-        TAG_VERSION="${{ github.ref_name }}"
-        VERSION=${TAG_VERSION#v}
-        echo "Updating version to $VERSION"
+            - name: Cache CocoaPods
+              uses: actions/cache@v4
+              with:
+                  path: |
+                      ios/Pods
+                      ~/Library/Caches/CocoaPods
+                  key: ${{ runner.os }}-pods-${{ hashFiles('ios/Podfile', 'ios/Podfile.properties.json', 'package-lock.json') }}
+                  restore-keys: |
+                      ${{ runner.os }}-pods-
 
-        node -e "
-          const fs = require('fs');
-          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-          pkg.version = '$VERSION';
-          fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
-        "
+            - name: Install dependencies
+              run: npm ci --legacy-peer-deps --prefer-offline --no-audit --progress=false
 
-    - name: Generate build info
-      run: npm run generate-build-info
+            - name: Sync build version
+              run: |
+                  VERSION="${{ steps.build-version.outputs.version }}"
+                  echo "Syncing package.json/app.json version to ${VERSION}"
+                  node -e "
+                    const fs = require('fs');
+                    const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+                    pkg.version = '${VERSION}';
+                    fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
 
-    - name: Install CocoaPods
-      run: |
-        cd ios
-        pod install --repo-update
+                    const app = JSON.parse(fs.readFileSync('app.json', 'utf8'));
+                    app.expo = app.expo || {};
+                    app.expo.version = '${VERSION}';
+                    fs.writeFileSync('app.json', JSON.stringify(app, null, 2) + '\n');
+                  "
 
-    - name: Build iOS (No Codesign)
-      run: |
-        cd ios
-        xcodebuild -workspace MusicFree.xcworkspace \
-          -scheme MusicFreeNew \
-          -configuration Release \
-          -sdk iphoneos \
-          -derivedDataPath build \
-          CODE_SIGN_IDENTITY="" \
-          CODE_SIGNING_REQUIRED=NO \
-          CODE_SIGNING_ALLOWED=NO \
-          -allowProvisioningUpdates
+            - name: Generate build info
+              run: npm run generate-build-info
 
-    - name: Create IPA
-      run: |
-        cd ios/build/Build/Products/Release-iphoneos
-        mkdir -p Payload
-        cp -r MusicFree.app Payload/
-        zip -r MusicFree-${{ github.event.inputs.version || github.ref_name }}.ipa Payload
+            - name: Install CocoaPods
+              run: |
+                  cd ios
+                  pod install --repo-update
 
-    - name: Upload IPA artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: musicfree-ios-${{ github.event.inputs.version || github.ref_name }}
-        path: ios/build/Build/Products/Release-iphoneos/*.ipa
-        retention-days: 30
+            - name: Build iOS (No Codesign)
+              run: |
+                  cd ios
+                  xcodebuild -workspace MusicFree.xcworkspace \
+                    -scheme MusicFreeNew \
+                    -configuration Release \
+                    -sdk iphoneos \
+                    -derivedDataPath build \
+                    CODE_SIGN_IDENTITY="" \
+                    CODE_SIGNING_REQUIRED=NO \
+                    CODE_SIGNING_ALLOWED=NO \
+                    MARKETING_VERSION="${{ steps.build-version.outputs.version }}" \
+                    CURRENT_PROJECT_VERSION="${{ steps.build-version.outputs.build_number }}" \
+                    -allowProvisioningUpdates
 
-    - name: Upload to Release
-      if: startsWith(github.ref, 'refs/tags/')
-      uses: softprops/action-gh-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ github.ref_name }}
-        files: ios/build/Build/Products/Release-iphoneos/*.ipa
+            - name: Create IPA
+              run: |
+                  cd ios/build/Build/Products/Release-iphoneos
+                  mkdir -p Payload
+                  cp -r MusicFree.app Payload/
+                  zip -r MusicFree-${{ steps.build-version.outputs.raw }}.ipa Payload
+
+            - name: Upload IPA artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: musicfree-ios-${{ steps.build-version.outputs.raw }}
+                  path: ios/build/Build/Products/Release-iphoneos/*.ipa
+                  retention-days: 30
+
+            - name: Upload to Release
+              if: startsWith(github.ref, 'refs/tags/')
+              uses: softprops/action-gh-release@v1
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              with:
+                  tag_name: ${{ github.ref_name }}
+                  files: ios/build/Build/Products/Release-iphoneos/*.ipa

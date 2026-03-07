@@ -38,7 +38,7 @@ function Dialog(props: IDialogProps) {
     const sharedShowValue = useSharedValue(0);
     const keyboardHeight = useSharedValue(0);
     const colors = useColors();
-    const backHandlerRef = useRef<NativeEventSubscription>();
+    const backHandlerRef = useRef<NativeEventSubscription | null>(null);
     const orientation = useOrientation();
     const keyboardAvoidMode = Config.getConfig("basic.keyboardAvoidMode") ?? "auto";
 
@@ -56,7 +56,7 @@ function Dialog(props: IDialogProps) {
         sharedShowValue.value = 1;
         if (backHandlerRef.current) {
             backHandlerRef.current?.remove();
-            backHandlerRef.current = undefined;
+            backHandlerRef.current = null;
         }
         backHandlerRef.current = BackHandler.addEventListener(
             "hardwareBackPress",
@@ -100,7 +100,7 @@ function Dialog(props: IDialogProps) {
             sharedShowValue.value = 0;
             if (backHandlerRef.current) {
                 backHandlerRef.current?.remove();
-                backHandlerRef.current = undefined;
+                backHandlerRef.current = null;
             }
             keyboardShowListener.remove();
             keyboardHideListener.remove();

@@ -1,3 +1,4 @@
+import type { ComponentType } from "react";
 import Home from "@/pages/home";
 import MusicDetail from "@/pages/musicDetail";
 import TopList from "@/pages/topList";
@@ -24,7 +25,7 @@ export type RoutePaths = ValueOf<typeof ROUTE_PATH>;
 
 type IRoutes = {
   path: RoutePaths;
-  component: (...args: any[]) => JSX.Element;
+  component: ComponentType<any>;
 };
 
 

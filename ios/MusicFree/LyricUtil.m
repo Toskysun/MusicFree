@@ -1,12 +1,17 @@
 #import <React/RCTBridgeModule.h>
+#import <React/RCTEventEmitter.h>
 #import <zlib.h>
 
-@interface LyricUtil : NSObject <RCTBridgeModule>
+@interface LyricUtil : RCTEventEmitter <RCTBridgeModule>
 @end
 
 @implementation LyricUtil
 
 RCT_EXPORT_MODULE();
+
+- (NSArray<NSString *> *)supportedEvents {
+  return @[];
+}
 
 // ==================== Permissions / UI Stubs (iOS No-ops) ====================
 
@@ -70,6 +75,54 @@ RCT_EXPORT_METHOD(setStatusBarLyricAlign:(int)alignment
 
 RCT_EXPORT_METHOD(setStatusBarColors:(NSString *)textColor
                   backgroundColor:(NSString *)backgroundColor
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+  resolve(@YES);
+}
+
+// ==================== Desktop Lyric Advanced API Stubs (iOS No-ops) ====================
+
+RCT_EXPORT_METHOD(setDesktopLyricLine:(NSDictionary *)data
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+  resolve(@YES);
+}
+
+RCT_EXPORT_METHOD(syncPlaybackState:(NSDictionary *)state
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+  resolve(@YES);
+}
+
+RCT_EXPORT_METHOD(setSungColor:(NSString *)color
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+  resolve(@YES);
+}
+
+RCT_EXPORT_METHOD(lockDesktopLyric:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+  resolve(@YES);
+}
+
+RCT_EXPORT_METHOD(unlockDesktopLyric:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+  resolve(@YES);
+}
+
+RCT_EXPORT_METHOD(setColorPreset:(NSInteger)index
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+  resolve(@YES);
+}
+
+RCT_EXPORT_METHOD(setSecondaryFontRatio:(double)ratio
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+  resolve(@YES);
+}
+
+RCT_EXPORT_METHOD(setSecondaryAlphaRatio:(double)ratio
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject) {
   resolve(@YES);

@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 interface IHorizontalSafeAreaViewProps {
     mode?: "margin" | "padding";
-    children: JSX.Element | JSX.Element[];
+    children: React.ReactNode;
     style?: StyleProp<ViewStyle>;
 }
 export default function HorizontalSafeAreaView(

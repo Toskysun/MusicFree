@@ -52,7 +52,7 @@ function useScheduleCloseCountDown() {
     const [countDown, setCountDown] = useState(
         deadline ? deadline - Date.now() : null);
 
-    const intervalRef = useRef<any>();
+    const intervalRef = useRef<any>(null);
 
     useEffect(() => {
         // deadline改变时，更新定时器

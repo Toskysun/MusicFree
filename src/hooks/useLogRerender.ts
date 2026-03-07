@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { devLog } from "@/utils/log";
 
 export default function (msg?: string, deps: any[] = []) {
-    const idRef = useRef<number>();
+    const idRef = useRef<number | null>(null);
     useEffect(() => {
         idRef.current = Math.random();
         devLog("info", "🔄[组件调试] 组件挂载", { msg, id: idRef.current });

@@ -20,7 +20,7 @@ import CryptoJs from "crypto-js";
 import dayjs from "dayjs";
 import he from "he";
 import { produce } from "immer";
-import { nanoid } from "nanoid";
+import { nanoid } from "@/utils/nanoid";
 import objectPath from "object-path";
 import qs from "qs";
 import { default as DeviceInfo, default as deviceInfoModule } from "react-native-device-info";

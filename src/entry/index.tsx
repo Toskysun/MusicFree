@@ -18,19 +18,27 @@ import { ReduceMotion, ReducedMotionConfig } from "react-native-reanimated";
 import { routes } from "@/core/router/routes.tsx";
 import ErrorBoundary from "@/components/errorBoundary";
 import { NotificationLifecycleManager } from "@/core/notificationLifecycleManager";
-
-/**
- * 字体颜色
- */
+import { appendStartupBreadcrumb } from "@/utils/log";
 
 StatusBar.setBackgroundColor("transparent");
 StatusBar.setTranslucent(true);
-
+void appendStartupBreadcrumb("entry-module-loaded");
+void appendStartupBreadcrumb("statusbar-configured");
+void appendStartupBreadcrumb("bootstrap-dispatch");
 bootstrap();
+
 const Stack = createNativeStackNavigator<any>();
 
 export default function Pages() {
     const theme = Theme.useTheme();
+
+    React.useEffect(() => {
+        void appendStartupBreadcrumb("pages-mounted");
+
+        return () => {
+            void appendStartupBreadcrumb("pages-unmounted");
+        };
+    }, []);
 
     return (
         <ErrorBoundary>
@@ -55,7 +63,7 @@ export default function Pages() {
                                     component={route.component}
                                 />
                             ))}
-                        </Stack.Navigator>                        
+                        </Stack.Navigator>
                         <Panels />
                         <Dialogs />
                         <Debug />

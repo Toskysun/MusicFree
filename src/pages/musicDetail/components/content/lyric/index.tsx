@@ -166,7 +166,7 @@ export default function Lyric(props: IProps) {
 
     const [layout, setLayout] = useState<LayoutRectangle>();
 
-    const listRef = useRef<FlatList<IParsedLrcItem> | null>();
+    const listRef = useRef<FlatList<IParsedLrcItem> | null>(null);
 
     const currentMusicItem = useCurrentMusic();
     const associateMusicItem = getMediaExtraProperty(currentMusicItem, "associatedLrc");

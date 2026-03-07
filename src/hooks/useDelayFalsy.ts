@@ -5,19 +5,19 @@ export default function useDelayFalsy<T extends any = any>(
     ms: number = 0,
 ) {
     const [_state, _setState] = useState<T | undefined>(init);
-    const timer = useRef<any>();
+    const timer = useRef<any>(null);
 
     function setState(st: T) {
         if (st === undefined || st === null || st === false) {
             timer.current && clearTimeout(timer.current);
             timer.current = setTimeout(() => {
                 _setState(st);
-                timer.current = undefined;
+                timer.current = null;
             }, ms);
             return;
         }
         timer.current && clearTimeout(timer.current);
-        timer.current = undefined;
+        timer.current = null;
         _setState(st);
     }
 

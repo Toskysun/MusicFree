@@ -15,7 +15,7 @@ import { compare } from "compare-versions";
 import EventEmitter from "eventemitter3";
 import { readAsStringAsync } from "expo-file-system";
 import { atom, getDefaultStore, useAtomValue } from "jotai";
-import { nanoid } from "nanoid";
+import { nanoid } from "@/utils/nanoid";
 import { useEffect, useState } from "react";
 import { ToastAndroid } from "react-native";
 import { copyFile, readDir, readFile, unlink, writeFile } from "react-native-fs";

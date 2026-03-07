@@ -1,4 +1,5 @@
 import { NativeEventEmitter, NativeModules } from 'react-native';
+import { devLog } from "@/utils/log";
 
 /**
  * 文本对齐方式枚举
@@ -56,13 +57,31 @@ const { LyricUtil: NativeLyricUtil } = NativeModules;
 
 class LyricUtilManager {
   private nativeModule = NativeLyricUtil;
-  private emitter = NativeLyricUtil ? new NativeEventEmitter(NativeLyricUtil) : null;
+  private emitter: NativeEventEmitter | null = null;
+
+  private getEmitter(): NativeEventEmitter | null {
+    if (!this.emitter && this.nativeModule) {
+      this.emitter = new NativeEventEmitter(this.nativeModule);
+    }
+
+    return this.emitter;
+  }
+
+  private canCall(methodName: string): boolean {
+    return !!this.nativeModule && typeof this.nativeModule[methodName] === "function";
+  }
 
   async checkSystemAlertPermission(): Promise<boolean> {
+    if (!this.canCall("checkSystemAlertPermission")) {
+      return false;
+    }
     return this.nativeModule.checkSystemAlertPermission();
   }
 
   async requestSystemAlertPermission(): Promise<boolean> {
+    if (!this.canCall("requestSystemAlertPermission")) {
+      return false;
+    }
     return this.nativeModule.requestSystemAlertPermission();
   }
 
@@ -83,73 +102,129 @@ class LyricUtilManager {
       secondaryAlphaRatio?: number;
     }
   ): Promise<boolean> {
-    return this.nativeModule.showStatusBarLyric(initLyric || null, options || null);
+    if (!this.canCall("showStatusBarLyric")) {
+      return false;
+    }
+    try {
+      return await this.nativeModule.showStatusBarLyric(initLyric || null, options || null);
+    } catch (error) {
+      devLog("warn", "[LyricUtil] showStatusBarLyric failed", String(error));
+      return false;
+    }
   }
 
   async hideStatusBarLyric(): Promise<boolean> {
+    if (!this.canCall("hideStatusBarLyric")) {
+      return false;
+    }
     return this.nativeModule.hideStatusBarLyric();
   }
 
   async setStatusBarLyricText(lyric: string): Promise<boolean> {
+    if (!this.canCall("setStatusBarLyricText")) {
+      return false;
+    }
     return this.nativeModule.setStatusBarLyricText(lyric);
   }
 
   async setDesktopLyricLine(data: IDesktopLyricLineData): Promise<boolean> {
+    if (!this.canCall("setDesktopLyricLine")) {
+      return false;
+    }
     return this.nativeModule.setDesktopLyricLine(data);
   }
 
   async syncPlaybackState(state: IPlaybackSyncData): Promise<boolean> {
+    if (!this.canCall("syncPlaybackState")) {
+      return false;
+    }
     return this.nativeModule.syncPlaybackState(state);
   }
 
   async setSungColor(color: string): Promise<boolean> {
+    if (!this.canCall("setSungColor")) {
+      return false;
+    }
     return this.nativeModule.setSungColor(color);
   }
 
   async setStatusBarLyricAlign(alignment: number): Promise<boolean> {
+    if (!this.canCall("setStatusBarLyricAlign")) {
+      return false;
+    }
     return this.nativeModule.setStatusBarLyricAlign(alignment);
   }
 
   async setStatusBarLyricTop(pct: number): Promise<boolean> {
+    if (!this.canCall("setStatusBarLyricTop")) {
+      return false;
+    }
     return this.nativeModule.setStatusBarLyricTop(pct);
   }
 
   async setStatusBarLyricLeft(pct: number): Promise<boolean> {
+    if (!this.canCall("setStatusBarLyricLeft")) {
+      return false;
+    }
     return this.nativeModule.setStatusBarLyricLeft(pct);
   }
 
   async setStatusBarLyricWidth(pct: number): Promise<boolean> {
+    if (!this.canCall("setStatusBarLyricWidth")) {
+      return false;
+    }
     return this.nativeModule.setStatusBarLyricWidth(pct);
   }
 
   async setStatusBarLyricFontSize(fontSize: number): Promise<boolean> {
+    if (!this.canCall("setStatusBarLyricFontSize")) {
+      return false;
+    }
     return this.nativeModule.setStatusBarLyricFontSize(fontSize);
   }
 
   async setSecondaryFontRatio(ratio: number): Promise<boolean> {
+    if (!this.canCall("setSecondaryFontRatio")) {
+      return false;
+    }
     return this.nativeModule.setSecondaryFontRatio(ratio);
   }
 
   async setSecondaryAlphaRatio(ratio: number): Promise<boolean> {
+    if (!this.canCall("setSecondaryAlphaRatio")) {
+      return false;
+    }
     return this.nativeModule.setSecondaryAlphaRatio(ratio);
   }
 
   async setStatusBarColors(textColor?: string | null, backgroundColor?: string | null): Promise<boolean> {
+    if (!this.canCall("setStatusBarColors")) {
+      return false;
+    }
     return this.nativeModule.setStatusBarColors(textColor || null, backgroundColor || null);
   }
 
   /** 锁定桌面歌词（触摸穿透） */
   async lockDesktopLyric(): Promise<boolean> {
+    if (!this.canCall("lockDesktopLyric")) {
+      return false;
+    }
     return this.nativeModule.lockDesktopLyric();
   }
 
   /** 解锁桌面歌词（可拖拽/点击） */
   async unlockDesktopLyric(): Promise<boolean> {
+    if (!this.canCall("unlockDesktopLyric")) {
+      return false;
+    }
     return this.nativeModule.unlockDesktopLyric();
   }
 
   /** 切换预设颜色方案 */
   async setColorPreset(index: number): Promise<boolean> {
+    if (!this.canCall("setColorPreset")) {
+      return false;
+    }
     return this.nativeModule.setColorPreset(index);
   }
 
@@ -158,19 +233,19 @@ class LyricUtilManager {
     event: 'LyricUtil:onLockStateChanged' | 'LyricUtil:onPresetChanged' | 'LyricUtil:onFontSizeChanged' | 'LyricUtil:onPositionChanged' | 'LyricUtil:onClose' | 'LyricUtil:onPresetLongPress',
     handler: (payload: any) => void,
   ): { remove: () => void } {
-    const sub = this.emitter?.addListener(event, handler);
+    const sub = this.getEmitter()?.addListener(event, handler);
     return sub ?? { remove: () => {} };
   }
 
   async decryptKuwoLyric(lrcBase64: string, isGetLyricx: boolean = true): Promise<string> {
-    if (!this.nativeModule?.decryptKuwoLyric) {
+    if (!this.canCall("decryptKuwoLyric")) {
       throw new Error('decryptKuwoLyric not available in native module');
     }
     return this.nativeModule.decryptKuwoLyric(lrcBase64, isGetLyricx);
   }
 
   async decryptQRCLyric(encryptedHex: string): Promise<string> {
-    if (!this.nativeModule?.decryptQRCLyric) {
+    if (!this.canCall("decryptQRCLyric")) {
       throw new Error('decryptQRCLyric not available in native module');
     }
     return this.nativeModule.decryptQRCLyric(encryptedHex);

@@ -12,7 +12,7 @@ import {
 import StateMapper from "@/utils/stateMapper";
 import { getStorage, setStorage } from "@/utils/storage";
 import CryptoJs from "crypto-js";
-import { nanoid } from "nanoid";
+import { nanoid } from "@/utils/nanoid";
 import { useEffect, useState } from "react";
 import { ReadDirItem, exists, readDir, unlink } from "react-native-fs";
 

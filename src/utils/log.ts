@@ -29,6 +29,53 @@ const traceConfig = {
 
 const log = logger.createLogger(config);
 const traceLogger = logger.createLogger(traceConfig);
+const startupBreadcrumbFile = `${pathConst.logPath}startup-breadcrumb.log`;
+
+let startupSessionId = `${Date.now()}`;
+
+function safeSerialize(value: any) {
+    if (value === undefined) {
+        return undefined;
+    }
+
+    try {
+        return JSON.stringify(value);
+    } catch {
+        return JSON.stringify(String(value));
+    }
+}
+
+export async function markStartupSession(label = "app-launch") {
+    startupSessionId = `${Date.now()}`;
+    await appendStartupBreadcrumb(label, {
+        sessionId: startupSessionId,
+    });
+}
+
+export async function appendStartupBreadcrumb(step: string, details?: any) {
+    try {
+        await RNFS.mkdir(pathConst.logPath);
+        const payload = {
+            ts: new Date().toISOString(),
+            sessionId: startupSessionId,
+            step,
+            details,
+        };
+        await RNFS.appendFile(startupBreadcrumbFile, `${safeSerialize(payload)}\n`, "utf8");
+    } catch {
+    }
+}
+
+export async function getStartupBreadcrumbContent() {
+    try {
+        if (!(await RNFS.exists(startupBreadcrumbFile))) {
+            return "";
+        }
+        return await readFile(startupBreadcrumbFile, "utf8");
+    } catch {
+        return "";
+    }
+}
 
 export function trace(
     desc: string,

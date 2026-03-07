@@ -31,7 +31,7 @@ class MainApplication : Application(), ReactApplication {
               add(LyricUtilPackage())
             }
 
-        override fun getJSMainModuleName(): String = "index"
+        override fun getJSMainModuleName(): String = ".expo/.virtual-metro-entry"
 
         override fun getUseDeveloperSupport(): Boolean = BuildConfig.DEBUG
 

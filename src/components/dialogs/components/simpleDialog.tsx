@@ -5,7 +5,7 @@ import { useI18N } from "@/core/i18n";
 
 interface ISimpleDialogProps {
     title: string;
-    content: string | JSX.Element;
+    content: React.ReactNode;
     okText?: string;
     cancelText?: string;
     onOk?: () => void;

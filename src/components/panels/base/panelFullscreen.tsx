@@ -51,7 +51,7 @@ export default function (props: IPanelFullScreenProps) {
 
     const colors = useColors();
 
-    const backHandlerRef = useRef<NativeEventSubscription>();
+    const backHandlerRef = useRef<NativeEventSubscription | null>(null);
 
     const hideCallbackRef = useRef<Function[]>([]);
 
@@ -62,7 +62,7 @@ export default function (props: IPanelFullScreenProps) {
 
         if (backHandlerRef.current) {
             backHandlerRef.current?.remove();
-            backHandlerRef.current = undefined;
+            backHandlerRef.current = null;
         }
         backHandlerRef.current = BackHandler.addEventListener(
             "hardwareBackPress",
@@ -85,7 +85,7 @@ export default function (props: IPanelFullScreenProps) {
         return () => {
             if (backHandlerRef.current) {
                 backHandlerRef.current?.remove();
-                backHandlerRef.current = undefined;
+                backHandlerRef.current = null;
             }
             listenerSubscription.remove();
         };

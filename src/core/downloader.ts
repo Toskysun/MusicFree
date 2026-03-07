@@ -120,7 +120,11 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
         this.pluginManagerService = pluginManager;
 
         musicMetadataManager.injectPluginManager(pluginManager);
-        this.bindNativeEvents();
+        try {
+            this.bindNativeEvents();
+        } catch (error) {
+            devLog("warn", "⚠️[下载器] 绑定 Native 事件失败", String(error));
+        }
         this.syncNativeConcurrency();
         void this.hydrateNativeTasks();
     }
@@ -208,10 +212,20 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
     }
 
     private syncNativeConcurrency() {
-        const max = Math.max(1, Math.min(+(this.configService.getConfig("basic.maxDownload") || 3), 10));
-        Mp3Util.setDownloadMaxConcurrency(max).catch(error => {
-            devLog("warn", "⚠️[下载器] 设置 Native 并发失败", String(error));
-        });
+        try {
+            const rawMax = this.configService.getConfig("basic.maxDownload");
+            const numeric = Number(rawMax);
+            const max = Number.isFinite(numeric) && numeric > 0
+                ? Math.max(1, Math.min(numeric, 10))
+                : 3;
+            Mp3Util.setDownloadMaxConcurrency(max).catch(error => {
+                devLog("warn", "⚠️[下载器] 设置 Native 并发失败", String(error));
+            });
+        } catch (error) {
+            devLog("warn", "⚠️[下载器] 读取下载并发配置失败，使用默认值 3", String(error));
+            Mp3Util.setDownloadMaxConcurrency(3).catch(() => {
+            });
+        }
     }
 
     private generateFilename(musicItem: IMusic.IMusicItem, quality?: IMusic.IQualityKey): string {

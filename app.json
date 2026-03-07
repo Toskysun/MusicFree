@@ -1,4 +1,7 @@
 {
-  "name": "MusicFree",
-  "displayName": "MusicFree"
+  "expo": {
+    "name": "MusicFree",
+    "slug": "musicfree",
+    "version": "0.6.48"
+  }
 }

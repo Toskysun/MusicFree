@@ -39,7 +39,7 @@ interface IPanelBaseProps {
     height?: number;
     // 定位方式
     positionMethod?: "top" | "bottom";
-    renderBody: (loading: boolean) => JSX.Element;
+    renderBody: (loading: boolean) => React.ReactNode;
 }
 
 export default function (props: IPanelBaseProps) {
@@ -55,7 +55,7 @@ export default function (props: IPanelBaseProps) {
 
     const colors = useColors();
     const [loading, setLoading] = useState(true); // 是否处于弹出状态
-    const timerRef = useRef<any>();
+    const timerRef = useRef<any>(null);
     const safeAreaInsets = useSafeAreaInsets();
     const orientation = useOrientation();
     const useAnimatedBase = useMemo(
@@ -63,7 +63,7 @@ export default function (props: IPanelBaseProps) {
         [orientation, height],
     );
 
-    const backHandlerRef = useRef<NativeEventSubscription>();
+    const backHandlerRef = useRef<NativeEventSubscription | null>(null);
 
     const hideCallbackRef = useRef<Function[]>([]);
 
@@ -78,7 +78,7 @@ export default function (props: IPanelBaseProps) {
         }, 400);
         if (backHandlerRef.current) {
             backHandlerRef.current.remove();
-            backHandlerRef.current = undefined;
+            backHandlerRef.current = null;
         }
         backHandlerRef.current = BackHandler.addEventListener(
             "hardwareBackPress",
@@ -137,7 +137,7 @@ export default function (props: IPanelBaseProps) {
             }
             if (backHandlerRef.current) {
                 backHandlerRef.current?.remove();
-                backHandlerRef.current = undefined;
+                backHandlerRef.current = null;
             }
             listenerSubscription.remove();
             keyboardShowListener.remove();

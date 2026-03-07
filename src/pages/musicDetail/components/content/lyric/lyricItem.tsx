@@ -14,7 +14,7 @@ import Animated, {
 import rpx from "@/utils/rpx";
 import useColors from "@/hooks/useColors";
 import { fontSizeConst } from "@/constants/uiConst";
-import { currentPositionMsShared } from "@/core/lyricManager";
+import { getCurrentPositionMsShared } from "@/core/lyricManager";
 import { useAppConfig } from "@/core/appConfig";
 
 type LyricAlign = "left" | "center";
@@ -250,7 +250,12 @@ function splitWordToChars(word: ILyric.IWordData): ILyric.IWordData[] {
 // Each KaraokeWord compares its flat index to activeCharIndex — only the active char reads activeCharProgress.
 // Reanimated's dependency tracking ensures completed/pending chars' worklets DON'T re-evaluate per frame.
 // Result: ~400 worklet evals/frame → ~5 worklet evals/frame (80x improvement).
+function useCurrentPositionShared() {
+    return useMemo(() => getCurrentPositionMsShared(), []);
+}
+
 function useLineActiveState(flatTimings: { startTime: number; endTime: number }[]) {
+    const currentPositionMsShared = useCurrentPositionShared();
     const activeCharIndex = useSharedValue(-1);
     const activeCharProgress = useSharedValue(0);
 
@@ -581,6 +586,8 @@ const FollowingTranslationLine = memo(({
     highlightColor: string;
     align?: LyricAlign;
 }) => {
+    const currentPositionMsShared = useCurrentPositionShared();
+
     // Animated style for color + opacity interpolation — derived from SharedValue on UI thread
     const overlayStyle = useAnimatedStyle(() => {
         'worklet';
