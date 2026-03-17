@@ -252,7 +252,6 @@ static void MusicFreeInstallNativeStartupHooks(void)
 @end
 
 @interface AppDelegate () {
-  UIWindow *_musicFreeWindow;
   RCTReactNativeFactory *_musicFreeReactNativeFactory;
   MusicFreeReactNativeFactoryDelegate *_musicFreeReactNativeFactoryDelegate;
 }
@@ -274,7 +273,7 @@ static void MusicFreeInstallNativeStartupHooks(void)
     @"moduleName" : self.moduleName ?: @"",
   });
 
-  _musicFreeWindow = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
+  self.window = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
   _musicFreeReactNativeFactoryDelegate = [MusicFreeReactNativeFactoryDelegate new];
   MusicFreeAppendNativeStartupLog(@"react-factory-delegate-ready", nil);
 
@@ -298,19 +297,23 @@ static void MusicFreeInstallNativeStartupHooks(void)
   _musicFreeReactNativeFactory = [[RCTReactNativeFactory alloc] initWithDelegate:_musicFreeReactNativeFactoryDelegate];
   MusicFreeAppendNativeStartupLog(@"react-factory-ready", nil);
 
-  SEL bindFactorySelector = NSSelectorFromString(@"bindReactNativeFactory:");
-  if ([self respondsToSelector:bindFactorySelector]) {
+  // Bind factory to Expo's internal delegate via ObjC message forwarding.
+  // EXAppDelegateWrapper forwards unknown selectors to EXExpoAppDelegate which owns bindReactNativeFactory:.
+  @try {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+    SEL bindFactorySelector = NSSelectorFromString(@"bindReactNativeFactory:");
     [self performSelector:bindFactorySelector withObject:_musicFreeReactNativeFactory];
 #pragma clang diagnostic pop
     MusicFreeAppendNativeStartupLog(@"react-factory-bound", nil);
-  } else {
-    MusicFreeAppendNativeStartupLog(@"react-factory-bind-missing", nil);
+  } @catch (NSException *exception) {
+    MusicFreeAppendNativeStartupLog(@"react-factory-bind-failed", @{
+      @"reason" : exception.reason ?: @"unknown",
+    });
   }
 
   [_musicFreeReactNativeFactory startReactNativeWithModuleName:self.moduleName ?: @"main"
-                                                inWindow:_musicFreeWindow
+                                                inWindow:self.window
                                        initialProperties:self.initialProps
                                            launchOptions:launchOptions];
   MusicFreeAppendNativeStartupLog(@"react-native-started", nil);
