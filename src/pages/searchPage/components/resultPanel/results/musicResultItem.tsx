@@ -3,6 +3,7 @@ import MusicItem from "@/components/mediaItem/musicItem";
 import Config from "@/core/appConfig";
 import { ISearchResult } from "@/pages/searchPage/store/atoms";
 import TrackPlayer from "@/core/trackPlayer";
+import timeformat from "@/utils/timeformat";
 
 interface IMusicResultsProps {
     item: IMusic.IMusicItem;
@@ -16,6 +17,11 @@ export default function MusicResultItem(props: IMusicResultsProps) {
     return (
         <MusicItem
             musicItem={musicItem}
+            titleTagSubText={
+                typeof musicItem.duration === "number"
+                    ? timeformat(musicItem.duration)
+                    : undefined
+            }
             onItemPress={() => {
                 const clickBehavior = Config.getConfig(
                     "basic.clickMusicInSearch",

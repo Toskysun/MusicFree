@@ -6,7 +6,7 @@ import { CustomizedColors } from "@/hooks/useColors";
 
 interface ITitleAndTagProps {
     title: string;
-    titleFontColor?: keyof CustomizedColors
+    titleFontColor?: keyof CustomizedColors;
     tag?: string;
 }
 export default function TitleAndTag(props: ITitleAndTagProps) {

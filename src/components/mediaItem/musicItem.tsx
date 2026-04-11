@@ -5,8 +5,8 @@ import ListItem from "../base/listItem";
 
 import LocalMusicSheet from "@/core/localMusicSheet";
 import { showPanel } from "../panels/usePanel";
-import TitleAndTag from "./titleAndTag";
 import ThemeText from "../base/themeText";
+import Tag from "../base/tag";
 import TrackPlayer from "@/core/trackPlayer";
 import Icon from "@/components/base/icon.tsx";
 import { ImgAsset } from "@/constants/assetsConst";
@@ -45,6 +45,7 @@ interface IMusicItemProps {
     index?: string | number;
     showMoreIcon?: boolean;
     musicItem: IMusic.IMusicItem;
+    titleTagSubText?: string;
     musicSheet?: IMusic.IMusicSheetItem;
     onItemPress?: (musicItem: IMusic.IMusicItem) => void;
     onItemLongPress?: () => void;
@@ -57,6 +58,7 @@ export default function MusicItem(props: IMusicItemProps) {
     const {
         musicItem,
         index,
+        titleTagSubText,
         onItemPress,
         onItemLongPress,
         musicSheet,
@@ -104,11 +106,11 @@ export default function MusicItem(props: IMusicItemProps) {
             />
             <ListItem.Content
                 title={
-                    <TitleAndTag
-                        title={musicItem.title}
-                        titleFontColor={highlight ? "primary": "text"}
-                        tag={musicItem.platform}
-                    />
+                    <ThemeText
+                        fontColor={highlight ? "primary" : "text"}
+                        numberOfLines={1}>
+                        {musicItem.title}
+                    </ThemeText>
                 }
                 description={
                     <View style={styles.descContainer}>
@@ -137,6 +139,20 @@ export default function MusicItem(props: IMusicItemProps) {
                     </View>
                 }
             />
+            {(musicItem.platform || titleTagSubText) ? (
+                <View style={styles.rightColumn}>
+                    {musicItem.platform ? (
+                        <Tag tagName={musicItem.platform} containerStyle={styles.rightTag} />
+                    ) : null}
+                    {titleTagSubText ? (
+                        <ThemeText
+                            fontSize="description"
+                            fontColor="textSecondary">
+                            {titleTagSubText}
+                        </ThemeText>
+                    ) : null}
+                </View>
+            ) : null}
             {showMoreIcon ? (
                 <ListItem.ListItemIcon
                     width={rpx(48)}
@@ -165,6 +181,17 @@ const styles = StyleSheet.create({
     },
     artistText: {
         flex: 1,
+    },
+    rightColumn: {
+        flexShrink: 0,
+        alignItems: "center",
+        justifyContent: "center",
+        marginLeft: rpx(12),
+        marginRight: rpx(8),
+        gap: rpx(6),
+    },
+    rightTag: {
+        marginLeft: 0,
     },
     indexText: {
         fontStyle: "italic",

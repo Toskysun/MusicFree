@@ -18,7 +18,7 @@
     "build-android": "node ./scripts/generate-build-info.js && cd .\\android\\ && .\\gradlew assembleRelease",
     "generate-assets": "node ./generator/generate-assets.mjs",
     "generate-build-info": "node ./scripts/generate-build-info.js",
-    "postinstall": "node ./scripts/patch-react-native-track-player.js",
+    "postinstall": "node ./scripts/patch-react-native-track-player.js && node ./scripts/patch-use-latest-callback.js && node ./scripts/patch-react-native-tab-view.js",
     "prepare": "husky",
     "lint:staged": "lint-staged"
   },
