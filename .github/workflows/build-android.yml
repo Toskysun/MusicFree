@@ -31,7 +31,7 @@ jobs:
                   cache: 'npm'
                   cache-dependency-path: 'package-lock.json'
 
-            # �?Java 工具链设�?
+            # ☕ Java 工具链设置
             - name: Setup Java with caching
               uses: actions/setup-java@v4
               with:
@@ -82,7 +82,7 @@ jobs:
             # 📦 安装依赖
             - name: Install dependencies with cache optimization
               run: |
-                  # 使用npm ci进行更快的安�?
+                  # 使用npm ci进行更快的安装
                   npm ci --legacy-peer-deps --prefer-offline --no-audit --progress=false
 
             # 🔄 从tag同步版本号到package.json和version.json
@@ -90,7 +90,7 @@ jobs:
               if: startsWith(github.ref, 'refs/tags/')
               run: |
                   TAG_VERSION="${{ github.ref_name }}"
-                  # 移除v前缀，获取纯版本�?
+                  # 移除v前缀，获取纯版本号
                   VERSION=${TAG_VERSION#v}
                   echo "📝 Updating version to $VERSION from tag $TAG_VERSION..."
 
@@ -100,7 +100,7 @@ jobs:
                     const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
                     pkg.version = '$VERSION';
                     fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
-                    console.log('�?Updated package.json version to:', pkg.version);
+                    console.log('✅ Updated package.json version to:', pkg.version);
                   "
 
                   # 更新release/version.json
@@ -109,7 +109,7 @@ jobs:
                     const version = '$VERSION';
                     const tagVersion = '${{ github.ref_name }}';
 
-                    // 读取现有�?version.json，保�?changeLog
+                    // 读取现有的 version.json，保留 changeLog
                     let existingChangeLog = [];
                     try {
                       const existingData = JSON.parse(fs.readFileSync('release/version.json', 'utf8'));
@@ -120,13 +120,13 @@ jobs:
                       existingChangeLog = [];
                     }
 
-                    // 生成下载链接（使用新的文件名格式�?
+                    // 生成下载链接（使用新的文件名格式）
                     const downloadUrls = [
                       'https://github.com/${{ github.repository }}/releases/download/' + tagVersion + '/MusicFree-v' + version + '-arm64-v8a-release.apk',
                       'https://github.com/${{ github.repository }}/releases/download/' + tagVersion + '/MusicFree-v' + version + '-universal-release.apk'
                     ];
 
-                    // 只更�?version �?download，保留现有的 changeLog
+                    // 只更新 version 和 download，保留现有的 changeLog
                     const versionInfo = {
                       version: version,
                       changeLog: existingChangeLog,
@@ -134,7 +134,7 @@ jobs:
                     };
 
                     fs.writeFileSync('release/version.json', JSON.stringify(versionInfo, null, 2) + '\n');
-                    console.log('�?Updated version.json:', JSON.stringify(versionInfo, null, 2));
+                    console.log('✅ Updated version.json:', JSON.stringify(versionInfo, null, 2));
                   "
 
             # 🔨 生成构建信息
@@ -145,16 +145,16 @@ jobs:
                   npm run generate-build-info
                   BUILD_TIME=$(node -e "console.log(require('./src/constants/buildInfo.ts').buildInfo.buildTime)")
                   echo "build-time=$BUILD_TIME" >> $GITHUB_OUTPUT
-                  echo "�?Build info generated"
+                  echo "✅ Build info generated"
 
-            # 🔧 Gradle 权限和缓存预�?
+            # 🔧 Gradle 权限和缓存预热
             - name: Setup Gradle with permissions and cache warmup
               run: |
                   chmod +x android/gradlew
                   # Gradle daemon预热
                   cd android && ./gradlew --version
 
-                  # 预构建React Native依赖以避免超�?
+                  # 预构建React Native依赖以避免超时
                   echo "🚀 Pre-building React Native native modules..."
                   cd android && ./gradlew :app:preBuild \
                     --build-cache \
@@ -204,12 +204,12 @@ jobs:
 
                   # Pre-build validation
                   if [[ ! -f "keystore.properties" ]]; then
-                    echo "�?ERROR: keystore.properties not found!"
+                    echo "❌ ERROR: keystore.properties not found!"
                     exit 1
                   fi
 
                   if [[ ! -f "app/release.keystore" ]]; then
-                    echo "�?ERROR: release.keystore not found!"
+                    echo "❌ ERROR: release.keystore not found!"
                     exit 1
                   fi
 
@@ -229,7 +229,7 @@ jobs:
 
                   # Check if build failed
                   if [ $BUILD_EXIT_CODE -ne 0 ]; then
-                    echo "�?Gradle build failed with exit code $BUILD_EXIT_CODE!"
+                    echo "❌ Gradle build failed with exit code $BUILD_EXIT_CODE!"
                     echo "=============== EXTRACTING ERROR DETAILS ==============="
                     # Extract Kotlin compilation errors
                     echo "--- Searching for Kotlin errors (e:) ---"
@@ -244,14 +244,14 @@ jobs:
                     exit $BUILD_EXIT_CODE
                   fi
 
-                  echo "�?Android APK build completed successfully"
+                  echo "✅ Android APK build completed successfully"
 
                   # Post-build verification
                   APK_DIR="app/build/outputs/apk/release"
                   echo "📦 Verifying build outputs in $APK_DIR..."
 
                   if [[ ! -d "$APK_DIR" ]]; then
-                    echo "�?ERROR: APK output directory not found!"
+                    echo "❌ ERROR: APK output directory not found!"
                     exit 1
                   fi
 
@@ -259,7 +259,7 @@ jobs:
                   echo "🎯 Found $APK_COUNT APK files"
 
                   if [[ $APK_COUNT -eq 0 ]]; then
-                    echo "�?ERROR: No APK files were generated!"
+                    echo "❌ ERROR: No APK files were generated!"
                     exit 1
                   fi
 
@@ -282,7 +282,7 @@ jobs:
                   retention-days: 30
                   compression-level: 9
 
-            # �?验证APK文件存在�?
+            # ✅ 验证APK文件存在性
             - name: Verify APK files exist
               if: startsWith(github.ref, 'refs/tags/')
               run: |
@@ -290,7 +290,7 @@ jobs:
                   APK_DIR="android/app/build/outputs/apk/release"
                   ls -la $APK_DIR/
 
-                  # 从tag获取版本号（去掉v前缀�?
+                  # 从tag获取版本号（去掉v前缀）
                   TAG_VERSION="${{ github.ref_name }}"
                   VERSION=${TAG_VERSION#v}
 
@@ -307,9 +307,9 @@ jobs:
                   for file in "${EXPECTED_FILES[@]}"; do
                     if [[ ! -f "$APK_DIR/$file" ]]; then
                       MISSING_FILES+=("$file")
-                      echo "�?Missing: $file"
+                      echo "❌ Missing: $file"
                     else
-                      echo "�?Found: $file"
+                      echo "✅ Found: $file"
                     fi
                   done
 
@@ -327,7 +327,7 @@ jobs:
               run: |
                   echo "📝 Generating release body from version.json..."
 
-                  # 从tag获取版本�?
+                  # 从tag获取版本号
                   TAG_VERSION="${{ github.ref_name }}"
                   VERSION=${TAG_VERSION#v}
 
@@ -343,31 +343,31 @@ jobs:
                     console.log(formattedLog);
                   ")
 
-                  # 创建完整�?Release 描述
+                  # 创建完整的 Release 描述
                   cat > release_body.md << EOF
                   ## 🎵 MusicFree ${{ github.ref_name }}
 
                   ### 📱 下载选项
 
-                  **推荐下载 (适用于所有设�?:**
+                  **推荐下载 (适用于所有设备):**
                   - **Universal APK**: [MusicFree-v${VERSION}-universal-release.apk](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/MusicFree-v${VERSION}-universal-release.apk)
 
-                  **按设备架构下�?(体积更小):**
+                  **按设备架构下载 (体积更小):**
                   - **ARM64 (推荐)**: [MusicFree-v${VERSION}-arm64-v8a-release.apk](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/MusicFree-v${VERSION}-arm64-v8a-release.apk) - 适用于大部分现代Android设备
                   - **ARM32**: [MusicFree-v${VERSION}-armeabi-v7a-release.apk](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/MusicFree-v${VERSION}-armeabi-v7a-release.apk) - 适用于老版本Android设备
-                  - **x86_64**: [MusicFree-v${VERSION}-x86_64-release.apk](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/MusicFree-v${VERSION}-x86_64-release.apk) - 适用于x86_64模拟�?
-                  - **x86**: [MusicFree-v${VERSION}-x86-release.apk](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/MusicFree-v${VERSION}-x86-release.apk) - 适用于x86模拟�?
+                  - **x86_64**: [MusicFree-v${VERSION}-x86_64-release.apk](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/MusicFree-v${VERSION}-x86_64-release.apk) - 适用于x86_64模拟器
+                  - **x86**: [MusicFree-v${VERSION}-x86-release.apk](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/MusicFree-v${VERSION}-x86-release.apk) - 适用于x86模拟器
 
                   ### 🔄 更新内容
 
                   $CHANGELOG
 
-                  ### �?构建信息
+                  ### 🔧 构建信息
                   - 构建时间: ${{ steps.build-info.outputs.build-time }}
                   - 提交SHA: ${{ github.sha }}
                   EOF
 
-                  echo "�?Release body generated"
+                  echo "✅ Release body generated"
 
             # 🎉 创建Release并上传所有APK
             - name: Create Release and Upload APKs
@@ -385,7 +385,7 @@ jobs:
                   files: |
                       android/app/build/outputs/apk/release/MusicFree-*.apk
 
-            # 📤 提交更新的版本文件回到仓�?
+            # 📤 提交更新的版本文件回到仓库
             - name: Commit updated version files
               if: startsWith(github.ref, 'refs/tags/')
               run: |
@@ -395,7 +395,7 @@ jobs:
                   git config --local user.email "3ssa@163.com"
                   git config --local user.name "Toskysun"
 
-                  # 检查是否有变更需要提�?
+                  # 检查是否有变更需要提交
                   CHANGED_FILES=""
                   if ! git diff --quiet package.json; then
                     CHANGED_FILES="$CHANGED_FILES package.json"
@@ -414,7 +414,7 @@ jobs:
                     # Push to master branch directly
                     echo "📤 Pushing version files to master..."
                     git push origin HEAD:master
-                    echo "�?Version files updated and pushed to master branch"
+                    echo "✅ Version files updated and pushed to master branch"
                   fi
 
             # 🧹 安全清理步骤
@@ -426,12 +426,12 @@ jobs:
                   # Remove sensitive files regardless of build outcome
                   if [[ -f "android/app/release.keystore" ]]; then
                     shred -vfz -n 3 android/app/release.keystore 2>/dev/null || rm -f android/app/release.keystore
-                    echo "�?Keystore file cleaned"
+                    echo "✅ Keystore file cleaned"
                   fi
 
                   if [[ -f "android/keystore.properties" ]]; then
                     shred -vfz -n 3 android/keystore.properties 2>/dev/null || rm -f android/keystore.properties
-                    echo "�?Keystore properties cleaned"
+                    echo "✅ Keystore properties cleaned"
                   fi
 
                   # Clean any temporary keystore files
