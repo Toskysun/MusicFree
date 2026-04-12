@@ -1,6 +1,7 @@
 import { RequestStateCode } from "@/constants/commonConst";
 import TrackPlayer from "@/core/trackPlayer";
 import rpx from "@/utils/rpx";
+import timeformat from "@/utils/timeformat";
 import { FlashList } from "@shopify/flash-list";
 import React, { useRef, useCallback, useState, useEffect } from "react";
 import { FlatListProps, Pressable, StyleSheet, View } from "react-native";
@@ -125,6 +126,11 @@ export default function MusicList(props: IMusicListProps) {
                         <MusicItem
                             musicItem={musicItem}
                             index={showIndex ? index + 1 : undefined}
+                            titleTagSubText={
+                                typeof musicItem.duration === "number"
+                                    ? timeformat(musicItem.duration)
+                                    : undefined
+                            }
                             onItemPress={() => {
                                 if (onItemPress) {
                                     onItemPress(musicItem, musicList);
