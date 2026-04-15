@@ -252,6 +252,7 @@ static void MusicFreeInstallNativeStartupHooks(void)
 @end
 
 @interface AppDelegate () {
+  UIWindow *_musicFreeWindow;
   RCTReactNativeFactory *_musicFreeReactNativeFactory;
   MusicFreeReactNativeFactoryDelegate *_musicFreeReactNativeFactoryDelegate;
 }
@@ -273,7 +274,7 @@ static void MusicFreeInstallNativeStartupHooks(void)
     @"moduleName" : self.moduleName ?: @"",
   });
 
-  self.window = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
+  _musicFreeWindow = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
   _musicFreeReactNativeFactoryDelegate = [MusicFreeReactNativeFactoryDelegate new];
   MusicFreeAppendNativeStartupLog(@"react-factory-delegate-ready", nil);
 
@@ -313,7 +314,7 @@ static void MusicFreeInstallNativeStartupHooks(void)
   }
 
   [_musicFreeReactNativeFactory startReactNativeWithModuleName:self.moduleName ?: @"main"
-                                                inWindow:self.window
+                                                inWindow:_musicFreeWindow
                                        initialProperties:self.initialProps
                                            launchOptions:launchOptions];
   MusicFreeAppendNativeStartupLog(@"react-native-started", nil);
