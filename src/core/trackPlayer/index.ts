@@ -292,6 +292,10 @@ class TrackPlayer extends EventEmitter<{
             ReactNativeTrackPlayer.addEventListener(
                 Event.PlaybackError,
                 async e => {
+                    void appendStartupBreadcrumb("trackplayer-playback-error", {
+                        message: e.message,
+                        code: e.code,
+                    });
                     errorLog("鎾斁鍑洪敊", e.message);
                     // WARNING: 涓嶇ǔ瀹氾紝鎶ラ敊鐨勬椂鍊欐湁鍙兘track宸茬粡鍙樺埌涓嬩竴棣栨瓕鍘讳簡
                     const currentTrack =
@@ -480,6 +484,11 @@ class TrackPlayer extends EventEmitter<{
         forcePlay?: boolean,
     ): Promise<void> {
         const playStartTime = Date.now();
+        void appendStartupBreadcrumb("trackplayer-play-invoked", {
+            title: musicItem?.title ?? this.currentMusic?.title ?? "",
+            platform: musicItem?.platform ?? this.currentMusic?.platform ?? "",
+            forcePlay: !!forcePlay,
+        });
         devLog('info', '[TrackPlayer] Play method called', {
             title: musicItem?.title,
             forcePlay,
@@ -563,6 +572,9 @@ class TrackPlayer extends EventEmitter<{
                 elapsed: Date.now() - playStartTime
             });
 
+            void appendStartupBreadcrumb("trackplayer-set-proposed-queue", {
+                title: musicItem.title,
+            });
             await ReactNativeTrackPlayer.setQueue([{
                 ...musicItem,
                 url: TrackPlayer.proposedAudioUrl,
@@ -613,6 +625,11 @@ class TrackPlayer extends EventEmitter<{
                 )) ?? null;
                 
                 if (source) {
+                    void appendStartupBreadcrumb("trackplayer-source-selected", {
+                        title: musicItem.title,
+                        quality: selectedQuality,
+                        url: source.url,
+                    });
                     try {
                         const { getLocalStreamUrlIfNeeded } = require("@/service/mflac/proxy");
                         const localUrl = await getLocalStreamUrlIfNeeded(source.url, (source as any)?.ekey, source.headers);
@@ -658,6 +675,9 @@ class TrackPlayer extends EventEmitter<{
             }
 
             if (!this.isCurrentMusic(musicItem)) {
+                void appendStartupBreadcrumb("trackplayer-play-aborted-current-changed", {
+                    title: musicItem.title,
+                });
                 return;
             }
             if (!source) {
@@ -796,6 +816,11 @@ class TrackPlayer extends EventEmitter<{
                 })();
             }, 0);
         } catch (e: any) {
+            void appendStartupBreadcrumb("trackplayer-play-catch", {
+                title: musicItem?.title ?? this.currentMusic?.title ?? "",
+                message: e?.message,
+                name: e?.name,
+            });
             const message = e?.message;
             if (
                 message ===
@@ -1006,12 +1031,23 @@ class TrackPlayer extends EventEmitter<{
     private async setTrackSource(track: Track, autoPlay = true) {
         const clonedTrack = this.patchMediaArtwork(track);
         if (!clonedTrack) {
+            void appendStartupBreadcrumb("trackplayer-set-source-skipped", {
+                reason: "patch-media-artwork-returned-null",
+            });
             return;
         }
+        void appendStartupBreadcrumb("trackplayer-set-source", {
+            title: (track as IMusic.IMusicItem)?.title ?? "",
+            url: clonedTrack.url,
+            autoPlay,
+        });
         await ReactNativeTrackPlayer.setQueue([clonedTrack, this.getFakeNextTrack()]);
         PersistStatus.set("music.musicItem", track as IMusic.IMusicItem);
         PersistStatus.set("music.progress", 0);
         if (autoPlay) {
+            void appendStartupBreadcrumb("trackplayer-native-play", {
+                title: (track as IMusic.IMusicItem)?.title ?? "",
+            });
             await ReactNativeTrackPlayer.play();
         }
     }
