@@ -260,6 +260,11 @@ static void MusicFreeInstallNativeStartupHooks(void)
 
 @implementation AppDelegate
 
+- (UIWindow *)window
+{
+  return _musicFreeWindow;
+}
+
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions
 {
   MusicFreeAppendNativeStartupLog(@"didFinishLaunching-enter", @{
