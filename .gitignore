@@ -109,3 +109,4 @@ docs/
 .serena/
 
 .ace-tool/
+.playwright-mcp/

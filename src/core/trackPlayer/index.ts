@@ -1,4 +1,4 @@
-﻿import { getCurrentDialog, showDialog } from "@/components/dialogs/useDialog";
+import { getCurrentDialog, showDialog } from "@/components/dialogs/useDialog";
 import {
     internalFakeSoundKey,
     sortIndexSymbol,
@@ -76,16 +76,16 @@ class TrackPlayer extends EventEmitter<{
         duration: number;
     }) => void;
 }> implements ITrackPlayer {
-    // 渚濊禆
+    // 依赖
     private configService!: IAppConfig;
     private musicHistoryService!: IMusicHistory;
     private pluginManagerService!: IPluginManager;
 
-    // 褰撳墠鎾斁鐨勯煶涔愪笅鏍?
+    // 当前播放的音乐下标
     private currentIndex = -1;
-    // 闊充箰鎾斁鍣ㄦ湇鍔℃槸鍚﹀惎鍔?
+    // 音乐播放器服务是否启动
     private serviceInited = false;
-    // 鎾斁闃熷垪绱㈠紩map
+    // 播放队列索引map
     private playListIndexMap = createMediaIndexMap([] as IMusic.IMusicItem[]);
 
 
@@ -156,7 +156,7 @@ class TrackPlayer extends EventEmitter<{
             this.configService.getConfig("basic.defaultPlayQuality") ||
             "master";
 
-        // 鐘舵€佹仮澶?
+        // 状态恢复
         if (rate) {
             ReactNativeTrackPlayer.setRate(+rate / 100);
         }
@@ -264,7 +264,7 @@ class TrackPlayer extends EventEmitter<{
         if (!this.serviceInited) {
 
             /**
-             * 姝や簨浠跺彲鑳戒細琚Е鍙戝娆★紙姣斿鐩存帴鏇挎崲queue锛?鍙傝€冧唬鐮侊細https://github.com/doublesymmetry/KotlinAudio
+             * 此事件可能会被触发多次（比如直接替换queue） 参考代码：https://github.com/doublesymmetry/KotlinAudio
              */
             ReactNativeTrackPlayer.addEventListener(
                 Event.PlaybackActiveTrackChanged,
@@ -282,7 +282,7 @@ class TrackPlayer extends EventEmitter<{
                         ) {
                             await this.play(null, true);
                         } else {
-                            // 褰撳墠鐢熸晥鐨勬瓕鏇叉槸涓嬩竴鏇茬殑鏍囪
+                            // 当前生效的歌曲是下一曲的标记
                             await this.skipToNext();
                         }
                     }
@@ -296,12 +296,12 @@ class TrackPlayer extends EventEmitter<{
                         message: e.message,
                         code: e.code,
                     });
-                    errorLog("鎾斁鍑洪敊", e.message);
-                    // WARNING: 涓嶇ǔ瀹氾紝鎶ラ敊鐨勬椂鍊欐湁鍙兘track宸茬粡鍙樺埌涓嬩竴棣栨瓕鍘讳簡
+                    errorLog("播放出错", e.message);
+                    // WARNING: 不稳定，报错的时候有可能track已经变到下一首歌去了
                     const currentTrack =
                         await ReactNativeTrackPlayer.getActiveTrack();
                     if (currentTrack?.isInit) {
-                        // HACK: 閬垮厤鍒濆澶辫触鐨勬儏鍐?
+                        // HACK: 避免初始失败的情况
                         ReactNativeTrackPlayer.updateMetadataForTrack(0, {
                             ...currentTrack,
                             // @ts-ignore
@@ -316,7 +316,7 @@ class TrackPlayer extends EventEmitter<{
                         e.message &&
                         e.message !== "android-io-file-not-found"
                     ) {
-                        trace("鎾斁鍑洪敊", {
+                        trace("播放出错", {
                             message: e.message,
                             code: e.code,
                         });
@@ -330,7 +330,7 @@ class TrackPlayer extends EventEmitter<{
         }
     }
 
-    /**************** 鎾斁闃熷垪 ******************/
+    /**************** 播放队列 ******************/
     getMusicIndexInPlayList(musicItem?: IMusic.IMusicItem | null) {
         if (!musicItem) {
             return -1;
@@ -359,7 +359,7 @@ class TrackPlayer extends EventEmitter<{
         return this.playList.length === 0;
     }
 
-    /****** 鎾斁閫昏緫 *****/
+    /****** 播放逻辑 *****/
     addAll(
         musicItems: Array<IMusic.IMusicItem>,
         beforeIndex?: number,
@@ -374,12 +374,12 @@ class TrackPlayer extends EventEmitter<{
         });
 
         if (beforeIndex === undefined || beforeIndex < 0) {
-            // 1.1. 娣诲姞鍒版瓕鍗曟湯灏撅紝骞惰繃婊ゆ帀宸叉湁鐨勬瓕鏇?
+            // 1.1. 添加到歌单末尾，并过滤掉已有的歌曲
             newPlayList = currentPlayList.concat(
                 musicItems.filter(item => !this.isInPlayList(item)),
             );
         } else {
-            // 1.2. 鏂扮殑鎾斁鍒楄〃锛屾彃鍏?
+            // 1.2. 新的播放列表，插入
             const indexMap = createMediaIndexMap(musicItems);
             const beforeDraft = currentPlayList
                 .slice(0, beforeIndex)
@@ -391,7 +391,7 @@ class TrackPlayer extends EventEmitter<{
             newPlayList = [...beforeDraft, ...musicItems, ...afterDraft];
         }
 
-        // 濡傛灉澶暱浜?
+        // 如果太长了
         if (newPlayList.length > TrackPlayer.maxMusicQueueLength) {
             newPlayList = this.shrinkPlayListToSize(
                 newPlayList,
@@ -399,11 +399,11 @@ class TrackPlayer extends EventEmitter<{
             );
         }
 
-        // 2. 濡傛灉闇€瑕侀殢鏈?
+        // 2. 如果需要随机
         if (shouldShuffle) {
             newPlayList = shuffle(newPlayList);
         }
-        // 3. 璁剧疆鎾斁鍒楄〃
+        // 3. 设置播放列表
         this.setPlayList(newPlayList);
     }
 
@@ -435,16 +435,16 @@ class TrackPlayer extends EventEmitter<{
         const targetIndex = this.getMusicIndexInPlayList(musicItem);
         let shouldPlayCurrent: boolean | null = null;
         if (targetIndex === -1) {
-            // 1. 杩欑鎯呭喌搴旇鏄嚭閿欎簡
+            // 1. 这种情况应该是出错了
             return;
         }
-        // 2. 绉婚櫎鐨勬槸褰撳墠椤?
+        // 2. 移除的是当前项
         if (this.currentIndex === targetIndex) {
-            // 2.1 鍋滄鎾斁锛岀Щ闄ゅ綋鍓嶉」
+            // 2.1 停止播放，移除当前项
             newPlayList = produce(playList, draft => {
                 draft.splice(targetIndex, 1);
             });
-            // 2.2 璁剧疆鏂扮殑鎾斁鍒楄〃锛屽苟鏇存柊褰撳墠闊充箰
+            // 2.2 设置新的播放列表，并更新当前音乐
             if (newPlayList.length === 0) {
                 currentMusic = null;
                 shouldPlayCurrent = false;
@@ -461,7 +461,7 @@ class TrackPlayer extends EventEmitter<{
             }
             this.setCurrentMusic(currentMusic);
         } else {
-            // 3. 鍒犻櫎
+            // 3. 删除
             newPlayList = produce(playList, draft => {
                 draft.splice(targetIndex, 1);
             });
@@ -496,14 +496,14 @@ class TrackPlayer extends EventEmitter<{
         });
 
         try {
-            // 濡傛灉涓嶄紶鍙傦紝榛樿鏄挱鏀惧綋鍓嶉煶涔?
+            // 如果不传参，默认是播放当前音乐
             if (!musicItem) {
                 musicItem = this.currentMusic;
             }
             if (!musicItem) {
                 throw new Error(PlayFailReason.PLAY_LIST_IS_EMPTY);
             }
-            // 1. 绉诲姩缃戠粶绂佹鎾斁
+            // 1. 移动网络禁止播放
             const localPath = getLocalPath(musicItem);
             if (
                 Network.isCellular &&
@@ -515,11 +515,11 @@ class TrackPlayer extends EventEmitter<{
                 throw new Error(PlayFailReason.FORBID_CELLUAR_NETWORK_PLAY);
             }
 
-            // 2. 濡傛灉鏄綋鍓嶆鍦ㄦ挱鏀剧殑闊抽
+            // 2. 如果是当前正在播放的音频
             if (this.isCurrentMusic(musicItem)) {
-                // 鑾峰彇搴曞眰鎾斁鍣ㄤ腑鐨則rack
+                // 获取底层播放器中的track
                 const currentTrack = await ReactNativeTrackPlayer.getTrack(0);
-                // 2.1 濡傛灉褰撳墠鏈夋簮
+                // 2.1 如果当前有源
                 if (
                     currentTrack?.url &&
                     isSameMediaItem(
@@ -533,7 +533,7 @@ class TrackPlayer extends EventEmitter<{
                         await ReactNativeTrackPlayer.skip(0);
                     }
                     if (forcePlay) {
-                        // 2.1.1 寮哄埗閲嶆柊寮€濮?
+                        // 2.1.1 强制重新开始
                         await this.seekTo(0);
                     }
                     const currentState = (
@@ -543,22 +543,22 @@ class TrackPlayer extends EventEmitter<{
                         await this.setTrackSource(currentTrack);
                     }
                     if (currentState !== State.Playing) {
-                        // 2.1.2 鎭㈠鎾斁
+                        // 2.1.2 恢复播放
                         await ReactNativeTrackPlayer.play();
                     }
-                    // 杩欑鎯呭喌涓嬶紝鎾斁闃熷垪鍜屽綋鍓嶆瓕鏇查兘涓嶉渶瑕佸彉鍖?
+                    // 这种情况下，播放队列和当前歌曲都不需要变化
                     return;
                 }
-                // 2.2 鍏朵粬鎯呭喌锛氶噸鏂拌幏鍙栨簮
+                // 2.2 其他情况：重新获取源
             }
 
-            // 3. 濡傛灉娌℃湁鍦ㄦ挱鏀惧垪琛ㄤ腑锛屾坊鍔犲埌闃熷熬锛涘悓鏃舵洿鏂板垪琛ㄧ姸鎬?
+            // 3. 如果没有在播放列表中，添加到队尾；同时更新列表状态
             const inPlayList = this.isInPlayList(musicItem);
             if (!inPlayList) {
                 this.add(musicItem);
             }
 
-            // 4. 鏇存柊鍒楄〃鐘舵€佸拰褰撳墠闊充箰
+            // 4. 更新列表状态和当前音乐
             devLog('info', '[TrackPlayer] Setting current music and emitting event', {
                 title: musicItem.title,
                 timestamp: Date.now(),
@@ -586,38 +586,38 @@ class TrackPlayer extends EventEmitter<{
                 elapsed: Date.now() - playStartTime
             });
 
-            // 5. 鑾峰彇闊虫簮
+            // 5. 获取音源
             let track: IMusic.IMusicItem;
 
-            // 5.1 閫氳繃鎻掍欢鑾峰彇闊虫簮
+            // 5.1 通过插件获取音源
             const plugin = this.pluginManagerService.getByName(musicItem.platform);
             
-            // 5.2 鏅鸿兘闊宠川閫夋嫨
+            // 5.2 智能音质选择
             const preferredQuality = this.configService.getConfig("basic.defaultPlayQuality") ?? "master";
             let selectedQuality: IMusic.IQualityKey;
             
-            // 濡傛灉闊充箰椤瑰寘鍚煶璐ㄤ俊鎭紝浣跨敤鏅鸿兘閫夋嫨
+            // 如果音乐项包含音质信息，使用智能选择
             if (musicItem.qualities || musicItem.source) {
                 selectedQuality = getSmartQuality(
                     preferredQuality,
                     (musicItem.qualities || musicItem.source) as IMusic.IQuality | undefined,
-                    plugin?.supportedQualities // 鍋囪鎻掍欢鎻愪緵鏀寔鐨勯煶璐ㄥ垪琛?
+                    plugin?.supportedQualities // 假设插件提供支持的音质列表
                 );
             } else {
-                // 鍥為€€鍒颁紶缁熺殑闊宠川鎺掑簭鏂规硶
+                // 回退到传统的音质排序方法
                 selectedQuality = preferredQuality;
             }
             
-            // 5.3 鑾峰彇闊宠川鎺掑簭浣滀负鍚庡
+            // 5.3 获取音质排序作为后备
             const qualityOrder = getQualityOrder(
                 selectedQuality,
                 this.configService.getConfig("basic.playQualityOrder") ?? "asc",
             );
             
-            // 5.4 鎻掍欢杩斿洖闊虫簮
+            // 5.4 插件返回音源
             let source: IPlugin.IMediaSourceResult | null = null;
             
-            // 棣栧厛灏濊瘯鏅鸿兘閫夋嫨鐨勯煶璐?
+            // 首先尝试智能选择的音质
             if (this.isCurrentMusic(musicItem)) {
                 source = (await plugin?.methods?.getMediaSource(
                     musicItem,
@@ -640,7 +640,7 @@ class TrackPlayer extends EventEmitter<{
                     } catch {}
                     this.setQuality(selectedQuality);
                 } else {
-                    // 鏅鸿兘閫夋嫨澶辫触锛屽洖閫€鍒伴亶鍘嗘墍鏈夐煶璐?
+                    // 智能选择失败，回退到遍历所有音质
                     let fallbackQuality: IMusic.IQualityKey | null = null;
                     
                     for (let quality of qualityOrder) {
@@ -649,7 +649,7 @@ class TrackPlayer extends EventEmitter<{
                                 musicItem,
                                 quality,
                             )) ?? null;
-                            // 5.4.1 鑾峰彇鍒扮湡瀹炴簮
+                            // 5.4.1 获取到真实源
                             if (source) {
                                 try {
                                     const { getLocalStreamUrlIfNeeded } = require("@/service/mflac/proxy");
@@ -664,12 +664,12 @@ class TrackPlayer extends EventEmitter<{
                                 break;
                             }
                         } else {
-                            // 5.4.2 宸茬粡鍒囨崲鍒板叾浠栨瓕鏇蹭簡锛?
+                            // 5.4.2 已经切换到其他歌曲了，
                             return;
                         }
                     }
                     
-                    // 鏄剧ず闊宠川涓嶆敮鎸佹彁绀猴紝鍖呭惈闄嶇骇缁撴灉
+                    // 显示音质不支持提示，包含降级结果
                     this.showQualityNotSupportedToast(selectedQuality, musicItem, fallbackQuality);
                 }
             }
@@ -681,7 +681,7 @@ class TrackPlayer extends EventEmitter<{
                 return;
             }
             if (!source) {
-                // 濡傛灉鏈塻ource
+                // 如果有source
                 if (musicItem.source) {
                     for (let quality of qualityOrder) {
                         if (musicItem.source[quality]?.url) {
@@ -692,11 +692,11 @@ class TrackPlayer extends EventEmitter<{
                         }
                     }
                 }
-                // 5.4 娌℃湁杩斿洖婧?
+                // 5.4 没有返回源
                 if (!source && !musicItem.url) {
-                    // 鎻掍欢澶辨晥鐨勬儏鍐?
+                    // 插件失效的情况
                     if (this.configService.getConfig("basic.tryChangeSourceWhenPlayFail")) {
-                        // 閲嶈瘯
+                        // 重试
                         const similarMusic = await this.getSimilarMusic(
                             musicItem,
                             "music",
@@ -714,31 +714,31 @@ class TrackPlayer extends EventEmitter<{
                                             similarMusic,
                                             quality,
                                         )) ?? null;
-                                    // 5.4.1 鑾峰彇鍒扮湡瀹炴簮
+                                    // 5.4.1 获取到真实源
                                     if (source) {
                                         try {
                                             const { getLocalStreamUrlIfNeeded } = require("@/service/mflac/proxy");
-                                            devLog('info', '馃幍[trackPlayer] 灏濊瘯澶勭悊mflac', {
+                                            devLog('info', '🎵[trackPlayer] 尝试处理mflac', {
                                                 url: source.url,
                                                 hasEkey: !!source.ekey,
                                                 ekeyLength: source.ekey?.length
                                             });
                                             const localUrl = await getLocalStreamUrlIfNeeded(source.url, source.ekey, source.headers);
                                             if (localUrl) {
-                                                devLog('info', '鉁匸trackPlayer] mflac浠ｇ悊URL鐢熸垚鎴愬姛', { localUrl });
+                                                devLog('info', '✅[trackPlayer] mflac代理URL生成成功', { localUrl });
                                                 source.url = localUrl;
                                                 source.headers = undefined;
                                             } else {
-                                                devLog('warn', '鈿狅笍[trackPlayer] mflac浠ｇ悊URL鐢熸垚澶辫触');
+                                                devLog('warn', '⚠️[trackPlayer] mflac代理URL生成失败');
                                             }
                                         } catch (error: any) {
-                                            devLog('error', '鉂孾trackPlayer] mflac澶勭悊寮傚父', error);
+                                            devLog('error', '❌[trackPlayer] mflac处理异常', error);
                                         }
                                         this.setQuality(quality);
                                         break;
                                     }
                                 } else {
-                                    // 5.4.2 宸茬粡鍒囨崲鍒板叾浠栨瓕鏇蹭簡锛?
+                                    // 5.4.2 已经切换到其他歌曲了，
                                     return;
                                 }
                             }
@@ -754,20 +754,20 @@ class TrackPlayer extends EventEmitter<{
                     source = {
                         url: musicItem.url,
                     };
-                    // 浣跨敤鐢ㄦ埛璁剧疆鐨勯粯璁ら煶璐紝鑰屼笉鏄‖缂栫爜
+                    // 使用用户设置的默认音质，而不是硬编码
                     this.setQuality(preferredQuality);
                 }
             }
 
-            // 6. 鐗规畩绫诲瀷婧?
+            // 6. 特殊类型源
             if (getUrlExt(source.url) === ".m3u8") {
                 // @ts-ignore
                 source.type = "hls";
             }
-            // 7. 鍚堝苟缁撴灉
+            // 7. 合并结果
             track = this.mergeTrackSource(musicItem, source) as IMusic.IMusicItem;
 
-            // 8. 鏂板鍘嗗彶璁板綍
+            // 8. 新增历史记录
             this.musicHistoryService.addMusic(musicItem);
 
             devLog('info', '[TrackPlayer] Media source obtained, starting playback', {
@@ -776,9 +776,9 @@ class TrackPlayer extends EventEmitter<{
                 hasUrl: !!track.url
             });
 
-            trace("鑾峰彇闊虫簮鎴愬姛", track);
+            trace("获取音源成功", track);
 
-            // 9. 璁剧疆闊虫簮骞剁珛鍗冲紑濮嬫挱鏀?- CRITICAL: 涓嶇瓑寰呬换浣曞叾浠栨搷浣?
+            // 9. 设置音源并立即开始播放 - CRITICAL: 不等待任何其他操作
             await this.setTrackSource(track as Track);
 
             devLog('info', '[TrackPlayer] Playback started successfully', {
@@ -786,7 +786,7 @@ class TrackPlayer extends EventEmitter<{
                 elapsed: Date.now() - playStartTime
             });
 
-            // 10. 寮傛鑾峰彇琛ュ厖淇℃伅 - 瀹屽叏鍚庡彴鎵ц锛岀粷瀵逛笉闃诲鎾斁
+            // 10. 异步获取补充信息 - 完全后台执行，绝对不阻塞播放
             // CRITICAL FIX: Use setTimeout(0) to push to end of event queue after playback starts
             setTimeout(() => {
                 (async () => {
@@ -800,7 +800,7 @@ class TrackPlayer extends EventEmitter<{
                                 delete info.url;
                             }
 
-                            // 11. 璁剧疆琛ュ厖淇℃伅
+                            // 11. 设置补充信息
                             if (this.isCurrentMusic(musicItem)) {
                                 const mergedTrack = this.mergeTrackSource(track, info);
                                 getDefaultStore().set(currentMusicAtom, mergedTrack as IMusic.IMusicItem);
@@ -831,7 +831,7 @@ class TrackPlayer extends EventEmitter<{
             } else if (message === PlayFailReason.FORBID_CELLUAR_NETWORK_PLAY) {
                 if (getCurrentDialog()?.name !== "SimpleDialog") {
                     showDialog("SimpleDialog", {
-                        title: "娴侀噺鎻愰啋",
+                        title: "流量提醒",
                         content:
                             "Current connection is not Wi-Fi. Enable cellular playback in settings to continue.",
                     });
@@ -840,7 +840,7 @@ class TrackPlayer extends EventEmitter<{
                 trace("playback failed because source is empty");
                 await this.handlePlayFail();
             } else if (message === PlayFailReason.PLAY_LIST_IS_EMPTY) {
-                // 闃熷垪鏄┖鐨勶紝涓嶅簲璇ュ嚭鐜拌繖绉嶆儏鍐?
+                // 队列是空的，不应该出现这种情况
             }
         }
     }
@@ -853,7 +853,7 @@ class TrackPlayer extends EventEmitter<{
         this.setRepeatMode(TrackPlayer.toggleRepeatMapping[this.repeatMode]);
     }
 
-    // 娓呯┖鎾斁闃熷垪
+    // 清空播放队列
     async clearPlayList(): Promise<void> {
         this.setPlayList([]);
         this.setCurrentMusic(null);
@@ -885,12 +885,12 @@ class TrackPlayer extends EventEmitter<{
     }
 
     async changeQuality(newQuality: IMusic.IQualityKey): Promise<boolean> {
-        // 鑾峰彇褰撳墠鐨勯煶涔愬拰杩涘害
+        // 获取当前的音乐和进度
         if (newQuality === this.quality) {
             return true;
         }
 
-        // 鑾峰彇褰撳墠姝屾洸
+        // 获取当前歌曲
         const musicItem = this.currentMusic;
         if (!musicItem) {
             return false;
@@ -929,7 +929,7 @@ class TrackPlayer extends EventEmitter<{
             }
             return true;
         } catch {
-            // 淇敼澶辫触
+            // 修改失败
             return false;
         }
     }
@@ -972,10 +972,10 @@ class TrackPlayer extends EventEmitter<{
     reset = ReactNativeTrackPlayer.reset;
 
 
-    /**************** 杈呭姪鍑芥暟 -- 璁剧疆鍐呴儴鐘舵€?****************/
+    /**************** 辅助函数 -- 设置内部状态 ****************/
 
     private setCurrentMusic(musicItem?: IMusic.IMusicItem | null) {
-        // 璁剧疆UI鍐呴儴鐘舵€佺殑musicitem
+        // 设置UI内部状态的musicitem
         if (!musicItem) {
             this.currentIndex = -1;
             getDefaultStore().set(currentMusicAtom, null);
@@ -1013,12 +1013,12 @@ class TrackPlayer extends EventEmitter<{
         }
 
         getDefaultStore().set(repeatModeAtom, mode);
-        // 鏇存柊涓嬩竴棣栨瓕鐨勪俊鎭?
+        // 更新下一首歌的信息
         ReactNativeTrackPlayer.updateMetadataForTrack(
             1,
             this.getFakeNextTrack(),
         );
-        // 璁板綍
+        // 记录
         PersistStatus.set("music.repeatMode", mode);
     }
 
@@ -1027,7 +1027,7 @@ class TrackPlayer extends EventEmitter<{
         PersistStatus.set("music.quality", quality);
     }
 
-    // 璁剧疆闊虫簮
+    // 设置音源
     private async setTrackSource(track: Track, autoPlay = true) {
         const clonedTrack = this.patchMediaArtwork(track);
         if (!clonedTrack) {
@@ -1053,9 +1053,9 @@ class TrackPlayer extends EventEmitter<{
     }
 
     /**
-     * 璁剧疆鎾斁闃熷垪
-     * @param newPlayList 鎾斁闃熷垪
-     * @param persist 鏄惁鎸佷箙鍖?
+     * 设置播放队列
+     * @param newPlayList 播放队列
+     * @param persist 是否持久化
      */
     private setPlayList(newPlayList: IMusic.IMusicItem[], persist = true) {
         getDefaultStore().set(playListAtom, newPlayList);
@@ -1070,12 +1070,12 @@ class TrackPlayer extends EventEmitter<{
     }
 
 
-    /**************** 杈呭姪鍑芥暟 -- 宸ュ叿鏂规硶 ****************/
+    /**************** 辅助函数 -- 工具方法 ****************/
     private shrinkPlayListToSize = (
         queue: IMusic.IMusicItem[],
         targetIndex = this.currentIndex,
     ) => {
-        // 鎾斁鍒楄〃涓婇檺锛屽お澶氭棤娉曠紦瀛樼姸鎬?
+        // 播放列表上限，太多无法缓存状态
         if (queue.length > TrackPlayer.maxMusicQueueLength) {
             if (targetIndex < TrackPlayer.halfMaxMusicQueueLength) {
                 queue = queue.slice(0, TrackPlayer.maxMusicQueueLength);
@@ -1122,10 +1122,10 @@ class TrackPlayer extends EventEmitter<{
         let track: Track | undefined;
         const repeatMode = this.repeatMode;
         if (repeatMode === MusicRepeatMode.SINGLE) {
-            // 鍗曟洸寰幆
+            // 单曲循环
             track = this.getPlayListMusicAt(this.currentIndex) as Track;
         } else {
-            // 涓嬩竴鏇?
+            // 下一曲
             track = this.getPlayListMusicAt(this.currentIndex + 1) as Track;
         }
 
@@ -1136,7 +1136,7 @@ class TrackPlayer extends EventEmitter<{
                 _.artwork = resolveImportedAssetOrPath(ImgAsset.albumDefault) as unknown as any;
             });
         } else {
-            // 鍙湁鍒楄〃闀垮害涓?鏃舵墠浼氬嚭鐜扮殑鐗规畩鎯呭喌
+            // 只有列表长度为0时才会出现的特殊情况
             return {
                 url: TrackPlayer.fakeAudioUrl,
                 $: internalFakeSoundKey,
@@ -1149,7 +1149,7 @@ class TrackPlayer extends EventEmitter<{
         musicItem: IMusic.IMusicItem,
         fallbackQuality?: IMusic.IQualityKey | null,
     ) {
-        // 鑾峰彇鐢ㄦ埛鑷畾涔夌殑闊宠川缈昏瘧璁剧疆
+        // 获取用户自定义的音质翻译设置
         const customQualityTranslations = this.configService.getConfig("basic.qualityTranslations");
         const languageData = i18n.getLanguage().languageData;
         const qualityTextI18n = getQualityText(languageData, customQualityTranslations);
@@ -1160,18 +1160,18 @@ class TrackPlayer extends EventEmitter<{
         let message: string;
         if (fallbackQuality) {
             const fallbackDisplayName = qualityTextI18n[fallbackQuality];
-            message = `${platformPrefix}姝屾洸涓嶆敮鎸?{requestedDisplayName}锛屽凡闄嶇骇鑷?{fallbackDisplayName}`;
+            message = `${platformPrefix}歌曲不支持${requestedDisplayName}，已降级至${fallbackDisplayName}`;
         } else {
-            message = `${platformPrefix}姝屾洸涓嶆敮鎸?{requestedDisplayName}锛屾棤娉曟挱鏀捐闊宠川`;
+            message = `${platformPrefix}歌曲不支持${requestedDisplayName}，无法播放该音质`;
         }
         
-        // 鏄剧ずToast鎻愮ず
+        // 显示Toast提示
         Toast.warn(message);
     }
 
 
     private async handlePlayFail() {
-        // 濡傛灉鑷姩璺宠浆涓嬩竴鏇? 500s鍚庤嚜鍔ㄨ烦杞?
+        // 如果自动跳转下一曲, 500s后自动跳转
         if (!this.configService.getConfig("basic.autoStopWhenError")) {
             await delay(500);
             await this.skipToNext();
@@ -1180,9 +1180,9 @@ class TrackPlayer extends EventEmitter<{
 
     /**
  *
- * @param musicItem 闊充箰绫诲瀷
- * @param type 濯掍綋绫诲瀷
- * @param abortFunction 濡傛灉鍑芥暟涓簍rue锛屽垯涓柇
+ * @param musicItem 音乐类型
+ * @param type 媒体类型
+ * @param abortFunction 如果函数为true，则中断
  * @returns
  */
     private async getSimilarMusic<T extends ICommon.SupportMediaType>(
@@ -1200,7 +1200,7 @@ class TrackPlayer extends EventEmitter<{
         const startTime = Date.now();
 
         for (let plugin of plugins) {
-            // 瓒呮椂鏃堕棿锛?s
+            // 超时时间：8s
             if (abortFunction?.() || Date.now() - startTime > 8000) {
                 break;
             }
@@ -1211,7 +1211,7 @@ class TrackPlayer extends EventEmitter<{
                 .search(keyword, 1, type)
                 .catch(() => null);
 
-            // 鍙栧墠涓や釜
+            // 取前两个
             const firstTwo = results?.data?.slice(0, 2) || [];
 
             for (let item of firstTwo) {
@@ -1245,7 +1245,7 @@ class TrackPlayer extends EventEmitter<{
 
 
     private patchMediaArtwork(track: Track) {
-        // Bug: React native track player 鍦ㄨ缃煶棰戞椂锛宎rtwork涓嶈兘涓簄ull锛屽苟涓旈儴鍒嗘儏鍐典笅artwork涓嶈兘涓篒mageSource绫诲瀷
+        // Bug: React native track player 在设置音频时，artwork不能为null，并且部分情况下artwork不能为ImageSource类型
         if (!track) {
             return null;
         }
@@ -1271,13 +1271,13 @@ export function useMusicState() {
 export { State as MusicState, useProgress };
 
 enum PlayFailReason {
-    /** 绂佹绉诲姩缃戠粶鎾斁 */
+    /** 禁止移动网络播放 */
     FORBID_CELLUAR_NETWORK_PLAY = "FORBID_CELLUAR_NETWORK_PLAY",
-    /** 鎾斁鍒楄〃涓虹┖ */
+    /** 播放列表为空 */
     PLAY_LIST_IS_EMPTY = "PLAY_LIST_IS_EMPTY",
-    /** 鏃犳晥婧?*/
+    /** 无效源 */
     INVALID_SOURCE = "INVALID_SOURCE",
-    /** 闈炲綋鍓嶉煶涔?*/
+    /** 非当前音乐 */
 }
 
 const trackPlayer = new TrackPlayer();
