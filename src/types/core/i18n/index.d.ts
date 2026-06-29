@@ -217,6 +217,7 @@ export interface ILanguageData {
     "toast.copiedToClipboard": string; // 已复制到剪贴板
     "toast.copiedToClipboardFailed": string; // 复制失败
     "toast.failToSharePlugin": string; // 插件分享失败
+    "toast.failToShareMusic": string; // 歌曲分享失败
     "toast.pluginUninstalled": string; // 插件已卸载
     "toast.toast.pluginUninstalled": string; // 插件已卸载
     "toast.failToImportMusic": string; // 音乐导入失败
@@ -508,6 +509,9 @@ export interface ILanguageData {
     // 面板相关 - 音乐项选项
     "panel.musicItemOptions.author": string; // 作者
     "panel.musicItemOptions.album": string; // 专辑
+    "panel.musicItemOptions.share": string; // 分享歌曲
+    "panel.musicItemOptions.shareTitle": string; // 歌曲分享标题
+    "panel.musicItemOptions.shareDialogTitle": string; // 歌曲分享面板标题
     "panel.musicItemOptions.downloaded": string; // 已下载
     "panel.musicItemOptions.readComment": string; // 查看评论
     "panel.musicItemOptions.deleteLocalDownload": string; // 删除本地下载

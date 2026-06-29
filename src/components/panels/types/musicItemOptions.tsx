@@ -1,5 +1,5 @@
 import React from "react";
-import { StyleSheet, View } from "react-native";
+import { Share, StyleSheet, View } from "react-native";
 import rpx from "@/utils/rpx";
 import ListItem from "@/components/base/listItem";
 import ThemeText from "@/components/base/themeText";
@@ -65,6 +65,19 @@ const getAlbumIds = (musicItem: IMusic.IMusicItem) => {
     }
 
     return { albumId, albumMid };
+};
+
+const formatMusicShareMessage = async (musicItem: IMusic.IMusicItem) => {
+    const title = musicItem.title?.toString().trim();
+    const artist = musicItem.artist?.toString().trim();
+    const musicTitle = (title && artist
+        ? `${title} - ${artist}`
+        : title || artist || getPlatformMediaId(musicItem) || musicItem.id
+    ).replace(/\s/g, "");
+    const detailUrl = await pluginManager.getByMedia(musicItem)
+        ?.methods.getMusicDetailPageUrl(musicItem);
+
+    return detailUrl ? `${musicTitle}\n${detailUrl}` : musicTitle;
 };
 
 export default function MusicItemOptions(props: IMusicItemOptionsProps) {
@@ -161,6 +174,29 @@ export default function MusicItemOptions(props: IMusicItemOptionsProps) {
                     Toast.success(t("toast.copiedToClipboard"));
                 } catch {
                     Toast.warn(t("toast.copiedToClipboardFailed"));
+                }
+            },
+        },
+        {
+            icon: "share",
+            title: t("panel.musicItemOptions.share"),
+            onPress: async () => {
+                try {
+                    await Share.share(
+                        {
+                            title: t("panel.musicItemOptions.shareTitle"),
+                            message: await formatMusicShareMessage(musicItem),
+                        },
+                        {
+                            dialogTitle: t("panel.musicItemOptions.shareDialogTitle", {
+                                title: musicItem.title || t("panel.musicItemOptions.shareTitle"),
+                            }),
+                            subject: t("panel.musicItemOptions.shareTitle"),
+                        },
+                    );
+                    hidePanel();
+                } catch {
+                    Toast.warn(t("toast.failToShareMusic"));
                 }
             },
         },

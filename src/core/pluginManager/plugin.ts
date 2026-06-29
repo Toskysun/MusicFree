@@ -409,6 +409,29 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
         }
     }
 
+    /** 获取音乐详情页 URL */
+    async getMusicDetailPageUrl(
+        musicItem: IMusic.IMusicItemBase,
+    ): Promise<string> {
+        await this.ensurePluginIsMounted();
+        if (!this.plugin.instance.getMusicDetailPageUrl) {
+            return "";
+        }
+
+        try {
+            const detailUrl = await this.plugin.instance.getMusicDetailPageUrl(
+                resetMediaItem(musicItem, undefined, true),
+            );
+
+            return typeof detailUrl === "string" && /^https?:\/\//.test(detailUrl)
+                ? detailUrl
+                : "";
+        } catch (e: any) {
+            devLog("error", "获取音乐详情页URL失败", e, e?.message);
+            return "";
+        }
+    }
+
     /**
      *
      * getLyric(musicItem) => {
