@@ -29,6 +29,7 @@ import { URL } from "react-native-url-polyfill";
 import * as webdav from "webdav";
 import * as pako from "pako";
 import { Buffer } from "buffer";
+import iconvLite from "iconv-lite";
 import { devLog, errorLog, trace } from "../../utils/log";
 import Network from "../../utils/network";
 import MediaCache from "../mediaCache";
@@ -69,6 +70,7 @@ const packages: Record<string, any> = {
     webdav,
     pako,
     buffer: { Buffer },
+    "iconv-lite": iconvLite,
 };
 
 const _require = (packageName: string) => {
@@ -76,6 +78,55 @@ const _require = (packageName: string) => {
     pkg.default = pkg;
     return pkg;
 };
+
+const nativeTextDecoder = globalThis.TextDecoder;
+const nativeTextEncoder = globalThis.TextEncoder;
+
+function bufferFromTextDecoderInput(input?: ArrayBuffer | ArrayBufferView | null) {
+    if (!input) {
+        return Buffer.alloc(0);
+    }
+    if (input instanceof ArrayBuffer) {
+        return Buffer.from(new Uint8Array(input));
+    }
+    return Buffer.from(input.buffer, input.byteOffset, input.byteLength);
+}
+
+class PluginTextDecoder {
+    private decoder?: any;
+    private encoding: string;
+    private fatal: boolean;
+
+    constructor(label: string = "utf-8", options?: any) {
+        this.encoding = label.toLowerCase().replace(/[-_\s]/g, "");
+        this.fatal = !!options?.fatal;
+
+        if (!["gb18030", "gbk", "gb2312", "cp936"].includes(this.encoding)) {
+            this.decoder = nativeTextDecoder
+                ? new nativeTextDecoder(label, options)
+                : undefined;
+        }
+    }
+
+    decode(input?: ArrayBuffer | ArrayBufferView | null) {
+        if (this.decoder) {
+            return this.decoder.decode(input as any);
+        }
+
+        const buffer = bufferFromTextDecoderInput(input);
+        if (["gb18030", "gbk", "gb2312", "cp936"].includes(this.encoding)) {
+            try {
+                return iconvLite.decode(buffer, "gb18030");
+            } catch (error) {
+                if (this.fatal) {
+                    throw error;
+                }
+            }
+        }
+
+        return buffer.toString("utf8");
+    }
+}
 
 const _consoleBind = function (
     method: "log" | "error" | "info" | "warn",
@@ -1066,7 +1117,7 @@ export class Plugin {
                 // eslint-disable-next-line no-new-func
                 _instance = Function(`
                     'use strict';
-                    return function(require, __musicfree_require, module, exports, console, env, URL, process) {
+                    return function(require, __musicfree_require, module, exports, console, env, URL, process, TextDecoder, TextEncoder, Buffer) {
                         ${funcCode}
                     }
                 `)()(
@@ -1077,7 +1128,10 @@ export class Plugin {
                     _console,
                     env,
                     URL,
-                    _process
+                    _process,
+                    PluginTextDecoder,
+                    nativeTextEncoder,
+                    Buffer
                 );
                 if (_module.exports.default) {
                     _instance = _module.exports
