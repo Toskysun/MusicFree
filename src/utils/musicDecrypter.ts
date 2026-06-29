@@ -1,16 +1,19 @@
 /**
- * QQ Music QRC & Kuwo Lyric Decrypter
+ * QQ Music QRC Lyric Decrypter
  * Uses Android Native implementation for high-performance decryption
  *
  * Native Implementation:
  * - Location: android/app/src/main/java/fun/upup/musicfree/lyricUtil/LyricUtilModule.kt
  * - QQ Music: Triple-DES + Zlib decompression
- * - Kuwo: Zlib inflate + GB18030 decode (with optional XOR decryption)
  * - Performance: ~10ms (vs 100-500ms in JS)
  *
  * Migration Note:
  * - Old JS implementation moved to @deprecated customDES.ts (kept for reference)
  * - All decryption now delegated to Native module for better performance
+ *
+ * Kuwo Note:
+ * - Kuwo lyric decryption is handled entirely by the plugin (kw.js)
+ * - Plugin returns already-decrypted lyrics, no client-side processing needed
  */
 
 import LyricUtil from '@/native/lyricUtil';
@@ -109,62 +112,6 @@ export async function decryptQRCLyric(encryptedHex: string, enableWordByWord: bo
 }
 
 /**
- * Decrypt Kuwo encrypted lyrics using Native implementation (async)
- *
- * Performance:
- * - Native implementation: <10ms (non-blocking)
- *
- * Algorithm (implemented in Kotlin):
- * 1. Base64 decode
- * 2. Check "tp=content" header
- * 3. Strip HTTP-like header (\r\n\r\n)
- * 4. Zlib inflate (decompress)
- * 5. Optional XOR decryption with "yeelion" key (for lyricx format)
- * 6. GB18030 decode (Chinese encoding)
- *
- * @param lrcBase64 - Kuwo encrypted lyrics in base64 format
- * @param isGetLyricx - Whether to apply XOR decryption (default: true)
- * @returns Promise<string> - Decrypted lyrics text
- * @throws Error with user-friendly Chinese message on decryption failure
- */
-export async function decryptKuwoLyric(lrcBase64: string, isGetLyricx: boolean = true): Promise<string> {
-  try {
-    const startTime = Date.now();
-
-    devLog('info', '[Kuwo Native] 开始解密', {
-      inputLength: lrcBase64.length,
-      isGetLyricx
-    });
-
-    // Call Native decryption (Zlib + GB18030 + optional XOR)
-    const decrypted = await LyricUtil.decryptKuwoLyric(lrcBase64, isGetLyricx);
-
-    const duration = Date.now() - startTime;
-    devLog('info', `[Kuwo Native] 解密完成 (${duration}ms)`, {
-      outputLength: decrypted.length,
-      preview: decrypted.substring(0, 100)
-    });
-
-    return decrypted;
-  } catch (error: any) {
-    devLog('error', '[Kuwo Native] 解密失败', {
-      error: error?.message,
-      code: error?.code,
-      base64Length: lrcBase64?.length
-    });
-
-    // Provide user-friendly error messages
-    if (error?.code === 'KW_INVALID_FORMAT') {
-      throw new Error('酷我歌词解密失败：无效的数据格式');
-    } else if (error?.code === 'KW_DECRYPT_ERROR') {
-      throw new Error('酷我歌词解密失败：解密错误');
-    } else {
-      throw new Error(`酷我歌词解密失败: ${error?.message || 'Unknown error'}`);
-    }
-  }
-}
-
-/**
  * Check if lyrics are encrypted (QRC format)
  *
  * QRC encrypted lyrics characteristics:
@@ -200,59 +147,11 @@ export function isQRCEncrypted(lyrics: string): boolean {
 }
 
 /**
- * Check if lyrics are Kuwo encrypted format
- *
- * Kuwo encrypted lyrics are base64 encoded data that starts with "tp=content" after decoding
- * - Usually very long base64 string (>50 chars)
- * - Valid base64 format (alphanumeric + + / =)
- * - Decodes to data starting with "tp=content" header
- * - No LRC timestamp patterns
- */
-export function isKuwoEncrypted(lyrics: string): boolean {
-  if (!lyrics) return false;
-
-  const trimmed = lyrics.trim();
-
-  // Minimum length check: at least 50 chars for a base64 encrypted lyric
-  if (trimmed.length < 50) return false;
-
-  // Should NOT contain LRC timestamp patterns
-  if (/\[\d{2}:\d{2}\.\d{2}\]/.test(trimmed)) return false;
-
-  // Should be valid base64 format (alphanumeric + + / =)
-  // But not pure hex (which would be QRC)
-  const isValidBase64 = /^[A-Za-z0-9+/=]+$/.test(trimmed);
-  const notPureHex = !/^[0-9A-Fa-f]+$/.test(trimmed);
-
-  if (!isValidBase64 || !notPureHex) return false;
-
-  // Try to decode and check for "tp=" header (React Native compatible)
-  try {
-    // Use atob if available (browser/React Native), otherwise Buffer
-    let decoded: string;
-    if (typeof atob !== 'undefined') {
-      // Browser/React Native environment
-      decoded = atob(trimmed.substring(0, 20)); // Only decode first 20 base64 chars
-    } else if (typeof Buffer !== 'undefined') {
-      // Node.js environment
-      decoded = Buffer.from(trimmed, 'base64').toString('utf8', 0, 20);
-    } else {
-      // Fallback: manual base64 decode (simplified, just check first few chars)
-      return true; // Assume it's Kuwo format if we can't decode
-    }
-
-    return decoded.startsWith('tp=');
-  } catch {
-    // If decode fails, assume not Kuwo format
-    return false;
-  }
-}
-
-/**
  * Auto-decrypt lyrics if encrypted (async)
  *
- * Automatically detects QRC or Kuwo encryption and decrypts if needed.
+ * Automatically detects QRC encryption and decrypts if needed.
  * Also handles decrypted QRC XML format to convert to word-by-word LRC.
+ * Kuwo lyrics are already decrypted by the plugin, no client-side processing needed.
  * Falls back to original text on decryption failure.
  *
  * @param lyrics - Potentially encrypted lyrics text
@@ -264,23 +163,12 @@ export async function autoDecryptLyric(lyrics: string, enableWordByWord: boolean
     return '';
   }
 
-  // Try QRC decryption first (QQ Music encrypted hex)
+  // Try QRC decryption (QQ Music encrypted hex)
   if (isQRCEncrypted(lyrics)) {
     try {
       return await decryptQRCLyric(lyrics, enableWordByWord);
     } catch (error) {
       devLog('warn', '[QRC Native] 自动解密失败，返回原始内容', error);
-      return lyrics;
-    }
-  }
-
-  // Try Kuwo decryption (普通歌词模式: isGetLyricx=false)
-  if (isKuwoEncrypted(lyrics)) {
-    try {
-      // 插件使用 lrcx=0 (普通歌词)，所以不需要 XOR 解密
-      return await decryptKuwoLyric(lyrics, false);
-    } catch (error) {
-      devLog('warn', '[Kuwo Native] 自动解密失败，返回原始内容', error);
       return lyrics;
     }
   }

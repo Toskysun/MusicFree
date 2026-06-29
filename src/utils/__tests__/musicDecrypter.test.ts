@@ -7,7 +7,6 @@ jest.mock("@/native/lyricUtil", () => ({
   default: {
     decryptQRCLyric: async (encryptedHex: string) =>
       encryptedHex ? "[00:00.00]mock lyric" : "",
-    decryptKuwoLyric: async (lrcBase64: string) => lrcBase64,
   },
 }));
 
