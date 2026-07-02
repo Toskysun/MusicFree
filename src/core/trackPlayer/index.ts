@@ -219,7 +219,7 @@ class TrackPlayer extends EventEmitter<{
                     .then(async newSource => {
                         try {
                             const { getLocalStreamUrlIfNeeded } = require("@/service/mflac/proxy");
-                            const localUrl = await getLocalStreamUrlIfNeeded(newSource?.url, (newSource as any)?.ekey, newSource?.headers);
+                            const localUrl = await getLocalStreamUrlIfNeeded(newSource?.url, (newSource as any)?.ekey, newSource?.headers, (newSource as any)?.cek);
                             if (localUrl) {
                                 track.url = localUrl;
                                 track.headers = undefined;
@@ -632,7 +632,7 @@ class TrackPlayer extends EventEmitter<{
                     });
                     try {
                         const { getLocalStreamUrlIfNeeded } = require("@/service/mflac/proxy");
-                        const localUrl = await getLocalStreamUrlIfNeeded(source.url, (source as any)?.ekey, source.headers);
+                        const localUrl = await getLocalStreamUrlIfNeeded(source.url, (source as any)?.ekey, source.headers, (source as any)?.cek);
                         if (localUrl) {
                             source.url = localUrl;
                             source.headers = undefined;
@@ -653,7 +653,7 @@ class TrackPlayer extends EventEmitter<{
                             if (source) {
                                 try {
                                     const { getLocalStreamUrlIfNeeded } = require("@/service/mflac/proxy");
-                                    const localUrl = await getLocalStreamUrlIfNeeded(source.url, (source as any)?.ekey, source.headers);
+                                    const localUrl = await getLocalStreamUrlIfNeeded(source.url, (source as any)?.ekey, source.headers, (source as any)?.cek);
                                     if (localUrl) {
                                         source.url = localUrl;
                                         source.headers = undefined;
@@ -723,7 +723,7 @@ class TrackPlayer extends EventEmitter<{
                                                 hasEkey: !!source.ekey,
                                                 ekeyLength: source.ekey?.length
                                             });
-                                            const localUrl = await getLocalStreamUrlIfNeeded(source.url, source.ekey, source.headers);
+                                            const localUrl = await getLocalStreamUrlIfNeeded(source.url, source.ekey, source.headers, source.cek);
                                             if (localUrl) {
                                                 devLog('info', '✅[trackPlayer] mflac代理URL生成成功', { localUrl });
                                                 source.url = localUrl;
@@ -911,7 +911,7 @@ class TrackPlayer extends EventEmitter<{
                 ).state;
                 try {
                     const { getLocalStreamUrlIfNeeded } = require("@/service/mflac/proxy");
-                    const localUrl = await getLocalStreamUrlIfNeeded(newSource.url, (newSource as any)?.ekey, newSource.headers);
+                    const localUrl = await getLocalStreamUrlIfNeeded(newSource.url, (newSource as any)?.ekey, newSource.headers, (newSource as any)?.cek);
                     const adapted = localUrl ? { ...newSource, url: localUrl, headers: undefined } : newSource;
                     await this.setTrackSource(
                         this.mergeTrackSource(musicItem, adapted) as unknown as Track,

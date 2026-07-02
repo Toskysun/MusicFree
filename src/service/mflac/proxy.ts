@@ -1,6 +1,7 @@
 import Mp3Util from "@/native/mp3Util";
 import { normalizeEkey, isMflacUrl } from "@/utils/mflac";
 import { devLog } from "@/utils/log";
+import Cenc from "@/native/cenc";
 
 let proxyStarted = false;
 
@@ -22,6 +23,7 @@ export async function getLocalStreamUrlIfNeeded(
   url?: string,
   ekey?: string,
   headers?: Record<string, string>,
+  cek?: string,
 ): Promise<string | undefined> {
   devLog('info', '🔍[mflac] getLocalStreamUrlIfNeeded调用', {
     hasUrl: !!url,
@@ -31,6 +33,15 @@ export async function getLocalStreamUrlIfNeeded(
   });
 
   if (!url) return undefined;
+  if (cek) {
+    try {
+      devLog("info", "[cenc] 注册流式解密会话", { url });
+      return await Cenc.registerStream(url, cek, headers);
+    } catch (error) {
+      devLog("error", "[cenc] 注册流式解密会话失败", error);
+      return undefined;
+    }
+  }
   const hasEkey = !!ekey;
   // 没有 ekey 则不尝试代理（上游仍是加密流，播放会失败）；此时返回 undefined 让播放器继续走原URL（用于非mflac）
   if (!hasEkey) {

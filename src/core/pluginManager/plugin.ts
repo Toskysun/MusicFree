@@ -330,7 +330,7 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
                 musicItem,
                 quality,
             )) ?? { url: musicItem?.qualities?.[quality]?.url };
-            const { url, headers, ekey } = mediaSourceResult as any;
+            const { url, headers, ekey, cek } = mediaSourceResult as any;
             if (!url) {
                 throw new Error("NOT RETRY");
             }
@@ -340,6 +340,7 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
                 headers,
                 userAgent: headers?.["user-agent"],
                 ekey, // 传递 ekey 用于 mflac 解密
+                cek, // 传递 cek 用于 CENC 流式解密
             } as IPlugin.IMediaSourceResult;
             const authFormattedResult = formatAuthUrl(result.url!);
             if (authFormattedResult.auth) {

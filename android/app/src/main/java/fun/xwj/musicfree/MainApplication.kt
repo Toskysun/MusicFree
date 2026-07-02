@@ -17,6 +17,7 @@ import com.facebook.soloader.SoLoader
 import `fun`.xwj.musicfree.lyricUtil.LyricUtilPackage
 import `fun`.xwj.musicfree.mp3Util.Mp3UtilPackage
 import `fun`.xwj.musicfree.utils.UtilsPackage
+import `fun`.xwj.musicfree.cenc.CencPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -29,6 +30,7 @@ class MainApplication : Application(), ReactApplication {
               add(UtilsPackage())
               add(Mp3UtilPackage())
               add(LyricUtilPackage())
+              add(CencPackage())
             }
 
         override fun getJSMainModuleName(): String = ".expo/.virtual-metro-entry"
