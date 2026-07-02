@@ -192,13 +192,7 @@ class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactCo
             val file = File(filePath)
             if (file.exists()) {
                 val audioFile = AudioFileIO.read(file)
-                var tag = audioFile.tag
-                
-                // 如果文件没有现有标签，创建一个新的标签
-                if (tag == null) {
-                    tag = audioFile.createDefaultTag()
-                    android.util.Log.i("Mp3UtilModule", "Created new tag for file: $filePath")
-                }
+                val tag = audioFile.getTagOrCreateAndSetDefault()
                 
                 // 基本信息
                 meta.getString("title")?.let { tag.setField(FieldKey.TITLE, it) }
@@ -335,13 +329,7 @@ class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactCo
             
             // 写入封面到音频文件
             val audioFile = AudioFileIO.read(file)
-            var tag = audioFile.tag
-            
-            // 如果文件没有现有标签，创建一个新的标签
-            if (tag == null) {
-                tag = audioFile.createDefaultTag()
-                android.util.Log.i("Mp3UtilModule", "Created new tag for file: $filePath")
-            }
+            val tag = audioFile.getTagOrCreateAndSetDefault()
             
             // OGG: 使用 OggCoverWriter 直接操作比特流（JAudioTagger 的 OGG 封面写入有 bug）
             if (file.extension.lowercase() == "ogg") {
@@ -573,11 +561,45 @@ class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactCo
     }
 
     /**
-     * 为MP4/M4A文件设置封面 - 暂不支持，jaudiotagger对MP4支持有问题
+     * 为 MP4/M4A 写入 iTunes covr atom。Mp4TagCoverField 直接接收图片字节，
+     * 不依赖 Android 中不可用的 ImageIO。WebP 不属于 MP4 cover atom 的
+     * 标准图片类型，因此先无损转为 PNG。
      */
     private fun setCoverForMp4(tag: org.jaudiotagger.tag.Tag, coverBytes: ByteArray, mimeType: String): Boolean {
-        android.util.Log.w("Mp3UtilModule", "MP4/M4A cover writing is not supported")
-        return false
+        return try {
+            if (tag !is org.jaudiotagger.tag.mp4.Mp4Tag) {
+                android.util.Log.w("Mp3UtilModule", "Unsupported MP4 tag type: ${tag.javaClass.simpleName}")
+                return false
+            }
+
+            val mp4CoverBytes = if (mimeType == "image/webp") {
+                val bitmap = BitmapFactory.decodeByteArray(coverBytes, 0, coverBytes.size)
+                    ?: throw IllegalArgumentException("Unable to decode WebP cover")
+                try {
+                    ByteArrayOutputStream().use { output ->
+                        if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)) {
+                            throw IllegalStateException("Unable to convert WebP cover to PNG")
+                        }
+                        output.toByteArray()
+                    }
+                } finally {
+                    bitmap.recycle()
+                }
+            } else {
+                coverBytes
+            }
+
+            tag.deleteField(org.jaudiotagger.tag.mp4.Mp4FieldKey.ARTWORK)
+            tag.setField(tag.createArtworkField(mp4CoverBytes))
+            android.util.Log.i(
+                "Mp3UtilModule",
+                "Successfully set MP4/M4A cover (${mp4CoverBytes.size} bytes)",
+            )
+            true
+        } catch (e: Exception) {
+            android.util.Log.e("Mp3UtilModule", "Failed to set MP4/M4A cover: ${e.message}", e)
+            false
+        }
     }
 
 
@@ -613,13 +635,7 @@ class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactCo
             }
             
             val audioFile = AudioFileIO.read(file)
-            var tag = audioFile.tag
-            
-            // 如果文件没有现有标签，创建一个新的标签
-            if (tag == null) {
-                tag = audioFile.createDefaultTag()
-                android.util.Log.i("Mp3UtilModule", "Created new tag for file: $filePath")
-            }
+            val tag = audioFile.getTagOrCreateAndSetDefault()
             
             // 基本标签
             meta.getString("title")?.let { tag.setField(FieldKey.TITLE, it) }
