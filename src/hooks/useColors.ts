@@ -33,21 +33,45 @@ export interface CustomizedColors extends IColors {
     backdrop?: string;
     /** 卡片背景色 */
     card: string;
+    /** 基础表面 */
+    surface?: string;
+    /** 浮起表面 */
+    surfaceElevated?: string;
+    /** 边框 */
+    border: string;
+    /** 暖色强调 */
+    accentWarm?: string;
+    /** 冷色强调 */
+    accentCool?: string;
+    success?: string;
+    danger?: string;
+    info?: string;
     /** paneltabbar 背景色 */
     tabBar?: string;
 }
 
 export default function useColors() {
-    const { colors } = useTheme();
+    const { colors, dark } = useTheme();
 
     const cColors: CustomizedColors = useMemo(() => {
+        const customColors = colors as CustomizedColors;
         return {
-            ...colors,
-            textSecondary: Color(colors.text).alpha(0.7).toString(),
+            ...customColors,
+            textSecondary: Color(colors.text).alpha(0.64).toString(),
+            surface: customColors.surface ?? colors.card,
+            surfaceElevated:
+                customColors.surfaceElevated ??
+                (dark
+                    ? Color(colors.card).lighten(0.24).toString()
+                    : Color(colors.card).lighten(0.12).toString()),
+            border: colors.border ?? Color(colors.text).alpha(0.12).toString(),
+            accentWarm: customColors.accentWarm ?? colors.primary,
+            accentCool:
+                customColors.accentCool ?? customColors.info ?? colors.primary,
             // @ts-ignore
             background: colors.pageBackground ?? colors.background,
         };
-    }, [colors]);
+    }, [colors, dark]);
 
     return cColors;
 }

@@ -40,17 +40,18 @@ function Dialog(props: IDialogProps) {
     const colors = useColors();
     const backHandlerRef = useRef<NativeEventSubscription | null>(null);
     const orientation = useOrientation();
-    const keyboardAvoidMode = Config.getConfig("basic.keyboardAvoidMode") ?? "auto";
+    const keyboardAvoidMode =
+        Config.getConfig("basic.keyboardAvoidMode") ?? "auto";
 
     // 对话框宽度
     const dialogContainerStyle: ViewStyle =
         orientation === "vertical"
             ? {
-                width: vw(100) - rpx(72),
-            }
+                  width: vw(100) - rpx(72),
+              }
             : {
-                width: "80%",
-            };
+                  width: "80%",
+              };
 
     useEffect(() => {
         sharedShowValue.value = 1;
@@ -67,34 +68,50 @@ function Dialog(props: IDialogProps) {
         );
 
         // 监听键盘事件
-        const keyboardShowEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
-        const keyboardHideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+        const keyboardShowEvent =
+            Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+        const keyboardHideEvent =
+            Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
 
-        const keyboardShowListener = Keyboard.addListener(keyboardShowEvent, (e) => {
-            if (keyboardAvoidMode === "off") {
+        const keyboardShowListener = Keyboard.addListener(
+            keyboardShowEvent,
+            e => {
+                if (keyboardAvoidMode === "off") {
+                    keyboardHeight.value = withTiming(0, {
+                        duration: Platform.OS === "ios" ? 250 : 150,
+                    });
+                    return;
+                }
+                const windowHeight = Dimensions.get("window").height;
+                const keyboardTopY =
+                    typeof e.endCoordinates.screenY === "number"
+                        ? e.endCoordinates.screenY
+                        : windowHeight - e.endCoordinates.height;
+                const effectiveKeyboardHeight = Math.max(
+                    0,
+                    windowHeight - keyboardTopY,
+                );
+                const targetHeight =
+                    keyboardAvoidMode === "manual"
+                        ? e.endCoordinates.height
+                        : Math.min(
+                              e.endCoordinates.height,
+                              effectiveKeyboardHeight,
+                          );
+                keyboardHeight.value = withTiming(targetHeight / 2, {
+                    duration: Platform.OS === "ios" ? 250 : 150,
+                });
+            },
+        );
+
+        const keyboardHideListener = Keyboard.addListener(
+            keyboardHideEvent,
+            () => {
                 keyboardHeight.value = withTiming(0, {
                     duration: Platform.OS === "ios" ? 250 : 150,
                 });
-                return;
-            }
-            const windowHeight = Dimensions.get("window").height;
-            const keyboardTopY = typeof e.endCoordinates.screenY === "number"
-                ? e.endCoordinates.screenY
-                : windowHeight - e.endCoordinates.height;
-            const effectiveKeyboardHeight = Math.max(0, windowHeight - keyboardTopY);
-            const targetHeight = keyboardAvoidMode === "manual"
-                ? e.endCoordinates.height
-                : Math.min(e.endCoordinates.height, effectiveKeyboardHeight);
-            keyboardHeight.value = withTiming(targetHeight / 2, {
-                duration: Platform.OS === "ios" ? 250 : 150,
-            });
-        });
-
-        const keyboardHideListener = Keyboard.addListener(keyboardHideEvent, () => {
-            keyboardHeight.value = withTiming(0, {
-                duration: Platform.OS === "ios" ? 250 : 150,
-            });
-        });
+            },
+        );
 
         return () => {
             sharedShowValue.value = 0;
@@ -146,7 +163,8 @@ function Dialog(props: IDialogProps) {
                     containerStyle,
                     scaleAnimationStyle,
                     {
-                        backgroundColor: colors.backdrop,
+                        backgroundColor: colors.surfaceElevated,
+                        borderColor: colors.border,
                         shadowColor: colors.shadow,
                     },
                 ]}>
@@ -172,7 +190,7 @@ function Title(props: IDialogTitleProps) {
                 {typeof children === "string" || stringContent ? (
                     <ThemeText
                         fontSize="title"
-                        fontWeight="bold"
+                        fontWeight="semibold"
                         numberOfLines={1}>
                         {children}
                     </ThemeText>
@@ -284,11 +302,15 @@ function BottomButton(props: {
                 styles.bottomBtn,
                 {
                     backgroundColor:
-                        type === "normal" ? colors.placeholder : colors.primary,
+                        type === "normal" ? colors.surface : colors.primary,
+                    borderColor:
+                        type === "normal" ? colors.border : colors.primary,
                 },
                 style,
             ]}>
-            <ThemeText color={type === "normal" ? undefined : "white"}>
+            <ThemeText
+                fontWeight="semibold"
+                color={type === "normal" ? undefined : "white"}>
                 {text}
             </ThemeText>
         </TouchableOpacity>
@@ -297,7 +319,8 @@ function BottomButton(props: {
 
 const styles = StyleSheet.create({
     bottomBtn: {
-        borderRadius: rpx(8),
+        borderRadius: rpx(36),
+        borderWidth: StyleSheet.hairlineWidth,
         flex: 1,
         flexShrink: 0,
         justifyContent: "center",
@@ -327,7 +350,8 @@ const styles = StyleSheet.create({
         position: "absolute",
         width: "80%",
         zIndex: 16310,
-        borderRadius: rpx(16),
+        borderRadius: rpx(28),
+        borderWidth: StyleSheet.hairlineWidth,
         backgroundColor: "red",
         shadowOffset: {
             width: 0,
@@ -347,7 +371,7 @@ const styles = StyleSheet.create({
     titleContainer: {
         height: rpx(88),
         width: "100%",
-        alignItems: "center",
+        alignItems: "flex-start",
         justifyContent: "center",
         flexDirection: "row",
         paddingHorizontal: rpx(24),

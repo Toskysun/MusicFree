@@ -21,7 +21,8 @@ export default function Chip(props: IChipProps) {
             style={[
                 styles.container,
                 {
-                    backgroundColor: colors.placeholder,
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
                 },
                 containerStyle,
             ]}>
@@ -47,6 +48,7 @@ const styles = StyleSheet.create({
         height: rpx(56),
         paddingHorizontal: rpx(18),
         borderRadius: rpx(28),
+        borderWidth: StyleSheet.hairlineWidth,
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",

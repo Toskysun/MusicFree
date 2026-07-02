@@ -1,5 +1,5 @@
 import React, { memo, useLayoutEffect, useMemo } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import rpx from "@/utils/rpx";
 import FastImage from "../base/fastImage";
 import { ImgAsset } from "@/constants/assetsConst";
@@ -53,25 +53,26 @@ function _BarMusicItem(props: IBarMusicItemProps) {
                 source={musicItem.artwork}
                 placeholderSource={ImgAsset.albumDefault}
             />
-            <Text
-                ellipsizeMode="tail"
-                accessible={false}
-                style={styles.textWrapper}
-                numberOfLines={1}>
-                <ThemeText fontSize="content" fontColor="musicBarText">
+            <View accessible={false} style={styles.textWrapper}>
+                <ThemeText
+                    fontSize="subTitle"
+                    fontWeight="semibold"
+                    fontColor="musicBarText"
+                    numberOfLines={1}>
                     {musicItem?.title}
                 </ThemeText>
                 {musicItem?.artist && (
                     <ThemeText
                         fontSize="description"
+                        numberOfLines={1}
+                        style={styles.artist}
                         color={Color(colors.musicBarText)
-                            .alpha(0.6)
+                            .alpha(0.62)
                             .toString()}>
-                        {" "}
-                        -{musicItem.artist}
+                        {musicItem.artist}
                     </ThemeText>
                 )}
-            </Text>
+            </View>
         </Animated.View>
     );
 }
@@ -91,14 +92,18 @@ const styles = StyleSheet.create({
         position: "absolute",
     },
     textWrapper: {
-        flexGrow: 1,
+        flex: 1,
         flexShrink: 1,
+        justifyContent: "center",
     },
     artworkImg: {
-        width: rpx(96),
-        height: rpx(96),
-        borderRadius: rpx(48),
-        marginRight: rpx(24),
+        width: rpx(76),
+        height: rpx(76),
+        borderRadius: rpx(16),
+        marginRight: rpx(18),
+    },
+    artist: {
+        marginTop: rpx(7),
     },
 });
 

@@ -49,7 +49,7 @@ interface IAppBarProps {
 }
 
 const ANIMATION_EASING: Animated.EasingFunction = Easing.out(Easing.exp);
-const ANIMATION_DURATION = 500;
+const ANIMATION_DURATION = 220;
 
 const timingConfig = {
     duration: ANIMATION_DURATION,
@@ -103,7 +103,10 @@ export default function AppBar(props: IAppBarProps) {
                 style={[
                     styles.container,
                     containerStyle,
-                    { backgroundColor: bgColor },
+                    {
+                        backgroundColor: bgColor,
+                        borderBottomColor: colors.border,
+                    },
                 ]}>
                 <IconButton
                     name="arrow-left"
@@ -121,13 +124,13 @@ export default function AppBar(props: IAppBarProps) {
                     {typeof children === "string" ? (
                         <ThemeText
                             fontSize="title"
-                            fontWeight="bold"
+                            fontWeight="semibold"
                             numberOfLines={1}
                             color={
                                 titleTextOpacity !== 1
                                     ? color(contentColor)
-                                        .alpha(titleTextOpacity)
-                                        .toString()
+                                          .alpha(titleTextOpacity)
+                                          .toString()
                                     : contentColor
                             }>
                             {children}
@@ -176,7 +179,7 @@ export default function AppBar(props: IAppBarProps) {
                         pointerEvents={showMenu ? "auto" : "none"}
                         style={[
                             {
-                                borderBottomColor: colors.background,
+                                borderBottomColor: colors.surfaceElevated,
                                 left:
                                     (menuIconLayout?.x ?? 0) +
                                     (menuIconLayout?.width ?? 0) / 2 -
@@ -196,7 +199,8 @@ export default function AppBar(props: IAppBarProps) {
                         pointerEvents={showMenu ? "auto" : "none"}
                         style={[
                             {
-                                backgroundColor: colors.background,
+                                backgroundColor: colors.surfaceElevated,
+                                borderColor: colors.border,
                                 right: rpx(24),
                                 top:
                                     (menuIconLayout?.y ?? 0) +
@@ -239,10 +243,11 @@ const styles = StyleSheet.create({
     container: {
         width: "100%",
         zIndex: 10000,
-        height: rpx(88),
+        height: rpx(96),
         flexDirection: "row",
         alignItems: "center",
         paddingHorizontal: rpx(24),
+        borderBottomWidth: StyleSheet.hairlineWidth,
     },
     content: {
         flexDirection: "row",
@@ -272,7 +277,8 @@ const styles = StyleSheet.create({
     menu: {
         width: rpx(340),
         maxHeight: rpx(600),
-        borderRadius: rpx(8),
+        borderRadius: rpx(18),
+        borderWidth: StyleSheet.hairlineWidth,
         zIndex: 10011,
         position: "absolute",
         opacity: 0,

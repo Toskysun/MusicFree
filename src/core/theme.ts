@@ -1,6 +1,9 @@
 import Config from "@/core/appConfig";
 
-import { DarkTheme as _DarkTheme, DefaultTheme as _DefaultTheme } from "@react-navigation/native";
+import {
+    DarkTheme as _DarkTheme,
+    DefaultTheme as _DefaultTheme,
+} from "@react-navigation/native";
 import { GlobalState } from "@/utils/stateMapper";
 import { CustomizedColors } from "@/hooks/useColors";
 import Color from "color";
@@ -11,26 +14,31 @@ export const lightTheme = {
     colors: {
         ..._DefaultTheme.colors,
         background: "transparent",
-        text: "#333333",
-        textSecondary: Color("#333333").alpha(0.7).toString(),
-        primary: "#f17d34",
-        pageBackground: "#fafafa",
-        shadow: "#000",
-        appBar: "#f17d34",
-        appBarText: "#fefefe",
-        musicBar: "#f2f2f2",
-        musicBarText: "#333333",
-        divider: "rgba(0,0,0,0.1)",
-        listActive: "rgba(0,0,0,0.1)", // 在手机上表现是ripple
-        mask: "rgba(51,51,51,0.2)",
-        backdrop: "#f0f0f0",
-        tabBar: "#f0f0f0",
-        placeholder: "#eaeaea",
+        text: "#191815",
+        textSecondary: Color("#191815").alpha(0.62).toString(),
+        primary: "#D94B32",
+        pageBackground: "#F3F0E9",
+        shadow: "#201D18",
+        appBar: "#F3F0E9",
+        appBarText: "#191815",
+        musicBar: "#1B1A17",
+        musicBarText: "#FAF6ED",
+        divider: "rgba(25,24,21,0.13)",
+        border: "rgba(25,24,21,0.14)",
+        listActive: "rgba(217,75,50,0.10)", // 在手机上表现是ripple
+        mask: "rgba(25,24,21,0.24)",
+        backdrop: "#E9E4DA",
+        surface: "#ECE7DD",
+        surfaceElevated: "#FAF7F0",
+        accentWarm: "#D94B32",
+        accentCool: "#3F899B",
+        tabBar: "#E9E4DA",
+        placeholder: "#E4DED3",
         success: "#08A34C",
         danger: "#FC5F5F",
         info: "#0A95C8",
-        card: "#e2e2e288",
-        notification: "#f0f0f0",
+        card: "#EAE4D9",
+        notification: "#E9E4DA",
     },
 };
 
@@ -40,26 +48,31 @@ export const darkTheme = {
     colors: {
         ..._DarkTheme.colors,
         background: "transparent",
-        text: "#fcfcfc",
-        textSecondary: Color("#fcfcfc").alpha(0.7).toString(),
-        primary: "#3FA3B5",
-        pageBackground: "#202020",
-        shadow: "#999",
-        appBar: "#262626",
-        appBarText: "#fcfcfc",
-        musicBar: "#262626",
-        musicBarText: "#fcfcfc",
-        divider: "rgba(255,255,255,0.1)",
-        listActive: "rgba(255,255,255,0.1)", // 在手机上表现是ripple
-        mask: "rgba(33,33,33,0.8)",
-        backdrop: "#303030",
-        tabBar: "#303030",
-        placeholder: "#424242",
+        text: "#F5F2EB",
+        textSecondary: Color("#F5F2EB").alpha(0.64).toString(),
+        primary: "#FF7650",
+        pageBackground: "#101419",
+        shadow: "#000000",
+        appBar: "#101419",
+        appBarText: "#F5F2EB",
+        musicBar: "#1A2027",
+        musicBarText: "#F8F5EE",
+        divider: "rgba(245,242,235,0.11)",
+        border: "rgba(245,242,235,0.12)",
+        listActive: "rgba(255,118,80,0.13)", // 在手机上表现是ripple
+        mask: "rgba(8,11,14,0.82)",
+        backdrop: "#171C22",
+        surface: "#171D24",
+        surfaceElevated: "#202730",
+        accentWarm: "#FF7650",
+        accentCool: "#54A5B8",
+        tabBar: "#171C22",
+        placeholder: "#20262E",
         success: "#08A34C",
         danger: "#FC5F5F",
         info: "#0A95C8",
-        card: "#33333388",
-        notification: "#303030",
+        card: "#192028",
+        notification: "#171C22",
     },
 };
 
@@ -205,7 +218,6 @@ const configableColorKey: Array<keyof CustomizedColors> = [
     "tabBar",
     "notification",
 ];
-
 
 const Theme = {
     setup,

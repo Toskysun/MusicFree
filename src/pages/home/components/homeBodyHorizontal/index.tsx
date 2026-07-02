@@ -3,13 +3,14 @@ import globalStyle from "@/constants/globalStyle";
 import Operations from "./operations";
 import { View } from "react-native";
 import Sheets from "../homeBody/sheets";
+import HomeHero from "../HomeHero";
 
 export default function HomeBodyHorizontal() {
     return (
         <View style={globalStyle.rowfwflex1}>
             <Operations />
             <View style={globalStyle.fwflex1}>
-                <Sheets />
+                <Sheets header={<HomeHero />} />
             </View>
         </View>
     );

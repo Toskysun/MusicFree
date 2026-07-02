@@ -72,6 +72,10 @@ export interface ILanguageData {
     "home.starredPlaylistsCount.a11y": string; // 我喜欢的歌单数量
     "home.songCount": string; // 歌曲数量
     "home.clickToSearch": string; // 点击搜索
+    "home.continueListening": string;
+    "home.welcomeTitle": string;
+    "home.welcomeSubtitle": string;
+    "home.viewAll": string;
     "home.playById.a11y": string; // 通过ID播放
 
     // 对话框相关

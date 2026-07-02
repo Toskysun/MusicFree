@@ -2,6 +2,8 @@ import { CustomizedColors } from "@/hooks/useColors";
 import rpx, { rpxRound } from "@/utils/rpx";
 
 const fontSizeConst = {
+    /** 辅助标记 */
+    caption: rpx(18),
     /** 标签 */
     tag: rpx(20),
     /** 描述文本等字体 */
@@ -14,6 +16,10 @@ const fontSizeConst = {
     title: rpx(32),
     /** appbar的字体 */
     appbar: rpx(36),
+    /** 分区标题 */
+    section: rpx(40),
+    /** 首页大标题 */
+    hero: rpx(54),
 };
 
 const fontWeightConst = {

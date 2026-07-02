@@ -2,63 +2,80 @@ import ThemeText from "@/components/base/themeText";
 import useColors from "@/hooks/useColors";
 import rpx from "@/utils/rpx";
 import React from "react";
-import { StyleProp, StyleSheet, ViewStyle } from "react-native";
+import { StyleProp, StyleSheet, View, ViewStyle } from "react-native";
 import { TouchableOpacity } from "react-native-gesture-handler";
 import Icon, { IIconName } from "@/components/base/icon.tsx";
+import Color from "color";
 
 interface IActionButtonProps {
     iconName: IIconName;
     iconColor?: string;
+    accentColor?: string;
     title: string;
     action?: () => void;
     style?: StyleProp<ViewStyle>;
 }
 
 export default function ActionButton(props: IActionButtonProps) {
-    const { iconName, iconColor, title, action, style } = props;
+    const { iconName, iconColor, accentColor, title, action, style } = props;
     const colors = useColors();
-    // rippleColor="rgba(0, 0, 0, .32)"
+    const accent = accentColor ?? colors.accentWarm ?? colors.primary;
     return (
         <TouchableOpacity
+            activeOpacity={0.72}
             onPress={action}
             style={[
                 styles.wrapper,
                 {
-                    backgroundColor: colors.card,
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
                 },
                 style,
             ]}>
-            <>
+            <View
+                style={[
+                    styles.iconFrame,
+                    { backgroundColor: Color(accent).alpha(0.16).toString() },
+                ]}>
                 <Icon
                     accessible={false}
                     name={iconName}
-                    color={iconColor ?? colors.text}
-                    size={rpx(48)}
+                    color={iconColor ?? accent}
+                    size={rpx(40)}
                 />
-                <ThemeText
-                    accessible={false}
-                    fontSize="subTitle"
-                    fontWeight="semibold"
-                    style={styles.text}>
-                    {title}
-                </ThemeText>
-            </>
+            </View>
+            <ThemeText
+                accessible={false}
+                fontSize="subTitle"
+                fontWeight="semibold"
+                numberOfLines={1}
+                style={styles.text}>
+                {title}
+            </ThemeText>
         </TouchableOpacity>
     );
 }
 
 const styles = StyleSheet.create({
     wrapper: {
-        width: rpx(140),
-        height: rpx(144),
-        borderRadius: rpx(12),
+        minHeight: rpx(104),
+        borderRadius: rpx(20),
+        borderWidth: StyleSheet.hairlineWidth,
         flexGrow: 1,
         flexShrink: 0,
-        flexDirection: "column",
+        flexDirection: "row",
         alignItems: "center",
-        justifyContent: "center",
+        paddingHorizontal: rpx(18),
     },
     text: {
-        marginTop: rpx(12),
+        flex: 1,
+        marginLeft: rpx(14),
+    },
+    iconFrame: {
+        width: rpx(62),
+        height: rpx(62),
+        borderRadius: rpx(31),
+        alignItems: "center",
+        justifyContent: "center",
     },
 });

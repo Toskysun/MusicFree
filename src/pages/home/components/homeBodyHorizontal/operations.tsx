@@ -5,15 +5,17 @@ import React from "react";
 import { StyleSheet } from "react-native";
 import { ScrollView } from "react-native-gesture-handler";
 import ActionButton from "../ActionButton";
+import useColors from "@/hooks/useColors";
 
 export default function Operations() {
     const navigate = useNavigate();
     const { t } = useI18N();
-
+    const colors = useColors();
 
     const actionButtons = [
         {
             iconName: "fire",
+            accentColor: colors.accentWarm,
             title: t("home.recommendSheet"),
             action() {
                 navigate(ROUTE_PATH.RECOMMEND_SHEETS);
@@ -21,6 +23,7 @@ export default function Operations() {
         },
         {
             iconName: "trophy",
+            accentColor: colors.accentCool,
             title: t("home.topList"),
             action() {
                 navigate(ROUTE_PATH.TOP_LIST);
@@ -28,6 +31,7 @@ export default function Operations() {
         },
         {
             iconName: "clock-outline",
+            accentColor: colors.info,
             title: t("home.playHistory"),
             action() {
                 navigate(ROUTE_PATH.HISTORY);
@@ -35,6 +39,7 @@ export default function Operations() {
         },
         {
             iconName: "folder-music-outline",
+            accentColor: colors.success,
             title: t("home.localMusic"),
             action() {
                 navigate(ROUTE_PATH.LOCAL);
@@ -43,13 +48,13 @@ export default function Operations() {
     ] as const;
 
     return (
-        <ScrollView style={styles.container}>
-            {actionButtons.map((action, index) => (
+        <ScrollView
+            style={styles.container}
+            contentContainerStyle={styles.content}
+            showsVerticalScrollIndicator={false}>
+            {actionButtons.map(action => (
                 <ActionButton
-                    style={[
-                        styles.actionButtonStyle,
-                        index % 4 ? styles.actionMarginLeft : null,
-                    ]}
+                    style={styles.actionButtonStyle}
                     key={action.title}
                     {...action}
                 />
@@ -60,20 +65,16 @@ export default function Operations() {
 
 const styles = StyleSheet.create({
     container: {
-        width: rpx(200),
+        width: rpx(250),
         flexGrow: 0,
         flexShrink: 0,
+    },
+    content: {
         paddingHorizontal: rpx(24),
-        marginVertical: rpx(32),
-        flexDirection: "row",
-        flexWrap: "wrap",
+        paddingVertical: rpx(20),
+        gap: rpx(14),
     },
     actionButtonStyle: {
-        width: rpx(157.5),
-        height: rpx(160),
-        borderRadius: rpx(18),
-    },
-    actionMarginLeft: {
-        marginTop: rpx(24),
+        width: rpx(202),
     },
 });

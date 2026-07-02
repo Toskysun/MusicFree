@@ -27,11 +27,15 @@ export function Button(props: {
                 styles.bottomBtn,
                 {
                     backgroundColor:
-                        type === "normal" ? colors.placeholder : colors.primary,
+                        type === "normal" ? colors.surface : colors.primary,
+                    borderColor:
+                        type === "normal" ? colors.border : colors.primary,
                 },
                 style,
             ]}>
-            <ThemeText color={type === "normal" ? undefined : "white"}>
+            <ThemeText
+                fontWeight="semibold"
+                color={type === "normal" ? undefined : "white"}>
                 {text}
             </ThemeText>
         </TouchableOpacity>
@@ -40,7 +44,8 @@ export function Button(props: {
 
 const styles = StyleSheet.create({
     bottomBtn: {
-        borderRadius: rpx(8),
+        borderRadius: rpx(36),
+        borderWidth: StyleSheet.hairlineWidth,
         flexShrink: 0,
         justifyContent: "center",
         alignItems: "center",

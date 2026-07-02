@@ -4,14 +4,17 @@ import rpx from "@/utils/rpx";
 import React from "react";
 import { StyleSheet, View } from "react-native";
 import ActionButton from "../ActionButton";
+import useColors from "@/hooks/useColors";
 
 export default function Operations() {
     const navigate = useNavigate();
     const { t } = useI18N();
+    const colors = useColors();
 
     const actionButtons = [
         {
             iconName: "fire",
+            accentColor: colors.accentWarm,
             title: t("home.recommendSheet"),
             action() {
                 navigate(ROUTE_PATH.RECOMMEND_SHEETS);
@@ -19,6 +22,7 @@ export default function Operations() {
         },
         {
             iconName: "trophy",
+            accentColor: colors.accentCool,
             title: t("home.topList"),
             action() {
                 navigate(ROUTE_PATH.TOP_LIST);
@@ -26,6 +30,7 @@ export default function Operations() {
         },
         {
             iconName: "clock-outline",
+            accentColor: colors.info,
             title: t("home.playHistory"),
             action() {
                 navigate(ROUTE_PATH.HISTORY);
@@ -33,6 +38,7 @@ export default function Operations() {
         },
         {
             iconName: "folder-music-outline",
+            accentColor: colors.success,
             title: t("home.localMusic"),
             action() {
                 navigate(ROUTE_PATH.LOCAL);
@@ -42,12 +48,9 @@ export default function Operations() {
 
     return (
         <View style={styles.container}>
-            {actionButtons.map((action, index) => (
+            {actionButtons.map(action => (
                 <ActionButton
-                    style={[
-                        styles.actionButtonStyle,
-                        index % 4 ? styles.actionMarginLeft : null,
-                    ]}
+                    style={styles.actionButtonStyle}
                     key={action.title}
                     {...action}
                 />
@@ -58,18 +61,15 @@ export default function Operations() {
 
 const styles = StyleSheet.create({
     container: {
-        width: rpx(750),
+        width: "100%",
         paddingHorizontal: rpx(24),
-        marginVertical: rpx(32),
+        marginTop: rpx(20),
+        marginBottom: rpx(12),
         flexDirection: "row",
-        flexWrap: "nowrap",
+        flexWrap: "wrap",
+        gap: rpx(14),
     },
     actionButtonStyle: {
-        width: rpx(157.5),
-        height: rpx(160),
-        borderRadius: rpx(18),
-    },
-    actionMarginLeft: {
-        marginLeft: rpx(24),
+        width: rpx(344),
     },
 });
