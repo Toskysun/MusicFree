@@ -21,6 +21,7 @@ import Mp3Util, {
     INativeDownloadTaskStatus,
     NativeDownloadEmitter,
 } from "@/native/mp3Util";
+import Cenc from "@/native/cenc";
 import LocalMusicSheet from "./localMusicSheet";
 import { IPluginManager } from "@/types/core/pluginManager";
 import musicMetadataManager from "./musicMetadataManager";
@@ -67,6 +68,7 @@ interface IDownloadRuntimeInfo {
     tempEncryptedPath: string;
     willDownloadEncrypted: boolean;
     mflacEkey?: string;
+    cencCek?: string;
     extension: string;
     encryptedExtension: string;
 }
@@ -594,6 +596,7 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
         let url = musicItem.url;
         let headers = musicItem.headers;
         let mflacEkey: string | undefined;
+        let cencCek: string | undefined;
         let actualQuality = quality ??
             this.configService.getConfig("basic.defaultDownloadQuality") ??
             "master";
@@ -620,6 +623,7 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
                     url = data.url;
                     headers = data.headers;
                     mflacEkey = data.ekey as string | undefined;
+                    cencCek = data.cek;
                     actualQuality = currentQuality;
                     break;
                 } catch {
@@ -644,7 +648,9 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
 
         const urlLower = url.toLowerCase().split("?")[0];
         let extension = "mp3";
-        if (urlLower.endsWith(".mgg")) {
+        if (cencCek) {
+            extension = "m4a";
+        } else if (urlLower.endsWith(".mgg")) {
             extension = "ogg";
         } else if (urlLower.endsWith(".mmp4")) {
             extension = "mp4";
@@ -666,12 +672,12 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
 
         const generatedFilename = this.generateFilename(musicItem, actualQuality);
         const targetDownloadPath = this.getDownloadPath(`${generatedFilename}.${extension}`);
-        const willDownloadEncrypted = !!mflacEkey || isMflacUrl(url);
+        const willDownloadEncrypted = !!cencCek || !!mflacEkey || isMflacUrl(url);
 
-        let encryptedExtension = "mflac";
-        if (urlLower.endsWith(".mgg")) {
+        let encryptedExtension = cencCek ? "cenc" : "mflac";
+        if (!cencCek && urlLower.endsWith(".mgg")) {
             encryptedExtension = "mgg";
-        } else if (urlLower.endsWith(".mmp4")) {
+        } else if (!cencCek && urlLower.endsWith(".mmp4")) {
             encryptedExtension = "mmp4";
         }
 
@@ -696,6 +702,7 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
             tempEncryptedPath,
             willDownloadEncrypted,
             mflacEkey,
+            cencCek,
             extension,
             encryptedExtension,
         };
@@ -859,15 +866,23 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
 
         try {
             if (runtimeInfo.willDownloadEncrypted) {
-                const cleaned = normalizeEkey(runtimeInfo.mflacEkey);
-                if (!cleaned) {
-                    throw new Error("missing ekey for encrypted media");
+                if (runtimeInfo.cencCek) {
+                    await Cenc.decryptFile(
+                        removeFileScheme(runtimeInfo.tempEncryptedPath),
+                        removeFileScheme(runtimeInfo.targetDownloadPath),
+                        runtimeInfo.cencCek,
+                    );
+                } else {
+                    const cleaned = normalizeEkey(runtimeInfo.mflacEkey);
+                    if (!cleaned) {
+                        throw new Error("missing ekey for encrypted media");
+                    }
+                    await Mp3Util.decryptMflacToFlac(
+                        removeFileScheme(runtimeInfo.tempEncryptedPath),
+                        removeFileScheme(runtimeInfo.targetDownloadPath),
+                        cleaned,
+                    );
                 }
-                await Mp3Util.decryptMflacToFlac(
-                    removeFileScheme(runtimeInfo.tempEncryptedPath),
-                    removeFileScheme(runtimeInfo.targetDownloadPath),
-                    cleaned,
-                );
                 if (runtimeInfo.tempEncryptedPath !== runtimeInfo.targetDownloadPath) {
                     try {
                         await unlink(removeFileScheme(runtimeInfo.tempEncryptedPath));
@@ -876,18 +891,8 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
                 }
             }
 
-            this.writeMetadataToFile(task.musicItem, runtimeInfo.targetDownloadPath).catch(err => {
-                errorLog("元数据写入失败，但不影响下载完成", {
-                    musicItem: task.musicItem.title,
-                    error: err instanceof Error ? err.message : String(err),
-                });
-            });
-            this.downloadLyricFile(task.musicItem, runtimeInfo.targetDownloadPath).catch(err => {
-                errorLog("歌词文件下载失败，但不影响下载完成", {
-                    musicItem: task.musicItem.title,
-                    error: err instanceof Error ? err.message : String(err),
-                });
-            });
+            await this.writeMetadataToFile(task.musicItem, runtimeInfo.targetDownloadPath);
+            await this.downloadLyricFile(task.musicItem, runtimeInfo.targetDownloadPath);
 
             LocalMusicSheet.addMusic({
                 ...task.musicItem,

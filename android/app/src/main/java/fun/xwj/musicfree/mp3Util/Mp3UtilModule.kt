@@ -11,10 +11,10 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.ByteArrayOutputStream
-import java.net.HttpURLConnection
-import java.net.URL
 import java.io.InputStream
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import java.util.UUID
 import fi.iki.elonen.NanoHTTPD
 import okhttp3.OkHttpClient
@@ -25,42 +25,75 @@ import java.io.BufferedInputStream
 
 class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
 
+    private val MAX_COVER_BYTES = 20 * 1024 * 1024
+    private val metadataExecutor = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "MusicFree-Metadata").apply { isDaemon = true }
+    }
+    private val coverHttpClient = OkHttpClient.Builder()
+        .connectTimeout(8, TimeUnit.SECONDS)
+        .readTimeout(12, TimeUnit.SECONDS)
+        .followRedirects(true)
+        .followSslRedirects(true)
+        .retryOnConnectionFailure(true)
+        .build()
+
     override fun getName() = "Mp3Util"
 
     private fun isContentUri(uri: Uri?): Boolean {
         return uri?.scheme?.equals("content", ignoreCase = true) == true
     }
 
-    /**
-     * 使用Android原生网络请求下载图片数据，完全避免ImageIO
-     */
+    /** Download cover bytes without blocking the React Native module queue. */
     private fun downloadImageBytes(imageUrl: String): ByteArray? {
         return try {
-            val url = URL(imageUrl)
-            val connection = url.openConnection() as HttpURLConnection
-            connection.requestMethod = "GET"
-            connection.connectTimeout = 10000
-            connection.readTimeout = 15000
-            connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Android)")
-            
-            val responseCode = connection.responseCode
-            if (responseCode == HttpURLConnection.HTTP_OK) {
-                connection.inputStream.use { inputStream ->
-                    val buffer = ByteArrayOutputStream()
-                    val data = ByteArray(4096)
-                    var bytesRead: Int
-                    while (inputStream.read(data).also { bytesRead = it } != -1) {
-                        buffer.write(data, 0, bytesRead)
-                    }
-                    buffer.toByteArray()
+            val request = Request.Builder()
+                .url(imageUrl)
+                .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/126 Mobile Safari/537.36")
+                .header("Accept", "image/jpeg,image/png,image/webp,image/*;q=0.8,*/*;q=0.1")
+                .build()
+            coverHttpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    android.util.Log.w("Mp3UtilModule", "Cover request failed: HTTP ${response.code}")
+                    return@use null
                 }
-            } else {
-                null
+                val body = response.body ?: return@use null
+                val contentLength = body.contentLength()
+                if (contentLength > MAX_COVER_BYTES) {
+                    android.util.Log.w("Mp3UtilModule", "Cover is too large: $contentLength bytes")
+                    return@use null
+                }
+                val bytes = body.bytes()
+                if (bytes.isEmpty() || bytes.size > MAX_COVER_BYTES) {
+                    android.util.Log.w("Mp3UtilModule", "Invalid cover size: ${bytes.size} bytes")
+                    null
+                } else {
+                    bytes
+                }
             }
         } catch (e: Exception) {
-            android.util.Log.w("Mp3UtilModule", "Failed to download image: ${e.message}")
+            android.util.Log.w("Mp3UtilModule", "Failed to download image: ${e.message}", e)
             null
         }
+    }
+
+    private fun readCoverBytes(coverPath: String): ByteArray {
+        val bytes = when {
+            coverPath.startsWith("/") || coverPath.startsWith("file://") -> {
+                val path = if (coverPath.startsWith("file://")) {
+                    Uri.parse(coverPath).path ?: coverPath
+                } else {
+                    coverPath
+                }
+                File(path).takeIf(File::isFile)?.readBytes()
+            }
+            coverPath.startsWith("http://") || coverPath.startsWith("https://") -> {
+                downloadImageBytes(coverPath)
+            }
+            else -> null
+        }
+        require(bytes != null && bytes.isNotEmpty()) { "Unable to load cover image" }
+        require(bytes.size <= MAX_COVER_BYTES) { "Cover image exceeds size limit" }
+        return bytes
     }
 
     @ReactMethod
@@ -188,6 +221,13 @@ class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactCo
 
     @ReactMethod
     fun setMediaTag(filePath: String, meta: ReadableMap, promise: Promise) {
+        val metaCopy = Arguments.makeNativeMap(meta.toHashMap())
+        metadataExecutor.execute {
+            setMediaTagInternal(filePath, metaCopy, promise)
+        }
+    }
+
+    private fun setMediaTagInternal(filePath: String, meta: ReadableMap, promise: Promise) {
         try {
             val file = File(filePath)
             if (file.exists()) {
@@ -290,6 +330,12 @@ class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactCo
     
     @ReactMethod
     fun setMediaCover(filePath: String, coverPath: String, promise: Promise) {
+        metadataExecutor.execute {
+            setMediaCoverInternal(filePath, coverPath, promise)
+        }
+    }
+
+    private fun setMediaCoverInternal(filePath: String, coverPath: String, promise: Promise) {
         try {
             val file = File(filePath)
             if (!file.exists()) {
@@ -562,8 +608,8 @@ class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactCo
 
     /**
      * 为 MP4/M4A 写入 iTunes covr atom。Mp4TagCoverField 直接接收图片字节，
-     * 不依赖 Android 中不可用的 ImageIO。WebP 不属于 MP4 cover atom 的
-     * 标准图片类型，因此先无损转为 PNG。
+     * 不依赖 Android 中不可用的 ImageIO。非 JPEG/PNG/GIF 图片先转为 PNG，
+     * 避免 CDN 返回 WebP/AVIF 时 covr 被写成错误的图片类型。
      */
     private fun setCoverForMp4(tag: org.jaudiotagger.tag.Tag, coverBytes: ByteArray, mimeType: String): Boolean {
         return try {
@@ -572,13 +618,13 @@ class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactCo
                 return false
             }
 
-            val mp4CoverBytes = if (mimeType == "image/webp") {
+            val mp4CoverBytes = if (mimeType !in setOf("image/jpeg", "image/png", "image/gif")) {
                 val bitmap = BitmapFactory.decodeByteArray(coverBytes, 0, coverBytes.size)
-                    ?: throw IllegalArgumentException("Unable to decode WebP cover")
+                    ?: throw IllegalArgumentException("Unable to decode cover image ($mimeType)")
                 try {
                     ByteArrayOutputStream().use { output ->
                         if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)) {
-                            throw IllegalStateException("Unable to convert WebP cover to PNG")
+                            throw IllegalStateException("Unable to convert cover to PNG")
                         }
                         output.toByteArray()
                     }
@@ -621,12 +667,24 @@ class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactCo
             imageBytes[2] == 0x46.toByte() && imageBytes[3] == 0x46.toByte() &&
             imageBytes[8] == 0x57.toByte() && imageBytes[9] == 0x45.toByte() && 
             imageBytes[10] == 0x42.toByte() && imageBytes[11] == 0x50.toByte() -> "image/webp"
-            else -> "image/jpeg" // 默认为JPEG
+            else -> "application/octet-stream"
         }
     }
 
     @ReactMethod
     fun setMediaTagWithCover(filePath: String, meta: ReadableMap, coverPath: String?, promise: Promise) {
+        val metaCopy = Arguments.makeNativeMap(meta.toHashMap())
+        metadataExecutor.execute {
+            setMediaTagWithCoverInternal(filePath, metaCopy, coverPath, promise)
+        }
+    }
+
+    private fun setMediaTagWithCoverInternal(
+        filePath: String,
+        meta: ReadableMap,
+        coverPath: String?,
+        promise: Promise,
+    ) {
         try {
             val file = File(filePath)
             if (!file.exists()) {
@@ -671,81 +729,38 @@ class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactCo
                 tag.setField(FieldKey.IS_COMPILATION, if (isCompilation) "1" else "0")
             }
             
-            // 如果有封面路径，使用完全无ImageIO依赖的方法设置封面
-            android.util.Log.i("Mp3UtilModule", "🖼️[封面] 检查封面路径: coverPath=$coverPath, isNullOrEmpty=${coverPath.isNullOrEmpty()}")
+            var shouldVerifyCover = false
             if (!coverPath.isNullOrEmpty()) {
-                try {
-                    android.util.Log.i("Mp3UtilModule", "🖼️[封面] 开始获取封面数据...")
-                    val coverBytes = when {
-                        // 本地文件
-                        coverPath.startsWith("/") || coverPath.startsWith("file://") -> {
-                            android.util.Log.i("Mp3UtilModule", "🖼️[封面] 从本地文件读取")
-                            val coverFile = File(if (coverPath.startsWith("file://")) {
-                                Uri.parse(coverPath).path ?: coverPath
-                            } else {
-                                coverPath
-                            })
-                            if (coverFile.exists()) {
-                                coverFile.readBytes()
-                            } else null
-                        }
-                        // 网络URL - 使用Android原生网络请求
-                        coverPath.startsWith("http://") || coverPath.startsWith("https://") -> {
-                            android.util.Log.i("Mp3UtilModule", "🖼️[封面] 从网络下载: $coverPath")
-                            downloadImageBytes(coverPath)
-                        }
-                        else -> {
-                            android.util.Log.w("Mp3UtilModule", "🖼️[封面] 未知的封面路径格式: $coverPath")
-                            null
-                        }
+                val coverBytes = readCoverBytes(coverPath)
+                val ext = file.extension.lowercase()
+                android.util.Log.i("Mp3UtilModule", "Loaded ${coverBytes.size} cover bytes for .$ext")
+                if (ext == "ogg") {
+                    audioFile.commit()
+                    val mimeType = detectImageMimeTypeByBytes(coverBytes)
+                    val bitmapOptions = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    BitmapFactory.decodeByteArray(coverBytes, 0, coverBytes.size, bitmapOptions)
+                    val width = bitmapOptions.outWidth.coerceAtLeast(0)
+                    val height = bitmapOptions.outHeight.coerceAtLeast(0)
+                    val depth = if (mimeType == "image/png") 32 else 24
+                    check(OggCoverWriter.writeCover(filePath, coverBytes, mimeType, width, height, depth)) {
+                        "Failed to write OGG cover"
                     }
-
-                    android.util.Log.i("Mp3UtilModule", "🖼️[封面] 获取结果: ${if (coverBytes != null) "${coverBytes.size} bytes" else "null"}")
-
-                    if (coverBytes != null && coverBytes.isNotEmpty()) {
-                        val ext = file.extension.lowercase()
-                        if (ext == "ogg") {
-                            // OGG: 先提交文本标签，再用 OggCoverWriter 写封面
-                            audioFile.commit()
-                            android.util.Log.i("Mp3UtilModule", "🖼️[封面] OGG 文本标签已提交，开始用 OggCoverWriter 写封面")
-                            val mimeType = detectImageMimeTypeByBytes(coverBytes)
-                            val bitmapOptions = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                            android.graphics.BitmapFactory.decodeByteArray(coverBytes, 0, coverBytes.size, bitmapOptions)
-                            val w = if (bitmapOptions.outWidth > 0) bitmapOptions.outWidth else 0
-                            val h = if (bitmapOptions.outHeight > 0) bitmapOptions.outHeight else 0
-                            val depth = if (mimeType == "image/png") 32 else 24
-                            val success = OggCoverWriter.writeCover(filePath, coverBytes, mimeType, w, h, depth)
-                            if (success) {
-                                android.util.Log.i("Mp3UtilModule", "🖼️[封面] ✅ OGG 封面写入成功: ${file.name}")
-                            } else {
-                                android.util.Log.w("Mp3UtilModule", "🖼️[封面] ❌ OGG 封面写入失败: ${file.name}")
-                            }
-                            promise.resolve(true)
-                            return
-                        }
-
-                        // 非 OGG: 使用 JAudioTagger 设置封面
-                        tag.deleteArtworkField()
-                        android.util.Log.i("Mp3UtilModule", "🖼️[封面] 已删除现有封面，开始设置新封面，文件扩展名: ${file.extension.lowercase()}")
-
-                        val success = setCoverArtImageIOFree(tag, coverBytes, ext)
-                        if (success) {
-                            android.util.Log.i("Mp3UtilModule", "🖼️[封面] ✅ 封面设置成功: ${file.name}")
-                        } else {
-                            android.util.Log.w("Mp3UtilModule", "🖼️[封面] ❌ 封面设置失败: ${file.name}")
-                        }
-                    } else {
-                        android.util.Log.w("Mp3UtilModule", "🖼️[封面] ❌ 无法获取封面数据: $coverPath")
-                    }
-                } catch (e: Exception) {
-                    // 封面设置失败不影响其他标签，但记录错误
-                    android.util.Log.e("Mp3UtilModule", "🖼️[封面] 💥 异常: ${e.javaClass.simpleName}: ${e.message}", e)
+                    promise.resolve(true)
+                    return
                 }
-            } else {
-                android.util.Log.i("Mp3UtilModule", "🖼️[封面] 无封面路径，跳过封面设置")
+
+                tag.deleteArtworkField()
+                check(setCoverArtImageIOFree(tag, coverBytes, ext)) {
+                    "Failed to create cover tag for .$ext"
+                }
+                shouldVerifyCover = ext == "m4a" || ext == "mp4"
             }
 
             audioFile.commit()
+            if (shouldVerifyCover) {
+                val writtenTag = AudioFileIO.read(file).tag
+                check(writtenTag.artworkList.isNotEmpty()) { "M4A cover verification failed" }
+            }
             android.util.Log.i("Mp3UtilModule", "Successfully committed all changes to ${file.name}")
             promise.resolve(true)
         } catch (e: Exception) {
@@ -1427,5 +1442,11 @@ class Mp3UtilModule(private val reactContext: ReactApplicationContext) : ReactCo
             android.util.Log.e("Mp3UtilModule", "[Proxy] Register error: ${e.message}", e)
             promise.reject("RegisterStreamError", e)
         }
+    }
+
+    override fun invalidate() {
+        metadataExecutor.shutdownNow()
+        coverHttpClient.dispatcher.cancelAll()
+        super.invalidate()
     }
 }

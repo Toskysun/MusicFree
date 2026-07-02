@@ -15,7 +15,6 @@ import kotlin.math.max
 import kotlin.math.min
 
 internal object CencProxy {
-    private const val PORT = 17174
     private const val PROBE_SIZE = 256 * 1024
     private const val MAX_BOX_SIZE = 64L * 1024L * 1024L
     private const val MAX_SESSIONS = 256
@@ -71,7 +70,9 @@ internal object CencProxy {
                 it.start(NanoHTTPD.SOCKET_READ_TIMEOUT, false)
             }
         }
-        return "http://127.0.0.1:$PORT"
+        val listeningPort = requireNotNull(server).listeningPort
+        check(listeningPort > 0) { "CENC proxy did not obtain a listening port" }
+        return "http://127.0.0.1:$listeningPort"
     }
 
     fun register(src: String, cek: String, headers: Map<String, String>): String {
@@ -249,7 +250,7 @@ internal object CencProxy {
         }
     }
 
-    private class Server : NanoHTTPD("127.0.0.1", PORT) {
+    private class Server : NanoHTTPD("127.0.0.1", 0) {
         override fun serve(request: IHTTPSession): Response {
             return try {
                 if (request.method != Method.GET && request.method != Method.HEAD) {

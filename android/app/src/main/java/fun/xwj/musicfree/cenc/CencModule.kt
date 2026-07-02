@@ -31,6 +31,23 @@ class CencModule(
         }
     }
 
+    @ReactMethod
+    fun decryptFile(
+        inputPath: String,
+        outputPath: String,
+        cek: String,
+        promise: Promise,
+    ) {
+        executor.execute {
+            try {
+                CencFileDecoder.decrypt(inputPath, outputPath, cek)
+                promise.resolve(true)
+            } catch (error: Throwable) {
+                promise.reject("CencFileDecryptionError", error)
+            }
+        }
+    }
+
     override fun invalidate() {
         executor.shutdownNow()
         super.invalidate()
