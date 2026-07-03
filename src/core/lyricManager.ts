@@ -20,7 +20,13 @@ import { TrackPlayerEvents } from "@/core.defination/trackPlayer";
 import { IPluginManager } from "@/types/core/pluginManager";
 import { autoDecryptLyric } from "@/utils/musicDecrypter";
 import { devLog } from "@/utils/log";
-import { makeMutable, type SharedValue } from "react-native-reanimated";
+import {
+    cancelAnimation,
+    Easing,
+    makeMutable,
+    withTiming,
+    type SharedValue,
+} from "react-native-reanimated";
 
 // Lazily create the shared value to avoid touching Reanimated during module load.
 let currentPositionMsShared: SharedValue<number> | null = null;
@@ -57,6 +63,9 @@ const currentPositionMsAtom = atom<number>(0);
 // Throttle interval for position updates (ms)
 // 16ms = 60fps, provides buttery smooth animation
 const POSITION_UPDATE_THROTTLE = 16;
+// TrackPlayer reports progress every 100 ms. Predict one report ahead and let
+// Reanimated interpolate on the UI thread so the karaoke mask moves at 60 fps.
+const POSITION_PREDICTION_MS = 110;
 
 
 class LyricManager implements IInjectable {
@@ -71,6 +80,7 @@ class LyricManager implements IInjectable {
     private lastPositionUpdateTime: number = 0;
     private pendingPositionMs: number = 0;
     private positionUpdateTimer: ReturnType<typeof setTimeout> | null = null;
+    private isPlaybackAdvancing = false;
 
     // Track last position for seek detection
     private lastProgressPositionMs: number = 0;
@@ -128,6 +138,8 @@ class LyricManager implements IInjectable {
         RNTrackPlayer.addEventListener(Event.PlaybackProgressUpdated, evt => {
             const parser = this.lyricParser;
             const positionMs = evt.position * 1000;
+            const positionDelta = Math.abs(positionMs - this.lastProgressPositionMs);
+            const isContinuousProgress = positionDelta <= 800;
 
             // Throttled position update for smooth animation without JS thread overload
             const now = Date.now();
@@ -137,7 +149,19 @@ class LyricManager implements IInjectable {
                 // Enough time has passed, update immediately
                 this.lastPositionUpdateTime = now;
                 getDefaultStore().set(currentPositionMsAtom, positionMs);
-                getCurrentPositionMsShared().value = positionMs;
+                const positionShared = getCurrentPositionMsShared();
+                if (this.isPlaybackAdvancing && isContinuousProgress) {
+                    positionShared.value = withTiming(
+                        positionMs + POSITION_PREDICTION_MS,
+                        {
+                            duration: POSITION_PREDICTION_MS,
+                            easing: Easing.linear,
+                        },
+                    );
+                } else {
+                    cancelAnimation(positionShared);
+                    positionShared.value = positionMs;
+                }
 
                 // Clear any pending timer
                 if (this.positionUpdateTimer) {
@@ -150,13 +174,24 @@ class LyricManager implements IInjectable {
                 this.positionUpdateTimer = setTimeout(() => {
                     this.lastPositionUpdateTime = Date.now();
                     getDefaultStore().set(currentPositionMsAtom, this.pendingPositionMs);
-                    getCurrentPositionMsShared().value = this.pendingPositionMs;
+                    const positionShared = getCurrentPositionMsShared();
+                    if (this.isPlaybackAdvancing && isContinuousProgress) {
+                        positionShared.value = withTiming(
+                            this.pendingPositionMs + POSITION_PREDICTION_MS,
+                            {
+                                duration: POSITION_PREDICTION_MS,
+                                easing: Easing.linear,
+                            },
+                        );
+                    } else {
+                        cancelAnimation(positionShared);
+                        positionShared.value = this.pendingPositionMs;
+                    }
                     this.positionUpdateTimer = null;
                 }, delay);
             }
 
             // Detect seek (position jump > 800ms) — only sync if desktop lyric is active
-            const positionDelta = Math.abs(positionMs - this.lastProgressPositionMs);
             if (positionDelta > 800 && this.appConfig.getConfig("lyric.showStatusBarLyric")) {
                 // Check actual playback state to avoid forcing 'playing' when paused
                 RNTrackPlayer.getPlaybackState().then(currentState => {
@@ -192,6 +227,19 @@ class LyricManager implements IInjectable {
 
         // Listen to playback state changes for desktop lyric visibility control
         RNTrackPlayer.addEventListener(Event.PlaybackState, async (state) => {
+            const isPaused = state.state === State.Paused;
+            const isPlaying = state.state === State.Playing;
+            this.isPlaybackAdvancing = isPlaying;
+
+            if (!isPlaying) {
+                const progress = await this.trackPlayer.getProgress();
+                const positionMs = progress.position * 1000;
+                const positionShared = getCurrentPositionMsShared();
+                cancelAnimation(positionShared);
+                positionShared.value = positionMs;
+                getDefaultStore().set(currentPositionMsAtom, positionMs);
+            }
+
             const showStatusBarLyric = this.appConfig.getConfig("lyric.showStatusBarLyric");
 
             if (!showStatusBarLyric) {
@@ -199,8 +247,6 @@ class LyricManager implements IInjectable {
             }
 
             const hideWhenPaused = this.appConfig.getConfig("lyric.hideDesktopLyricWhenPaused");
-            const isPaused = state.state === State.Paused;
-            const isPlaying = state.state === State.Playing;
             const currentMusic = this.trackPlayer.currentMusic;
 
             if (isPlaying) {

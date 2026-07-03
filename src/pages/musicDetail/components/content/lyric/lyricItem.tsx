@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useMemo } from "react";
+import React, { memo, useEffect, useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Animated, {
     useSharedValue,
@@ -179,9 +179,6 @@ const SCALE_TIMING_CONFIG = {
 // Scale factor for highlighted line (1 = no scale)
 const HIGHLIGHT_SCALE = 1;
 
-// Gradient edge width for smooth transition (percentage)
-const GRADIENT_EDGE_WIDTH = 0.12;
-
 // Font size ratio for secondary lines (smaller than primary/first line)
 const SECONDARY_FONT_RATIO = 0.75;
 
@@ -204,10 +201,6 @@ const ACTIVE_CHAR_SCALE = 1.06;
 // Scale wave radii (tighter than translate wave for focused effect)
 const SCALE_WAVE_LEAD = 2;
 const SCALE_WAVE_TRAIL = 3;
-
-// Color sweep gradient edge width (in character units).
-// Controls how many chars the color transition spans — larger = softer edge.
-const COLOR_SWEEP_EDGE = 2.5;
 
 // Normalize word space flags to prevent double spaces.
 // Handles two redundancy patterns in lyric data:
@@ -431,6 +424,7 @@ const KaraokeWord = memo(({
     activeCharProgress: SharedValue<number>;
 }) => {
     const { duration, text, space } = word;
+    const [textWidth, setTextWidth] = useState(0);
 
     // Trailing space as text (matches non-playing line text wrapping)
     const trailingSpace = !noSpace && space ? ' ' : '';
@@ -443,28 +437,17 @@ const KaraokeWord = memo(({
         return -fontSize * WAVE_MAX_TRANSLATE_EM * factor;
     }, [duration, fontSize, isPseudo]);
 
-    // Smooth color sweep progress — instead of hard 0/1 per-char switching,
-    // chars near the active position get a gradient transition based on distance.
-    // This creates a smooth "light wave" sweeping across the line like the original width-clip,
-    // but rendered per-character with color interpolation.
-    const animatedProgress = useDerivedValue(() => {
+    // True karaoke fill: completed characters are fully filled while the active
+    // character is clipped continuously from left to right. This avoids changing
+    // the brightness of an entire glyph at once and remains stable after wrapping.
+    const fillProgress = useDerivedValue(() => {
         'worklet';
         if (!isCurrentLine) return 0;
 
         const idx = activeCharIndex.value;
-        const progress = activeCharProgress.value;
-        const waveCenter = idx + progress;
-
-        // Distance from this char to the sweep front
-        const dist = charFlatIndex - waveCenter;
-
-        if (dist <= -COLOR_SWEEP_EDGE) return 1;   // fully completed (behind the edge)
-        if (dist >= 0) return 0;                     // fully pending (ahead of sweep)
-
-        // Within the gradient edge: smooth transition
-        // dist is in range [-COLOR_SWEEP_EDGE, 0), map to [1, 0]
-        const t = -dist / COLOR_SWEEP_EDGE;          // 0 at front → 1 at back
-        return t * t * (3 - 2 * t);                  // smoothstep for soft edge
+        if (charFlatIndex < idx) return 1;
+        if (charFlatIndex > idx) return 0;
+        return activeCharProgress.value;
     }, [isCurrentLine, charFlatIndex]);
 
     // Wave float style + scale wave — continuous asymmetric bell curve.
@@ -515,27 +498,10 @@ const KaraokeWord = memo(({
         };
     }, [enableFloat, isPseudo, isCurrentLine, charFlatIndex, maxWaveTranslate]);
 
-    // Per-character color + opacity interpolation (replaces width-clip overlay)
-    const charStyle = useAnimatedStyle(() => {
+    const fillMaskStyle = useAnimatedStyle(() => {
         'worklet';
-        const progress = animatedProgress.value;
-
-        // Color interpolation: base → highlight
-        const color = interpolateColor(
-            progress,
-            [0, 1],
-            [primaryColor, highlightColor],
-        );
-
-        // Opacity gradient: dim → bright
-        const opacity = interpolate(
-            progress,
-            [0, 0.3, 1],
-            [0.5, 0.75, 0.95],
-        );
-
-        return { color, opacity };
-    }, [primaryColor, highlightColor]);
+        return { width: fillProgress.value * textWidth };
+    }, [textWidth]);
 
     // For non-current lines: same View wrapper structure for consistent flex layout
     if (!isCurrentLine) {
@@ -553,18 +519,40 @@ const KaraokeWord = memo(({
         );
     }
 
-    // Single Animated.Text — color driven by worklet (no dual-layer overlay)
+    // The highlighted copy is masked instead of recoloring the complete glyph.
+    // Both copies use identical text metrics, keeping the sweep pixel-aligned.
     return (
         <Animated.View style={[styles.wordWrapper, floatStyle]}>
-            <Animated.Text
+            <Text
+                onLayout={event => {
+                    const width = event.nativeEvent.layout.width;
+                    if (width > 0 && Math.abs(width - textWidth) > 0.5) {
+                        setTextWidth(width);
+                    }
+                }}
                 style={[
                     styles.wordText,
-                    { fontSize },
-                    charStyle,
-                ]}
-            >
+                    { fontSize, color: primaryColor, opacity: 0.48 },
+                ]}>
                 {text}{trailingSpace}
-            </Animated.Text>
+            </Text>
+            <Animated.View
+                pointerEvents="none"
+                style={[styles.wordFillOverlay, fillMaskStyle]}>
+                <Text
+                    numberOfLines={1}
+                    style={[
+                        styles.wordText,
+                        {
+                            width: textWidth || undefined,
+                            fontSize,
+                            color: highlightColor,
+                            opacity: 0.98,
+                        },
+                    ]}>
+                    {text}{trailingSpace}
+                </Text>
+            </Animated.View>
         </Animated.View>
     );
 });
@@ -1393,6 +1381,13 @@ const styles = StyleSheet.create({
     },
     wordText: {
         fontWeight: '600',
+    },
+    wordFillOverlay: {
+        position: "absolute",
+        left: 0,
+        top: 0,
+        bottom: 0,
+        overflow: "hidden",
     },
     translationLineContainer: {
         position: 'relative',
