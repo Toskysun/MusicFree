@@ -63,9 +63,13 @@ const currentPositionMsAtom = atom<number>(0);
 // Throttle interval for position updates (ms)
 // 16ms = 60fps, provides buttery smooth animation
 const POSITION_UPDATE_THROTTLE = 16;
-// TrackPlayer reports progress every 100 ms. Predict one report ahead and let
-// Reanimated interpolate on the UI thread so the karaoke mask moves at 60 fps.
-const POSITION_PREDICTION_MS = 110;
+// TrackPlayer reports progress every 100ms, but restarting a 110ms animation on
+// every report makes its velocity visibly pulse. Keep a long-running UI-thread
+// clock instead and only resync it occasionally, like AMll's RAF time anchor.
+const POSITION_CLOCK_RUNWAY_MS = 60_000;
+const POSITION_CLOCK_RESYNC_INTERVAL_MS = 5_000;
+const POSITION_CLOCK_MAX_DRIFT_MS = 160;
+const POSITION_CLOCK_CORRECTION_MS = 2_000;
 
 
 class LyricManager implements IInjectable {
@@ -85,6 +89,12 @@ class LyricManager implements IInjectable {
     // Track last position for seek detection
     private lastProgressPositionMs: number = 0;
 
+    // Continuous UI-thread clock state for karaoke rendering
+    private isPositionClockRunning = false;
+    private positionClockRate = 1;
+    private lastPositionClockSyncTime = 0;
+    private positionClockCorrectionUntil = 0;
+
     // Native event subscriptions (cleaned up on re-setup)
     private nativeSubscriptions: Array<{ remove: () => void }> = [];
 
@@ -101,6 +111,101 @@ class LyricManager implements IInjectable {
         this.trackPlayer = trackPlayerService;
         this.appConfig = appConfigService;
         this.pluginManager = pluginManager;
+    }
+
+    private getPositionClockRate() {
+        const persistedRate = Number(PersistStatus.get("music.rate") ?? 100) / 100;
+        return Number.isFinite(persistedRate) && persistedRate > 0 ? persistedRate : 1;
+    }
+
+    private stopPositionClock(positionMs: number) {
+        const positionShared = getCurrentPositionMsShared();
+        cancelAnimation(positionShared);
+        positionShared.value = positionMs;
+        this.isPositionClockRunning = false;
+        this.lastPositionClockSyncTime = 0;
+        this.positionClockCorrectionUntil = 0;
+    }
+
+    private syncPositionClock(positionMs: number, force = false) {
+        if (!this.isPlaybackAdvancing) {
+            this.stopPositionClock(positionMs);
+            return;
+        }
+
+        const positionShared = getCurrentPositionMsShared();
+        const now = Date.now();
+        const rate = this.getPositionClockRate();
+
+        if (force || !this.isPositionClockRunning) {
+            cancelAnimation(positionShared);
+            positionShared.value = positionMs;
+            positionShared.value = withTiming(
+                positionMs + POSITION_CLOCK_RUNWAY_MS * rate,
+                {
+                    duration: POSITION_CLOCK_RUNWAY_MS,
+                    easing: Easing.linear,
+                },
+            );
+            this.isPositionClockRunning = true;
+            this.positionClockRate = rate;
+            this.lastPositionClockSyncTime = now;
+            this.positionClockCorrectionUntil = 0;
+            return;
+        }
+
+        // Let an in-flight correction finish instead of restarting it on every
+        // 100ms progress event. Repeated restarts were the visible stutter.
+        if (now < this.positionClockCorrectionUntil) return;
+
+        // A short drift correction has just completed. Immediately hand the
+        // clock back to a long linear run so it never pauses at the target.
+        if (this.positionClockCorrectionUntil > 0) {
+            this.positionClockCorrectionUntil = 0;
+            positionShared.value = withTiming(
+                positionMs + POSITION_CLOCK_RUNWAY_MS * rate,
+                {
+                    duration: POSITION_CLOCK_RUNWAY_MS,
+                    easing: Easing.linear,
+                },
+            );
+            this.positionClockRate = rate;
+            this.lastPositionClockSyncTime = now;
+            return;
+        }
+
+        const rateChanged = Math.abs(rate - this.positionClockRate) > 0.001;
+        const shouldResync =
+            rateChanged ||
+            now - this.lastPositionClockSyncTime >= POSITION_CLOCK_RESYNC_INTERVAL_MS;
+        if (!shouldResync) return;
+
+        // Reading a SharedValue from JS synchronizes with the UI thread. Do it
+        // only at the low-frequency resync point, never on every progress event.
+        const drift = positionMs - positionShared.value;
+        if (Math.abs(drift) > POSITION_CLOCK_MAX_DRIFT_MS) {
+            positionShared.value = withTiming(
+                positionMs + POSITION_CLOCK_CORRECTION_MS * rate,
+                {
+                    duration: POSITION_CLOCK_CORRECTION_MS,
+                    easing: Easing.linear,
+                },
+            );
+            this.positionClockRate = rate;
+            this.lastPositionClockSyncTime = now;
+            this.positionClockCorrectionUntil = now + POSITION_CLOCK_CORRECTION_MS;
+            return;
+        }
+
+        positionShared.value = withTiming(
+            positionMs + POSITION_CLOCK_RUNWAY_MS * rate,
+            {
+                duration: POSITION_CLOCK_RUNWAY_MS,
+                easing: Easing.linear,
+            },
+        );
+        this.positionClockRate = rate;
+        this.lastPositionClockSyncTime = now;
     }
 
     setup() {
@@ -139,7 +244,7 @@ class LyricManager implements IInjectable {
             const parser = this.lyricParser;
             const positionMs = evt.position * 1000;
             const positionDelta = Math.abs(positionMs - this.lastProgressPositionMs);
-            const isContinuousProgress = positionDelta <= 800;
+            const isSeek = positionDelta > 800;
 
             // Throttled position update for smooth animation without JS thread overload
             const now = Date.now();
@@ -149,19 +254,7 @@ class LyricManager implements IInjectable {
                 // Enough time has passed, update immediately
                 this.lastPositionUpdateTime = now;
                 getDefaultStore().set(currentPositionMsAtom, positionMs);
-                const positionShared = getCurrentPositionMsShared();
-                if (this.isPlaybackAdvancing && isContinuousProgress) {
-                    positionShared.value = withTiming(
-                        positionMs + POSITION_PREDICTION_MS,
-                        {
-                            duration: POSITION_PREDICTION_MS,
-                            easing: Easing.linear,
-                        },
-                    );
-                } else {
-                    cancelAnimation(positionShared);
-                    positionShared.value = positionMs;
-                }
+                this.syncPositionClock(positionMs, isSeek);
 
                 // Clear any pending timer
                 if (this.positionUpdateTimer) {
@@ -174,25 +267,13 @@ class LyricManager implements IInjectable {
                 this.positionUpdateTimer = setTimeout(() => {
                     this.lastPositionUpdateTime = Date.now();
                     getDefaultStore().set(currentPositionMsAtom, this.pendingPositionMs);
-                    const positionShared = getCurrentPositionMsShared();
-                    if (this.isPlaybackAdvancing && isContinuousProgress) {
-                        positionShared.value = withTiming(
-                            this.pendingPositionMs + POSITION_PREDICTION_MS,
-                            {
-                                duration: POSITION_PREDICTION_MS,
-                                easing: Easing.linear,
-                            },
-                        );
-                    } else {
-                        cancelAnimation(positionShared);
-                        positionShared.value = this.pendingPositionMs;
-                    }
+                    this.syncPositionClock(this.pendingPositionMs, isSeek);
                     this.positionUpdateTimer = null;
                 }, delay);
             }
 
             // Detect seek (position jump > 800ms) — only sync if desktop lyric is active
-            if (positionDelta > 800 && this.appConfig.getConfig("lyric.showStatusBarLyric")) {
+            if (isSeek && this.appConfig.getConfig("lyric.showStatusBarLyric")) {
                 // Check actual playback state to avoid forcing 'playing' when paused
                 RNTrackPlayer.getPlaybackState().then(currentState => {
                     const seekStatus = currentState.state === State.Playing ? 'playing' : 'paused';
@@ -231,12 +312,13 @@ class LyricManager implements IInjectable {
             const isPlaying = state.state === State.Playing;
             this.isPlaybackAdvancing = isPlaying;
 
-            if (!isPlaying) {
+            if (isPlaying) {
+                const progress = await this.trackPlayer.getProgress();
+                this.syncPositionClock(progress.position * 1000);
+            } else {
                 const progress = await this.trackPlayer.getProgress();
                 const positionMs = progress.position * 1000;
-                const positionShared = getCurrentPositionMsShared();
-                cancelAnimation(positionShared);
-                positionShared.value = positionMs;
+                this.stopPositionClock(positionMs);
                 getDefaultStore().set(currentPositionMsAtom, positionMs);
             }
 
@@ -307,6 +389,22 @@ class LyricManager implements IInjectable {
                 devLog('info', '[LyricManager] Desktop lyric hidden due to stop/reset');
             }
         });
+
+        // setup() may run after playback has already started, in which case no
+        // new PlaybackState event is guaranteed. Seed the continuous clock from
+        // the current native state instead of leaving it in 100ms snap mode.
+        RNTrackPlayer.getPlaybackState()
+            .then(async state => {
+                this.isPlaybackAdvancing = state.state === State.Playing;
+                const progress = await this.trackPlayer.getProgress();
+                const positionMs = progress.position * 1000;
+                if (this.isPlaybackAdvancing) {
+                    this.syncPositionClock(positionMs);
+                } else {
+                    this.stopPositionClock(positionMs);
+                }
+            })
+            .catch(() => {});
 
 
         // Hide desktop lyric on app startup to prevent showing stale content

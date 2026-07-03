@@ -1,5 +1,5 @@
 import React, { memo, useEffect, useMemo, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Platform, StyleSheet, Text, View } from "react-native";
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
@@ -182,25 +182,192 @@ const HIGHLIGHT_SCALE = 1;
 // Font size ratio for secondary lines (smaller than primary/first line)
 const SECONDARY_FONT_RATIO = 0.75;
 
-// Wave animation config — Apple Music-style progressive wave float
-// Subtle breathing motion: chars gently rise and settle like a soft wave washing over text.
-// The effect should be barely perceptible — felt more than seen.
+// AMll motion constants, ported from amll-core/lyric-player/dom/lyric-line.ts.
+const AMLL_MIN_DURATION_MS = 1000;
+const AMLL_WORD_FLOAT_EM = 0.05;
+const AMLL_EMPHASIS_STAGGER_RATIO = 2.5;
+const AMLL_EMPHASIS_FLOAT_DURATION_RATIO = 1.4;
+const AMLL_EMPHASIS_FLOAT_LEAD_MS = 400;
 
-// Duration range for dynamic amplitude calculation (ms)
-const WAVE_DURATION_MIN = 100;
-const WAVE_DURATION_MAX = 800;
-// Max upward offset in em units — visible but not exaggerated
-const WAVE_MAX_TRANSLATE_EM = 0.14;
+type AmllEmphasisTiming = {
+    startTime: number;
+    duration: number;
+    amount: number;
+    blur: number;
+    offsetFactor: number;
+};
 
-// Wide asymmetric radii spread the motion across more chars, making it feel fluid rather than jumpy
-const WAVE_LEAD_RADIUS = 3;    // chars ahead: gentle anticipation
-const WAVE_TRAIL_RADIUS = 6;   // chars behind: long graceful settle
+function isCjkCodePoint(codePoint: number) {
+    return (
+        (codePoint >= 0x3400 && codePoint <= 0x4dbf) ||
+        (codePoint >= 0x4e00 && codePoint <= 0x9fff) ||
+        (codePoint >= 0xf900 && codePoint <= 0xfaff) ||
+        (codePoint >= 0x3040 && codePoint <= 0x30ff) ||
+        (codePoint >= 0xac00 && codePoint <= 0xd7af)
+    );
+}
 
-// Active char micro-scale — subtle pop effect
-const ACTIVE_CHAR_SCALE = 1.06;
-// Scale wave radii (tighter than translate wave for focused effect)
-const SCALE_WAVE_LEAD = 2;
-const SCALE_WAVE_TRAIL = 3;
+function isFloatSeparator(codePoint: number) {
+    return (
+        codePoint <= 0x002f ||
+        (codePoint >= 0x003a && codePoint <= 0x0040) ||
+        (codePoint >= 0x005b && codePoint <= 0x0060) ||
+        (codePoint >= 0x007b && codePoint <= 0x007e) ||
+        (codePoint >= 0x2000 && codePoint <= 0x206f) ||
+        (codePoint >= 0x3000 && codePoint <= 0x303f) ||
+        (codePoint >= 0xff00 && codePoint <= 0xff65)
+    );
+}
+
+function isCjkText(text: string) {
+    const chars = [...text];
+    return chars.length > 0 && chars.every(char => isCjkCodePoint(char.codePointAt(0) ?? 0));
+}
+
+function shouldAmllEmphasize(text: string, duration: number) {
+    if (isCjkText(text)) return duration >= AMLL_MIN_DURATION_MS;
+    const length = [...text.trim()].length;
+    return duration >= AMLL_MIN_DURATION_MS && length > 1 && length <= 7;
+}
+
+type TimedCharacter = {
+    char: string;
+    wordIndex: number;
+    charIndex: number;
+    startTime: number;
+    endTime: number;
+};
+
+function buildAmllEmphasisTimings(words: ILyric.IWordData[]): Array<Array<AmllEmphasisTiming | undefined>> {
+    const result = words.map(word => new Array<AmllEmphasisTiming | undefined>(
+        Math.max(1, [...word.text].length),
+    ));
+    const characters: TimedCharacter[] = [];
+
+    words.forEach((word, wordIndex) => {
+        const chars = [...word.text];
+        const charDuration = chars.length > 0 ? Math.max(0, word.duration) / chars.length : 0;
+        chars.forEach((char, charIndex) => {
+            characters.push({
+                char,
+                wordIndex,
+                charIndex,
+                startTime: word.startTime + charDuration * charIndex,
+                endTime: word.startTime + charDuration * (charIndex + 1),
+            });
+        });
+        if (word.space && !word.text.endsWith(" ")) {
+            characters.push({
+                char: " ",
+                wordIndex: -1,
+                charIndex: -1,
+                startTime: word.startTime + Math.max(0, word.duration),
+                endTime: word.startTime + Math.max(0, word.duration),
+            });
+        }
+    });
+
+    const fullText = characters.map(character => character.char).join("");
+    type SegmenterLike = {
+        segment: (text: string) => Iterable<{ segment: string }>;
+    };
+    type SegmenterConstructor = new (
+        locale?: string,
+        options?: { granularity: "word" },
+    ) => SegmenterLike;
+    const Segmenter = (Intl as unknown as { Segmenter?: SegmenterConstructor }).Segmenter;
+    const segments = Segmenter
+        ? Array.from(new Segmenter(undefined, { granularity: "word" }).segment(fullText), item => item.segment)
+        : words.map(word => `${word.text}${word.space ? " " : ""}`);
+    let characterOffset = 0;
+    const lastWordIndex = words.length - 1;
+
+    for (const segment of segments) {
+        const segmentLength = [...segment].length;
+        const segmentCharacters = characters.slice(characterOffset, characterOffset + segmentLength);
+        characterOffset += segmentLength;
+        const visibleCharacters = segmentCharacters.filter(character =>
+            character.wordIndex >= 0 && !isFloatSeparator(character.char.codePointAt(0) ?? 0),
+        );
+        if (visibleCharacters.length === 0) continue;
+
+        const segmentText = visibleCharacters.map(character => character.char).join("");
+        const startTime = Math.min(...visibleCharacters.map(character => character.startTime));
+        const endTime = Math.max(...visibleCharacters.map(character => character.endTime));
+        const rawDuration = Math.max(0, endTime - startTime);
+        const sourceWordIndices = [...new Set(visibleCharacters.map(character => character.wordIndex))];
+        const sourceEmphasizes = sourceWordIndices.some(wordIndex => {
+            const sourceWord = words[wordIndex];
+            const sourceDuration = Math.max(0, sourceWord.duration);
+            if (isCjkText(sourceWord.text)) {
+                const sourceCharCount = Math.max(1, [...sourceWord.text].length);
+                return sourceDuration / sourceCharCount >= AMLL_MIN_DURATION_MS;
+            }
+            return shouldAmllEmphasize(sourceWord.text, sourceDuration);
+        });
+        const shouldEmphasize = sourceEmphasizes ||
+            (!isCjkText(segmentText) && shouldAmllEmphasize(segmentText, rawDuration));
+        if (!shouldEmphasize) continue;
+
+        let duration = Math.max(AMLL_MIN_DURATION_MS, rawDuration);
+        let amount = duration / 2000;
+        amount = amount > 1 ? Math.sqrt(amount) : amount ** 3;
+        let blur = duration / 3000;
+        blur = blur > 1 ? Math.sqrt(blur) : blur ** 3;
+        amount *= 0.6;
+        blur *= 0.5;
+
+        if (sourceWordIndices.includes(lastWordIndex)) {
+            amount *= 1.6;
+            blur *= 1.5;
+            duration *= 1.2;
+        }
+        amount = Math.min(1.2, amount);
+        blur = Math.min(0.8, blur);
+
+        visibleCharacters.forEach((character, index) => {
+            result[character.wordIndex][character.charIndex] = {
+                startTime: startTime +
+                    (duration / AMLL_EMPHASIS_STAGGER_RATIO / visibleCharacters.length) * index,
+                duration,
+                amount,
+                blur,
+                offsetFactor: visibleCharacters.length / 2 - index,
+            };
+        });
+    }
+
+    return result;
+}
+
+function cubicBezier(value: number, x1: number, y1: number, x2: number, y2: number) {
+    "worklet";
+    const progress = Math.max(0, Math.min(1, value));
+    if (progress === 0 || progress === 1) return progress;
+
+    let parameter = progress;
+    for (let iteration = 0; iteration < 5; iteration += 1) {
+        const inverse = 1 - parameter;
+        const currentX = 3 * inverse * inverse * parameter * x1 +
+            3 * inverse * parameter * parameter * x2 + parameter ** 3;
+        const derivative = 3 * inverse * inverse * x1 +
+            6 * inverse * parameter * (x2 - x1) +
+            3 * parameter * parameter * (1 - x2);
+        if (Math.abs(derivative) < 0.0001) break;
+        parameter = Math.max(0, Math.min(1, parameter - (currentX - progress) / derivative));
+    }
+
+    const inverse = 1 - parameter;
+    return 3 * inverse * inverse * parameter * y1 +
+        3 * inverse * parameter * parameter * y2 + parameter ** 3;
+}
+
+function amllEmphasisEasing(value: number) {
+    "worklet";
+    return value < 0.5
+        ? cubicBezier(value * 2, 0.2, 0.4, 0.58, 1)
+        : 1 - cubicBezier((value - 0.5) * 2, 0.3, 0, 0.58, 1);
+}
 
 // Normalize word space flags to prevent double spaces.
 // Handles two redundancy patterns in lyric data:
@@ -326,6 +493,7 @@ const KaraokeWordSplit = memo(({
     charFlatOffset,
     activeCharIndex,
     activeCharProgress,
+    emphasisTimings,
 }: {
     word: ILyric.IWordData;
     primaryColor: string;
@@ -338,33 +506,67 @@ const KaraokeWordSplit = memo(({
     charFlatOffset: number;
     activeCharIndex: SharedValue<number>;
     activeCharProgress: SharedValue<number>;
+    emphasisTimings: Array<AmllEmphasisTiming | undefined>;
 }) => {
     const subWords = useMemo(() => splitWordToChars(word), [word]);
+    const currentPositionMsShared = useCurrentPositionShared();
+    const wordFloatStyle = useAnimatedStyle(() => {
+        "worklet";
+        if (!enableFloat || isPseudo || !isCurrentLine) {
+            return { transform: [{ translateY: 0 }] };
+        }
 
-    // Single char (Chinese etc.) — render directly, no extra wrapper
+        const duration = Math.max(AMLL_MIN_DURATION_MS, Math.max(0, word.duration));
+        const rawProgress = (currentPositionMsShared.value - word.startTime) / duration;
+        const progress = Math.max(0, Math.min(1, rawProgress));
+        const easedProgress = cubicBezier(progress, 0, 0, 0.58, 1);
+
+        return {
+            transform: [{ translateY: -fontSize * AMLL_WORD_FLOAT_EM * easedProgress }],
+        };
+    }, [
+        enableFloat,
+        isPseudo,
+        isCurrentLine,
+        word.startTime,
+        word.duration,
+        fontSize,
+    ]);
+
+    // AMll applies the base float to the whole timed word. Per-character motion
+    // is reserved for long emphasis words only.
     if (subWords.length === 1) {
         return (
-            <KaraokeWord
-                word={subWords[0]}
-                primaryColor={primaryColor}
-                highlightColor={highlightColor}
-                fontSize={fontSize}
-                isCurrentLine={isCurrentLine}
-                enableFloat={enableFloat}
-
-                isPseudo={isPseudo}
-                noSpace={noSpace}
-                charFlatIndex={charFlatOffset}
-                activeCharIndex={activeCharIndex}
-                activeCharProgress={activeCharProgress}
-            />
+            <Animated.View
+                collapsable={false}
+                renderToHardwareTextureAndroid={enableFloat && isCurrentLine}
+                shouldRasterizeIOS={enableFloat && isCurrentLine}
+                style={wordFloatStyle}>
+                <KaraokeWord
+                    word={subWords[0]}
+                    primaryColor={primaryColor}
+                    highlightColor={highlightColor}
+                    fontSize={fontSize}
+                    isCurrentLine={isCurrentLine}
+                    noSpace={noSpace}
+                    charFlatIndex={charFlatOffset}
+                    activeCharIndex={activeCharIndex}
+                    activeCharProgress={activeCharProgress}
+                    emphasisTiming={isPseudo ? undefined : emphasisTimings[0]}
+                />
+            </Animated.View>
         );
     }
 
-    // Multi-char: render each letter as independent KaraokeWord in a row
+    // Multi-character words keep a single base transform while AMll emphasis
+    // can add staggered motion to their character layers.
     const groupTrailingSpace = !noSpace && word.space ? ' ' : '';
     return (
-        <View style={lyricStyles.charGroupRow}>
+        <Animated.View
+            collapsable={false}
+            renderToHardwareTextureAndroid={enableFloat && isCurrentLine}
+            shouldRasterizeIOS={enableFloat && isCurrentLine}
+            style={[lyricStyles.charGroupRow, wordFloatStyle]}>
             {subWords.map((charWord, i) => (
                 <KaraokeWord
                     key={i}
@@ -373,69 +575,178 @@ const KaraokeWordSplit = memo(({
                     highlightColor={highlightColor}
                     fontSize={fontSize}
                     isCurrentLine={isCurrentLine}
-                    enableFloat={enableFloat}
-    
-                    isPseudo={isPseudo}
                     noSpace={true}
                     charFlatIndex={charFlatOffset + i}
                     activeCharIndex={activeCharIndex}
                     activeCharProgress={activeCharProgress}
+                    emphasisTiming={isPseudo ? undefined : emphasisTimings[i]}
                 />
             ))}
             {groupTrailingSpace ? (
                 <Text style={{ fontSize, color: 'transparent' }}>{' '}</Text>
             ) : null}
-        </View>
+        </Animated.View>
     );
 });
 
-// Individual word component with smooth native-driven animation.
-// PERFORMANCE: Uses line-level activeCharIndex/activeCharProgress instead of reading currentPositionMsShared directly.
-// Only the ACTIVE character's worklets read activeCharProgress (changes every frame).
-// Completed/pending characters use index comparison only (changes infrequently) — their worklets skip re-evaluation.
-//
-// WAVE ANIMATION (Apple Music-style):
-// Instead of only the active char rising, we compute a "wave influence" based on distance to the active char.
-// Chars within WAVE_RADIUS of the active index are pulled up proportionally (cosine falloff),
-// creating a smooth traveling wave that propagates across the line as playback advances.
+const AmllEmphasisWrapper = memo(({
+    timing,
+    fontSize,
+    children,
+}: {
+    timing: AmllEmphasisTiming;
+    fontSize: number;
+    children: React.ReactNode;
+}) => {
+    const currentPositionMsShared = useCurrentPositionShared();
+    const emphasisTransformStyle = useAnimatedStyle(() => {
+        "worklet";
+        const currentTime = currentPositionMsShared.value;
+        const progress = Math.max(0, Math.min(
+            1,
+            (currentTime - timing.startTime) / timing.duration,
+        ));
+        const emphasis = amllEmphasisEasing(progress);
+        const floatStartTime = timing.startTime - AMLL_EMPHASIS_FLOAT_LEAD_MS;
+        const floatDuration = timing.duration * AMLL_EMPHASIS_FLOAT_DURATION_RATIO;
+        const floatProgress = Math.max(0, Math.min(
+            1,
+            (currentTime - floatStartTime) / floatDuration,
+        ));
+        const floatOffset = Math.sin(floatProgress * Math.PI) * AMLL_WORD_FLOAT_EM;
+
+        const translateX = -emphasis * 0.03 * timing.amount *
+            timing.offsetFactor * fontSize;
+        const translateY = -fontSize *
+            (emphasis * 0.025 * timing.amount + floatOffset);
+        const scale = 1 + emphasis * 0.1 * timing.amount;
+
+        // AMll uses matrix3d specifically to avoid glyph-edge jitter while
+        // scaling and translating. Keep the same single-matrix composition.
+        return {
+            transform: [{
+                matrix: [
+                    scale, 0, 0, 0,
+                    0, scale, 0, 0,
+                    0, 0, 1, 0,
+                    translateX, translateY, 0, 1,
+                ],
+            }],
+        };
+    }, [timing, fontSize]);
+
+    return (
+        <Animated.View
+            collapsable={false}
+            renderToHardwareTextureAndroid
+            shouldRasterizeIOS
+            style={emphasisTransformStyle}>
+            {children}
+        </Animated.View>
+    );
+});
+
+type AmllGlowTextProps = {
+    timing: AmllEmphasisTiming;
+    fontSize: number;
+    color: string;
+    text: string;
+    onLayout: React.ComponentProps<typeof Text>["onLayout"];
+};
+
+const AmllAnimatedGlowText = memo(({
+    timing,
+    fontSize,
+    color,
+    text,
+    onLayout,
+}: AmllGlowTextProps) => {
+    const currentPositionMsShared = useCurrentPositionShared();
+    const emphasisGlowStyle = useAnimatedStyle(() => {
+        "worklet";
+        const progress = Math.max(0, Math.min(
+            1,
+            (currentPositionMsShared.value - timing.startTime) / timing.duration,
+        ));
+        const glowLevel = amllEmphasisEasing(progress) * timing.blur;
+        return {
+            textShadowColor: interpolateColor(
+                glowLevel,
+                [0, 0.8],
+                ["rgba(255, 255, 255, 0)", "rgba(255, 255, 255, 0.8)"],
+            ),
+            textShadowRadius: fontSize * Math.min(0.3, timing.blur * 0.3),
+        };
+    }, [timing, fontSize]);
+
+    return (
+        <Animated.Text
+            onLayout={onLayout}
+            style={[
+                styles.wordText,
+                emphasisGlowStyle,
+                {
+                    fontSize,
+                    color,
+                    opacity: 0.48,
+                    textShadowOffset: { width: 0, height: 0 },
+                },
+            ]}>
+            {text}
+        </Animated.Text>
+    );
+});
+
+const AmllGlowText = memo((props: AmllGlowTextProps) => {
+    // Animated textShadow forces Android to rerasterize glyphs every frame and
+    // defeats the hardware texture used for subpixel movement. AMll's motion is
+    // substantially smoother there without the costly shadow layer.
+    if (Platform.OS === "android") {
+        return (
+            <Text
+                onLayout={props.onLayout}
+                style={[
+                    styles.wordText,
+                    { fontSize: props.fontSize, color: props.color, opacity: 0.48 },
+                ]}>
+                {props.text}
+            </Text>
+        );
+    }
+
+    return <AmllAnimatedGlowText {...props} />;
+});
+
+// Individual glyph: continuous fill plus AMll's optional long-word emphasis.
+// All progress is evaluated from the smooth UI-thread playback clock.
 const KaraokeWord = memo(({
     word,
     primaryColor,
     highlightColor,
     fontSize,
     isCurrentLine,
-    enableFloat = true,
-    isPseudo = false,
     noSpace = false,
     charFlatIndex,
     activeCharIndex,
     activeCharProgress,
+    emphasisTiming,
 }: {
     word: ILyric.IWordData;
     primaryColor: string;
     highlightColor: string;
     fontSize: number;
     isCurrentLine: boolean;
-    enableFloat?: boolean;
-    isPseudo?: boolean;
     noSpace?: boolean;
     charFlatIndex: number;
     activeCharIndex: SharedValue<number>;
     activeCharProgress: SharedValue<number>;
+    emphasisTiming?: AmllEmphasisTiming;
 }) => {
-    const { duration, text, space } = word;
+    const { text, space } = word;
     const [textWidth, setTextWidth] = useState(0);
 
     // Trailing space as text (matches non-playing line text wrapping)
     const trailingSpace = !noSpace && space ? ' ' : '';
-
-    // Wave amplitude pre-computed once (based on char duration)
-    const maxWaveTranslate = useMemo(() => {
-        if (isPseudo) return 0;
-        const clamped = Math.max(WAVE_DURATION_MIN, Math.min(duration, WAVE_DURATION_MAX));
-        const factor = (clamped - WAVE_DURATION_MIN) / (WAVE_DURATION_MAX - WAVE_DURATION_MIN);
-        return -fontSize * WAVE_MAX_TRANSLATE_EM * factor;
-    }, [duration, fontSize, isPseudo]);
 
     // True karaoke fill: completed characters are fully filled while the active
     // character is clipped continuously from left to right. This avoids changing
@@ -449,54 +760,6 @@ const KaraokeWord = memo(({
         if (charFlatIndex > idx) return 0;
         return activeCharProgress.value;
     }, [isCurrentLine, charFlatIndex]);
-
-    // Wave float style + scale wave — continuous asymmetric bell curve.
-    // The wave is ONE smooth curve peaking at the active char. Asymmetry comes solely from
-    // different radii (leading=shorter, trailing=longer), NOT from amplitude scaling.
-    //
-    // PERFORMANCE: First reads activeCharIndex (changes infrequently). Only chars within the
-    // wide asymmetric radius proceed to read activeCharProgress. Far chars exit early.
-    const floatStyle = useAnimatedStyle(() => {
-        'worklet';
-        if (!enableFloat || isPseudo || !isCurrentLine) return {};
-
-        const idx = activeCharIndex.value;
-
-        // Fast exit: chars far from active index don't read activeCharProgress at all.
-        const maxRadius = Math.max(WAVE_LEAD_RADIUS, SCALE_WAVE_LEAD) + 1;
-        const maxTrail = Math.max(WAVE_TRAIL_RADIUS, SCALE_WAVE_TRAIL) + 1;
-        const intDist = charFlatIndex - idx;
-        if (intDist > maxRadius || intDist < -maxTrail) {
-            return { transform: [{ translateY: 0 }, { scale: 1 }] };
-        }
-
-        const progress = activeCharProgress.value;
-        const waveCenter = idx + progress;
-        const dist = charFlatIndex - waveCenter;
-
-        // --- translateY wave (enhanced amplitude) ---
-        let translateY = 0;
-        const tRadius = dist >= 0 ? WAVE_LEAD_RADIUS : WAVE_TRAIL_RADIUS;
-        const tAbsDist = dist >= 0 ? dist : -dist;
-        if (tAbsDist < tRadius) {
-            const t = 1 - tAbsDist / tRadius;
-            translateY = maxWaveTranslate * t * t * (3 - 2 * t);
-        }
-
-        // --- scale wave (tighter radii for focused pop) ---
-        let scale = 1;
-        const sRadius = dist >= 0 ? SCALE_WAVE_LEAD : SCALE_WAVE_TRAIL;
-        const sAbsDist = dist >= 0 ? dist : -dist;
-        if (sAbsDist < sRadius) {
-            const s = 1 - sAbsDist / sRadius;
-            const influence = s * s * (3 - 2 * s);
-            scale = 1 + (ACTIVE_CHAR_SCALE - 1) * influence;
-        }
-
-        return {
-            transform: [{ translateY }, { scale }],
-        };
-    }, [enableFloat, isPseudo, isCurrentLine, charFlatIndex, maxWaveTranslate]);
 
     const fillMaskStyle = useAnimatedStyle(() => {
         'worklet';
@@ -519,23 +782,33 @@ const KaraokeWord = memo(({
         );
     }
 
-    // The highlighted copy is masked instead of recoloring the complete glyph.
-    // Both copies use identical text metrics, keeping the sweep pixel-aligned.
-    return (
-        <Animated.View style={[styles.wordWrapper, floatStyle]}>
-            <Text
-                onLayout={event => {
-                    const width = event.nativeEvent.layout.width;
-                    if (width > 0 && Math.abs(width - textWidth) > 0.5) {
-                        setTextWidth(width);
-                    }
-                }}
-                style={[
-                    styles.wordText,
-                    { fontSize, color: primaryColor, opacity: 0.48 },
-                ]}>
-                {text}{trailingSpace}
-            </Text>
+    const handleTextLayout: React.ComponentProps<typeof Text>["onLayout"] = event => {
+        const width = event.nativeEvent.layout.width;
+        if (width > 0 && Math.abs(width - textWidth) > 0.5) {
+            setTextWidth(width);
+        }
+    };
+    const baseText = emphasisTiming ? (
+        <AmllGlowText
+            timing={emphasisTiming}
+            fontSize={fontSize}
+            color={primaryColor}
+            text={`${text}${trailingSpace}`}
+            onLayout={handleTextLayout}
+        />
+    ) : (
+        <Text
+            onLayout={handleTextLayout}
+            style={[
+                styles.wordText,
+                { fontSize, color: primaryColor, opacity: 0.48 },
+            ]}>
+            {text}{trailingSpace}
+        </Text>
+    );
+    const content = (
+        <View style={styles.wordWrapper}>
+            {baseText}
             <Animated.View
                 pointerEvents="none"
                 style={[styles.wordFillOverlay, fillMaskStyle]}>
@@ -553,8 +826,16 @@ const KaraokeWord = memo(({
                     {text}{trailingSpace}
                 </Text>
             </Animated.View>
-        </Animated.View>
+        </View>
     );
+
+    // The highlighted copy is masked instead of recoloring the complete glyph.
+    // Both copies use identical text metrics, keeping the sweep pixel-aligned.
+    return emphasisTiming ? (
+        <AmllEmphasisWrapper timing={emphasisTiming} fontSize={fontSize}>
+            {content}
+        </AmllEmphasisWrapper>
+    ) : content;
 });
 
 // Translation line with smooth native-driven animation
@@ -781,6 +1062,22 @@ function WordByWordLyricLine({
         () => translationWords ? normalizeWordSpaces(translationWords) : undefined,
         [translationWords],
     );
+    const originalEmphasisTimings = useMemo(
+        () => buildAmllEmphasisTimings(normalizedWords),
+        [normalizedWords],
+    );
+    const romanizationEmphasisTimings = useMemo(
+        () => normalizedRomanizationWords
+            ? buildAmllEmphasisTimings(normalizedRomanizationWords)
+            : [],
+        [normalizedRomanizationWords],
+    );
+    const translationEmphasisTimings = useMemo(
+        () => normalizedTranslationWords
+            ? buildAmllEmphasisTimings(normalizedTranslationWords)
+            : [],
+        [normalizedTranslationWords],
+    );
 
     // Build flat timing arrays and char offset maps for each word list
     const originalFlatTimings = useMemo(() => buildFlatTimings(normalizedWords), [normalizedWords]);
@@ -857,6 +1154,7 @@ function WordByWordLyricLine({
                     charFlatOffset={originalCharOffsets[wordIndex]}
                     activeCharIndex={originalActive.activeCharIndex}
                     activeCharProgress={originalActive.activeCharProgress}
+                    emphasisTimings={originalEmphasisTimings[wordIndex]}
                 />
             ))}
         </View>
@@ -880,6 +1178,7 @@ function WordByWordLyricLine({
                     charFlatOffset={romanizationCharOffsets[wordIndex]}
                     activeCharIndex={romanizationActive.activeCharIndex}
                     activeCharProgress={romanizationActive.activeCharProgress}
+                    emphasisTimings={romanizationEmphasisTimings[wordIndex]}
                 />
             ))}
         </View>
@@ -904,6 +1203,7 @@ function WordByWordLyricLine({
                             charFlatOffset={translationCharOffsets[wordIndex]}
                             activeCharIndex={translationActive.activeCharIndex}
                             activeCharProgress={translationActive.activeCharProgress}
+                            emphasisTimings={translationEmphasisTimings[wordIndex]}
                         />
                     ))}
                 </View>
