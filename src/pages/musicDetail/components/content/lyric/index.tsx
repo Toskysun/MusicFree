@@ -238,6 +238,7 @@ export default function Lyric(props: IProps) {
     const scrollTargetIndex = useMemo(() => {
         return getLyricIndexAtPosition(lyrics, currentPositionMs, lyricOffsetSeconds);
     }, [currentPositionMs, lyricOffsetSeconds, lyrics]);
+    const restoreScrollIndexRef = useRef(-1);
     const activeLyricIndexRef = useRef(activeLyricIndex);
     activeLyricIndexRef.current = activeLyricIndex;
     const lyricsIdentity = `${currentMusicItem?.platform ?? ""}:${currentMusicItem?.id ?? ""}:${lyrics.length}:${lyrics[0]?.time ?? ""}:${lyrics[lyrics.length - 1]?.time ?? ""}`;
@@ -263,6 +264,8 @@ export default function Lyric(props: IProps) {
 
     // Track if list is ready to show (positioned correctly)
     const [isListReady, setIsListReady] = useState(false);
+    const [shouldApplyInitialContentOffset, setShouldApplyInitialContentOffset] =
+        useState(true);
     const setListReadyState = useCallback((ready: boolean) => {
         setIsListReady(ready);
     }, []);
@@ -288,6 +291,23 @@ export default function Lyric(props: IProps) {
         return Math.max(0, Math.min(index === -1 ? 0 : index, lyrics.length - 1));
     }, [lyrics.length]);
 
+    const getRestoreScrollIndex = useCallback(() => {
+        if (!lyrics.length) return -1;
+
+        const trackedIndex =
+            scrollTargetIndex === -1 ? getActiveLyricIndex() : scrollTargetIndex;
+        const fallbackIndex = getActiveLyricIndex();
+        const resolvedIndex =
+            restoreScrollIndexRef.current !== -1
+                ? restoreScrollIndexRef.current
+                : trackedIndex === -1
+                    ? fallbackIndex
+                    : trackedIndex;
+
+        if (resolvedIndex === -1) return -1;
+        return Math.max(0, Math.min(resolvedIndex, lyrics.length - 1));
+    }, [getActiveLyricIndex, lyrics.length, scrollTargetIndex]);
+
     /** Scroll list to a given lyric index */
     const scrollToIndex = useCallback((index: number, animated: boolean, force = false) => {
         if (!listRef.current || !lyrics.length) return;
@@ -308,18 +328,21 @@ export default function Lyric(props: IProps) {
 
         if (!listRef.current || !lyrics.length) {
             setListReadyState(true);
+            setShouldApplyInitialContentOffset(false);
             scrollPhaseRef.current = ScrollPhase.Tracking;
             return;
         }
 
-        const targetIndex = getActiveLyricIndex();
+        const targetIndex = getRestoreScrollIndex();
         if (targetIndex !== -1) {
             scrollToIndex(targetIndex, false, true);
+            restoreScrollIndexRef.current = targetIndex;
         }
 
         setListReadyState(true);
+        setShouldApplyInitialContentOffset(false);
         scrollPhaseRef.current = ScrollPhase.Tracking;
-    }, [getActiveLyricIndex, lyrics.length, scrollToIndex, setListReadyState]);
+    }, [getRestoreScrollIndex, lyrics.length, scrollToIndex, setListReadyState]);
 
     const scheduleInitialPositioning = useCallback(() => {
         cancelInitialPositionFrame();
@@ -346,17 +369,35 @@ export default function Lyric(props: IProps) {
     useEffect(() => {
         scrollPhaseRef.current = ScrollPhase.WaitingForContent;
         lastScrollIndexRef.current = -1;
+        restoreScrollIndexRef.current = -1;
         setListReadyState(false);
+        setShouldApplyInitialContentOffset(true);
     }, [currentMusicItem?.id, setListReadyState]);
+
+    useEffect(() => {
+        setShouldApplyInitialContentOffset(true);
+    }, [lyricsIdentity]);
+
+    useEffect(() => {
+        restoreScrollIndexRef.current =
+            scrollTargetIndex === -1 ? getActiveLyricIndex() : scrollTargetIndex;
+    }, [getActiveLyricIndex, scrollTargetIndex]);
 
     // Reset layout cache when lyrics or visible line layout changes.
     useEffect(() => {
+        restoreScrollIndexRef.current = getRestoreScrollIndex();
         layoutCacheRef.current.reset(lyrics.length);
         scrollPhaseRef.current = ScrollPhase.InitialPositioning;
         lastScrollIndexRef.current = -1;
         setListReadyState(false);
         scheduleInitialPositioning();
-    }, [layoutAffectingKey, lyrics, scheduleInitialPositioning, setListReadyState]);
+    }, [
+        getRestoreScrollIndex,
+        layoutAffectingKey,
+        lyrics,
+        scheduleInitialPositioning,
+        setListReadyState,
+    ]);
 
     useEffect(() => {
         return () => {
@@ -408,6 +449,7 @@ export default function Lyric(props: IProps) {
         if (safeIndex === -1) return;
 
         scrollToIndex(safeIndex, true, true);
+        restoreScrollIndexRef.current = safeIndex;
         scrollPhaseRef.current = ScrollPhase.Tracking;
     }, [getActiveLyricIndex, scrollToIndex]);
 
@@ -582,11 +624,17 @@ export default function Lyric(props: IProps) {
                                 });
                             }}
                             // Start at approximate position to prevent visible scroll
-                            contentOffset={initialContentOffset}
+                            contentOffset={
+                                shouldApplyInitialContentOffset
+                                    ? initialContentOffset
+                                    : undefined
+                            }
                             onScrollToIndexFailed={({ index }) => {
                                 requestAnimationFrame(() => {
                                     scrollToIndex(index, false, true);
+                                    restoreScrollIndexRef.current = index;
                                     setListReadyState(true);
+                                    setShouldApplyInitialContentOffset(false);
                                 });
                             }}
                             fadingEdgeLength={isHorizontal ? 80 : 120}
