@@ -23,6 +23,8 @@ import SongInfo from "../albumCover/songInfo";
 import useOrientation from "@/hooks/useOrientation";
 
 const ITEM_HEIGHT = rpx(92);
+const AUTO_FOLLOW_RESTORE_DELAY_MS = 120;
+const DEFAULT_LYRIC_ORDER = ["romanization", "original", "translation"] as const;
 
 /** Scroll state machine */
 const enum ScrollPhase {
@@ -63,14 +65,20 @@ class LayoutCache {
     setHeaderHeight(h: number) {
         if (this.headerHeight !== h) {
             this.headerHeight = h;
+            return true;
         }
+
+        return false;
     }
 
     setItemHeight(index: number, height: number) {
         if (index >= 0 && index < this.heights.length && this.heights[index] !== height) {
             this.heights[index] = height;
             this.dirty = true;
+            return true;
         }
+
+        return false;
     }
 
     /** Rebuild prefix sums. Call before querying if dirty. */
@@ -90,16 +98,20 @@ class LayoutCache {
     /** For FlatList getItemLayout */
     getItemLayout(index: number) {
         this.ensureClean();
+        const safeIndex = this.clampIndex(index);
+
         return {
-            length: this.heights[index] ?? ITEM_HEIGHT,
-            offset: this.headerHeight + (this.prefixSums[index] ?? 0),
-            index,
+            length: this.heights[safeIndex] ?? ITEM_HEIGHT,
+            offset: this.headerHeight + (this.prefixSums[safeIndex] ?? 0),
+            index: safeIndex,
         };
     }
 
     /** Binary search: given a scroll offset (relative to content top), find item index */
     findIndexAtOffset(contentOffset: number): number {
         this.ensureClean();
+        if (!this.heights.length) return -1;
+
         const target = contentOffset - this.headerHeight;
         if (target <= 0) return 0;
 
@@ -115,6 +127,12 @@ class LayoutCache {
             }
         }
         return lo;
+    }
+
+    private clampIndex(index: number) {
+        if (!this.heights.length) return 0;
+
+        return Math.max(0, Math.min(index, this.heights.length - 1));
     }
 }
 
@@ -147,8 +165,10 @@ export default function Lyric(props: IProps) {
     );
     const lyricOrder = PersistStatus.useValue(
         "lyric.lyricOrder",
-        ["romanization", "original", "translation"],
+        [...DEFAULT_LYRIC_ORDER],
     );
+    const resolvedLyricOrder = lyricOrder ?? [...DEFAULT_LYRIC_ORDER];
+    const lyricOrderKey = resolvedLyricOrder.join("|");
     const fontSizeKey = useAppConfig("lyric.detailFontSize") ?? 1;
     devLog("log", "Lyric detail page font size:", fontSizeKey);
     const fontSizeStyle = useMemo(
@@ -174,64 +194,67 @@ export default function Lyric(props: IProps) {
     // --- Scroll state machine ---
     const scrollPhaseRef = useRef<ScrollPhase>(ScrollPhase.WaitingForContent);
     const lastScrollIndexRef = useRef(-1);
+    const initialPositionFrameRef = useRef<number | null>(null);
+    const restoreTrackingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const isMomentumScrollingRef = useRef(false);
+    const activeLyricIndex = currentLrcItem?.index ?? lyricManager.currentLyricItem?.index ?? -1;
+    const activeLyricIndexRef = useRef(activeLyricIndex);
+    activeLyricIndexRef.current = activeLyricIndex;
+    const lyricsIdentity = `${currentMusicItem?.platform ?? ""}:${currentMusicItem?.id ?? ""}:${lyrics.length}:${lyrics[0]?.time ?? ""}:${lyrics[lyrics.length - 1]?.time ?? ""}`;
+    const initialContentOffsetRef = useRef<{
+        key: string;
+        value?: { x: number; y: number };
+    }>({
+        key: "",
+        value: undefined,
+    });
+    if (initialContentOffsetRef.current.key !== lyricsIdentity) {
+        const targetIndex = activeLyricIndex === -1 ? 0 : activeLyricIndex;
+        initialContentOffsetRef.current = {
+            key: lyricsIdentity,
+            value: targetIndex > 0 && lyrics.length
+                ? { x: 0, y: Math.max(0, targetIndex * ITEM_HEIGHT) }
+                : undefined,
+        };
+    }
 
     // Layout cache (prefix-sum based)
     const layoutCacheRef = useRef(new LayoutCache(lyrics.length));
 
-    // Reset layout cache when lyrics change
-    useEffect(() => {
-        layoutCacheRef.current.reset(lyrics.length);
-        scrollPhaseRef.current = ScrollPhase.WaitingForContent;
-        lastScrollIndexRef.current = -1;
-        setIsListReady(false);
-    }, [lyrics]);
-
-    // Reset when song changes
-    useEffect(() => {
-        scrollPhaseRef.current = ScrollPhase.WaitingForContent;
-        lastScrollIndexRef.current = -1;
-    }, [currentMusicItem?.id]);
-
     // Track if list is ready to show (positioned correctly)
     const [isListReady, setIsListReady] = useState(false);
-
-    // Approximate initial offset to prevent visible scroll-from-top flash
-    const initialContentOffset = useMemo(() => {
-        const targetIndex = lyricManager.currentLyricItem?.index ?? 0;
-        if (targetIndex <= 0 || !lyrics.length) return undefined;
-        return { x: 0, y: Math.max(0, targetIndex * ITEM_HEIGHT) };
-    }, [lyrics]);
-
-    // 设置空白组件，获取组件高度
-    const blankComponent = useMemo(() => {
-        return (
-            <View
-                style={[styles.empty, isHorizontal ? styles.emptyHorizontal : null]}
-                onLayout={evt => {
-                    layoutCacheRef.current.setHeaderHeight(
-                        evt.nativeEvent.layout.height,
-                    );
-                }}
-            />
-        );
-    }, [isHorizontal]);
-
-    const handleLyricItemLayout = useCallback(
-        (index: number, height: number) => {
-            layoutCacheRef.current.setItemHeight(index, height);
-        },
-        [],
-    );
-
-    // O(1) getItemLayout via prefix-sum cache
-    const getItemLayout = useCallback((_data: any, index: number) => {
-        return layoutCacheRef.current.getItemLayout(index);
+    const setListReadyState = useCallback((ready: boolean) => {
+        setIsListReady(ready);
     }, []);
 
+    const cancelInitialPositionFrame = useCallback(() => {
+        if (initialPositionFrameRef.current !== null) {
+            cancelAnimationFrame(initialPositionFrameRef.current);
+            initialPositionFrameRef.current = null;
+        }
+    }, []);
+
+    const clearTrackingRestoreTimer = useCallback(() => {
+        if (restoreTrackingTimerRef.current) {
+            clearTimeout(restoreTrackingTimerRef.current);
+            restoreTrackingTimerRef.current = null;
+        }
+    }, []);
+
+    const getActiveLyricIndex = useCallback(() => {
+        if (!lyrics.length) return -1;
+
+        const index = activeLyricIndexRef.current;
+        return Math.max(0, Math.min(index === -1 ? 0 : index, lyrics.length - 1));
+    }, [lyrics.length]);
+
     /** Scroll list to a given lyric index */
-    const scrollToIndex = useCallback((index: number, animated: boolean) => {
-        if (!listRef.current) return;
+    const scrollToIndex = useCallback((index: number, animated: boolean, force = false) => {
+        if (!listRef.current || !lyrics.length) return;
+
         const safeIndex = Math.max(0, Math.min(index, lyrics.length - 1));
+        if (!force && safeIndex === lastScrollIndexRef.current) return;
+
         listRef.current.scrollToIndex({
             index: safeIndex,
             viewPosition: 0.5,
@@ -240,31 +263,129 @@ export default function Lyric(props: IProps) {
         lastScrollIndexRef.current = safeIndex;
     }, [lyrics.length]);
 
+    const finishInitialPositioning = useCallback(() => {
+        initialPositionFrameRef.current = null;
+
+        if (!listRef.current || !lyrics.length) {
+            setListReadyState(true);
+            scrollPhaseRef.current = ScrollPhase.Tracking;
+            return;
+        }
+
+        const targetIndex = getActiveLyricIndex();
+        if (targetIndex !== -1) {
+            scrollToIndex(targetIndex, false, true);
+        }
+
+        setListReadyState(true);
+        scrollPhaseRef.current = ScrollPhase.Tracking;
+    }, [getActiveLyricIndex, lyrics.length, scrollToIndex, setListReadyState]);
+
+    const scheduleInitialPositioning = useCallback(() => {
+        cancelInitialPositionFrame();
+        initialPositionFrameRef.current = requestAnimationFrame(finishInitialPositioning);
+    }, [cancelInitialPositionFrame, finishInitialPositioning]);
+
+    const layoutAffectingKey = useMemo(() => [
+        fontSizeKey,
+        isHorizontal ? "horizontal" : "vertical",
+        showTranslation && hasTranslation ? "translation" : "no-translation",
+        showRomanization && hasRomanization ? "romanization" : "no-romanization",
+        lyricOrderKey,
+    ].join("|"), [
+        fontSizeKey,
+        hasRomanization,
+        hasTranslation,
+        isHorizontal,
+        lyricOrderKey,
+        showRomanization,
+        showTranslation,
+    ]);
+
+    // Reset when song changes before the new lyric payload arrives.
+    useEffect(() => {
+        scrollPhaseRef.current = ScrollPhase.WaitingForContent;
+        lastScrollIndexRef.current = -1;
+        setListReadyState(false);
+    }, [currentMusicItem?.id, setListReadyState]);
+
+    // Reset layout cache when lyrics or visible line layout changes.
+    useEffect(() => {
+        layoutCacheRef.current.reset(lyrics.length);
+        scrollPhaseRef.current = ScrollPhase.InitialPositioning;
+        lastScrollIndexRef.current = -1;
+        setListReadyState(false);
+        scheduleInitialPositioning();
+    }, [layoutAffectingKey, lyrics, scheduleInitialPositioning, setListReadyState]);
+
+    useEffect(() => {
+        return () => {
+            cancelInitialPositionFrame();
+            clearTrackingRestoreTimer();
+        };
+    }, [cancelInitialPositionFrame, clearTrackingRestoreTimer]);
+
+    // Approximate initial offset to prevent visible scroll-from-top flash.
+    // Keep it stable for the current lyric payload; changing this every line
+    // makes FlatList jump before auto-follow centers the active line.
+    const initialContentOffset = initialContentOffsetRef.current.value;
+
+    // 设置空白组件，获取组件高度
+    const blankComponent = useMemo(() => {
+        return (
+            <View
+                style={[styles.empty, isHorizontal ? styles.emptyHorizontal : null]}
+                onLayout={evt => {
+                    const didChange = layoutCacheRef.current.setHeaderHeight(
+                        evt.nativeEvent.layout.height,
+                    );
+                    if (didChange && scrollPhaseRef.current === ScrollPhase.InitialPositioning) {
+                        scheduleInitialPositioning();
+                    }
+                }}
+            />
+        );
+    }, [isHorizontal, scheduleInitialPositioning]);
+
+    const handleLyricItemLayout = useCallback(
+        (index: number, height: number) => {
+            const didChange = layoutCacheRef.current.setItemHeight(index, height);
+            if (didChange && scrollPhaseRef.current === ScrollPhase.InitialPositioning) {
+                scheduleInitialPositioning();
+            }
+        },
+        [scheduleInitialPositioning],
+    );
+
+    // O(1) getItemLayout via prefix-sum cache
+    const getItemLayout = useCallback((_data: any, index: number) => {
+        return layoutCacheRef.current.getItemLayout(index);
+    }, []);
+
     /** Called by LyricOperations to re-center on current line */
     const scrollToCurrentLrcItem = useCallback(() => {
-        if (!listRef.current || !layout?.height) return;
-        const idx = lyricManager.currentLyricItem?.index ?? 0;
-        const safeIndex = Math.max(0, Math.min(idx, lyrics.length - 1));
-        lastScrollIndexRef.current = -1; // force re-scroll
-        scrollToIndex(safeIndex, true);
+        const safeIndex = getActiveLyricIndex();
+        if (safeIndex === -1) return;
+
+        scrollToIndex(safeIndex, true, true);
         scrollPhaseRef.current = ScrollPhase.Tracking;
-    }, [layout?.height, lyrics.length, scrollToIndex]);
+    }, [getActiveLyricIndex, scrollToIndex]);
 
     // Handle content ready — initial positioning without animation
     const onContentSizeChange = useCallback(() => {
-        if (scrollPhaseRef.current !== ScrollPhase.WaitingForContent || !listRef.current) {
+        if (!listRef.current || !lyrics.length) {
             return;
         }
-        scrollPhaseRef.current = ScrollPhase.InitialPositioning;
 
-        const targetIndex = lyricManager.currentLyricItem?.index ?? -1;
-        if (targetIndex > 0 && targetIndex < lyrics.length) {
-            scrollToIndex(targetIndex, false);
+        if (scrollPhaseRef.current === ScrollPhase.WaitingForContent) {
+            scrollPhaseRef.current = ScrollPhase.InitialPositioning;
+            lastScrollIndexRef.current = -1;
         }
 
-        setIsListReady(true);
-        scrollPhaseRef.current = ScrollPhase.Tracking;
-    }, [lyrics.length, scrollToIndex]);
+        if (scrollPhaseRef.current === ScrollPhase.InitialPositioning) {
+            scheduleInitialPositioning();
+        }
+    }, [lyrics.length, scheduleInitialPositioning]);
 
     // Main scroll effect — triggers when current lyric line changes
     useEffect(() => {
@@ -281,27 +402,54 @@ export default function Lyric(props: IProps) {
             return;
         }
 
-        const targetIndex = currentLrcItem?.index ?? -1;
+        const targetIndex = getActiveLyricIndex();
+        if (targetIndex === -1) return;
 
-        // Deduplicate: don't scroll if already at this line
-        if (targetIndex === lastScrollIndexRef.current) return;
-
-        scrollToIndex(targetIndex === -1 ? 0 : targetIndex, true);
-    }, [currentLrcItem?.index, lyrics.length, draggingIndex, musicState, scrollToIndex]);
+        scrollToIndex(targetIndex, true);
+    }, [currentLrcItem?.index, draggingIndex, getActiveLyricIndex, lyrics, musicState, scrollToIndex]);
 
     // --- Drag handlers ---
     const onScrollBeginDrag = useCallback(() => {
+        cancelInitialPositionFrame();
+        clearTrackingRestoreTimer();
+        isMomentumScrollingRef.current = false;
         scrollPhaseRef.current = ScrollPhase.UserDragging;
-    }, []);
+    }, [cancelInitialPositionFrame, clearTrackingRestoreTimer]);
 
-    const onScrollEndDrag = useCallback(() => {
+    const restoreTrackingAfterDrag = useCallback(() => {
+        clearTrackingRestoreTimer();
+        restoreTrackingTimerRef.current = setTimeout(() => {
+            restoreTrackingTimerRef.current = null;
+            if (isMomentumScrollingRef.current) return;
+
+            lastScrollIndexRef.current = -1;
+            scrollPhaseRef.current = ScrollPhase.Tracking;
+        }, AUTO_FOLLOW_RESTORE_DELAY_MS);
+    }, [clearTrackingRestoreTimer]);
+
+    const releaseDraggingIndex = useCallback(() => {
         if (draggingIndex !== undefined) {
             setDraggingIndex(undefined);
         }
-        // Allow re-scroll to current line after user releases
-        lastScrollIndexRef.current = -1;
-        scrollPhaseRef.current = ScrollPhase.Tracking;
     }, [draggingIndex, setDraggingIndex]);
+
+    const onMomentumScrollBegin = useCallback(() => {
+        if (scrollPhaseRef.current !== ScrollPhase.UserDragging) return;
+
+        clearTrackingRestoreTimer();
+        isMomentumScrollingRef.current = true;
+    }, [clearTrackingRestoreTimer]);
+
+    const onScrollEndDrag = useCallback(() => {
+        releaseDraggingIndex();
+        restoreTrackingAfterDrag();
+    }, [releaseDraggingIndex, restoreTrackingAfterDrag]);
+
+    const onMomentumScrollEnd = useCallback(() => {
+        isMomentumScrollingRef.current = false;
+        releaseDraggingIndex();
+        restoreTrackingAfterDrag();
+    }, [releaseDraggingIndex, restoreTrackingAfterDrag]);
 
     // O(log n) drag index lookup via binary search
     const onScroll = useCallback((e: any) => {
@@ -312,7 +460,9 @@ export default function Lyric(props: IProps) {
             e.nativeEvent.layoutMeasurement.height / 2;
 
         const index = layoutCacheRef.current.findIndexAtOffset(centerOffset);
-        setDraggingIndex(Math.min(index, lyrics.length - 1));
+        if (index !== -1) {
+            setDraggingIndex(Math.min(index, lyrics.length - 1));
+        }
     }, [lyrics.length, setDraggingIndex]);
 
     const onLyricSeekPress = async () => {
@@ -322,6 +472,8 @@ export default function Lyric(props: IProps) {
                 await TrackPlayer.seekTo(time);
                 await TrackPlayer.play();
                 setDraggingIndexImmi(undefined);
+                scrollPhaseRef.current = ScrollPhase.Tracking;
+                scrollToIndex(draggingIndex, true, true);
             }
         }
     };
@@ -340,6 +492,18 @@ export default function Lyric(props: IProps) {
         })
         .runOnJS(true);
 
+    const listExtraData = useMemo(() => [
+        currentLrcItem?.index ?? -1,
+        draggingIndex ?? -1,
+        layoutAffectingKey,
+        lyricAlign,
+    ].join("|"), [
+        currentLrcItem?.index,
+        draggingIndex,
+        layoutAffectingKey,
+        lyricAlign,
+    ]);
+
     return (
         <>
             <GestureDetector gesture={tapGesture}>
@@ -357,17 +521,24 @@ export default function Lyric(props: IProps) {
                                 listRef.current = _;
                             }}
                             onLayout={e => {
-                                setLayout(e.nativeEvent.layout);
+                                const nextLayout = e.nativeEvent.layout;
+                                setLayout(prev => {
+                                    if (
+                                        prev?.height === nextLayout.height &&
+                                        prev?.width === nextLayout.width
+                                    ) {
+                                        return prev;
+                                    }
+
+                                    return nextLayout;
+                                });
                             }}
                             // Start at approximate position to prevent visible scroll
                             contentOffset={initialContentOffset}
-                            viewabilityConfig={{
-                                itemVisiblePercentThreshold: 100,
-                            }}
                             onScrollToIndexFailed={({ index }) => {
                                 requestAnimationFrame(() => {
-                                    scrollToIndex(index, false);
-                                    setIsListReady(true);
+                                    scrollToIndex(index, false, true);
+                                    setListReadyState(true);
                                 });
                             }}
                             fadingEdgeLength={isHorizontal ? 80 : 120}
@@ -380,9 +551,6 @@ export default function Lyric(props: IProps) {
                             updateCellsBatchingPeriod={50}
                             removeClippedSubviews={false}
                             getItemLayout={getItemLayout}
-                            maintainVisibleContentPosition={{
-                                minIndexForVisible: 0,
-                            }}
                             ListHeaderComponent={
                                 <>
                                     {blankComponent}
@@ -424,7 +592,9 @@ export default function Lyric(props: IProps) {
                             }
                             ListFooterComponent={blankComponent}
                             onScrollBeginDrag={onScrollBeginDrag}
-                            onMomentumScrollEnd={onScrollEndDrag}
+                            onScrollEndDrag={onScrollEndDrag}
+                            onMomentumScrollBegin={onMomentumScrollBegin}
+                            onMomentumScrollEnd={onMomentumScrollEnd}
                             onScroll={onScroll}
                             scrollEventThrottle={16}
                             style={[
@@ -434,11 +604,9 @@ export default function Lyric(props: IProps) {
                             ]}
                             data={lyrics}
                             overScrollMode="never"
-                            extraData={currentLrcItem?.index}
+                            extraData={listExtraData}
                             renderItem={({ item, index }) => {
                                 const isHighlighted = currentLrcItem?.index === index;
-
-                                const order = lyricOrder ?? ["romanization", "original", "translation"];
 
                                 // Get romanization text for multi-line display
                                 const romanizationText = showRomanization && hasRomanization ? item.romanization : undefined;
@@ -481,7 +649,7 @@ export default function Lyric(props: IProps) {
                                                 ? true
                                                 : undefined
                                         }
-                                        lyricOrder={order}
+                                        lyricOrder={resolvedLyricOrder}
                                         align={lyricAlign}
                                     />
                                 );

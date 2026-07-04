@@ -629,39 +629,26 @@ export default class LyricParser {
 
     getPosition(position: number): IParsedLrcItem | null {
         position = position - (this.meta?.offset ?? 0);
-        let index;
-        /** 最前面 */
-        if (!this.lrcItems[0] || position < this.lrcItems[0].time) {
+        const itemCount = this.lrcItems.length;
+
+        if (!itemCount || position < this.lrcItems[0].time) {
             this.lastSearchIndex = 0;
             return null;
         }
-        for (
-            index = this.lastSearchIndex;
-            index < this.lrcItems.length - 1;
-            ++index
-        ) {
-            if (
-                position >= this.lrcItems[index].time &&
-                position < this.lrcItems[index + 1].time
-            ) {
-                this.lastSearchIndex = index;
-                return this.lrcItems[index];
+
+        let left = 0;
+        let right = itemCount - 1;
+        while (left < right) {
+            const mid = (left + right + 1) >>> 1;
+            if (this.lrcItems[mid].time <= position) {
+                left = mid;
+            } else {
+                right = mid - 1;
             }
         }
 
-        for (index = 0; index < this.lastSearchIndex; ++index) {
-            if (
-                position >= this.lrcItems[index].time &&
-                position < this.lrcItems[index + 1].time
-            ) {
-                this.lastSearchIndex = index;
-                return this.lrcItems[index];
-            }
-        }
-
-        index = this.lrcItems.length - 1;
-        this.lastSearchIndex = index;
-        return this.lrcItems[index];
+        this.lastSearchIndex = left;
+        return this.lrcItems[left];
     }
 
     getLyricItems() {
