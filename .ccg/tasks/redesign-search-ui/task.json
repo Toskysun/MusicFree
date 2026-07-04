@@ -1,0 +1,12 @@
+{
+  "id": "redesign-search-ui",
+  "title": "为搜索界面重新设计UI，包括通用的歌曲列表",
+  "status": "in_progress",
+  "strategy": "guided-develop",
+  "currentPhase": "5-implement",
+  "nextAction": "按计划执行实施",
+  "gate": null,
+  "branch": "master",
+  "scope": "redesign-search-ui",
+  "createdAt": "2026-07-04T03:33:39Z"
+}

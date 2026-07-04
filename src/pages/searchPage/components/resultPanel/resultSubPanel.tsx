@@ -4,6 +4,7 @@ import { useI18N } from "@/core/i18n";
 import PluginManager from "@/core/pluginManager";
 import useColors from "@/hooks/useColors";
 import rpx, { vw } from "@/utils/rpx";
+import Color from "color";
 import { useAtomValue } from "jotai";
 import React, { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Text } from "react-native";
@@ -66,6 +67,7 @@ function ResultSubPanel(props: IResultSubPanelProps) {
     const [index, setIndex] = useState(0);
     const colors = useColors();
     const { t } = useI18N();
+    const activeTabBackground = Color(colors.primary).alpha(0.12).toString();
 
     const routes = PluginManager.getSortedSearchablePlugins(props.tab).map(
         _ => ({
@@ -95,32 +97,42 @@ function ResultSubPanel(props: IResultSubPanelProps) {
                     scrollEnabled
                     // eslint-disable-next-line react-native/no-inline-styles -- Dynamic transparent styles for tab appearance
                     style={{
-                         
                         backgroundColor: "transparent",
                         shadowColor: "transparent",
                         borderColor: "transparent",
+                        paddingHorizontal: rpx(16),
+                        paddingTop: rpx(10),
+                        paddingBottom: rpx(6),
                     }}
                     inactiveColor={colors.text}
                     activeColor={colors.primary}
                     // eslint-disable-next-line react-native/no-inline-styles -- Dynamic width for tab flexibility
                     tabStyle={{
-                         
                         width: "auto",
+                        paddingHorizontal: rpx(4),
                     }}
                     renderIndicator={() => null}
                     pressColor="transparent"
-                    renderLabel={({ route, focused, color }) => (
+                    renderLabel={({ route, focused }) => (
                         <Text
                             numberOfLines={1}
                             // eslint-disable-next-line react-native/no-inline-styles -- Dynamic focused state styles
                             style={{
-                                width: rpx(140),
+                                maxWidth: rpx(200),
                                 fontWeight: focused
                                     ? fontWeightConst.bolder
                                     : fontWeightConst.medium,
-                                color,
-                                 
+                                color: focused
+                                    ? colors.primary
+                                    : colors.textSecondary ?? colors.text,
                                 textAlign: "center",
+                                paddingVertical: rpx(8),
+                                paddingHorizontal: rpx(16),
+                                borderRadius: rpx(16),
+                                backgroundColor: focused
+                                    ? activeTabBackground
+                                    : "transparent",
+                                overflow: "hidden",
                             }}>
                             {route.title ?? `(${t("common.unknownName")})`}
                         </Text>

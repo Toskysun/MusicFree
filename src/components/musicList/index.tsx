@@ -4,7 +4,7 @@ import rpx from "@/utils/rpx";
 import timeformat from "@/utils/timeformat";
 import { FlashList } from "@shopify/flash-list";
 import React, { useRef, useCallback, useState, useEffect } from "react";
-import { FlatListProps, Pressable, StyleSheet, View } from "react-native";
+import { FlatListProps, Pressable, StyleSheet, View, StyleProp, ViewStyle } from "react-native";
 import ListEmpty from "../base/listEmpty";
 import ListFooter from "../base/listFooter";
 import MusicItem from "../mediaItem/musicItem";
@@ -33,8 +33,18 @@ interface IMusicListProps {
     highlightMusicItem?: IMusic.IMusicItem | null;
     onRetry?: () => void;
     onLoadMore?: () => void;
+    /** 展示模式 */
+    variant?: "default" | "compact" | "card";
+    /** 是否显示封面 */
+    showCover?: boolean;
+    /** 项目间距（卡片模式使用） */
+    itemSpacing?: number;
+    /** 卡片自定义样式 */
+    cardStyle?: StyleProp<ViewStyle>;
 }
 const ITEM_HEIGHT = rpx(120);
+const COMPACT_ITEM_HEIGHT = rpx(88);
+const CARD_ITEM_HEIGHT = rpx(132);
 
 /** 音乐列表 */
 export default function MusicList(props: IMusicListProps) {
@@ -48,11 +58,22 @@ export default function MusicList(props: IMusicListProps) {
         onRetry,
         onLoadMore,
         highlightMusicItem,
-    } = props;    
+        variant = "default",
+        showCover = false,
+        itemSpacing = 0,
+        cardStyle,
+    } = props;
     const colors = useColors();
     const flashListRef = useRef<FlashList<IMusic.IMusicItem>>(null);
     const [showBadge, setShowBadge] = useState(false);
     const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    // 根据模式计算行高
+    const itemHeight = variant === "compact"
+        ? COMPACT_ITEM_HEIGHT
+        : variant === "card"
+        ? CARD_ITEM_HEIGHT
+        : ITEM_HEIGHT;
 
     // 查找高亮项的索引
     const highlightIndex = React.useMemo(() => {
@@ -117,12 +138,12 @@ export default function MusicList(props: IMusicListProps) {
                 }
                 extraData={highlightMusicItem}
                 data={musicList ?? []}
-                estimatedItemSize={ITEM_HEIGHT}
+                estimatedItemSize={itemHeight}
                 onScrollBeginDrag={handleScrollBegin}
                 onScrollEndDrag={handleScrollEnd}
                 onMomentumScrollEnd={handleScrollEnd}
                 renderItem={({ index, item: musicItem }) => {
-                    return (
+                    const itemContent = (
                         <MusicItem
                             musicItem={musicItem}
                             index={showIndex ? index + 1 : undefined}
@@ -145,6 +166,25 @@ export default function MusicList(props: IMusicListProps) {
                             highlight={isSameMediaItem(musicItem, highlightMusicItem)}
                         />
                     );
+
+                    if (variant === "card") {
+                        return (
+                            <View
+                                style={[
+                                    styles.cardWrapper,
+                                    {
+                                        backgroundColor: colors.surface,
+                                        marginHorizontal: rpx(12),
+                                        marginVertical: itemSpacing / 2,
+                                    },
+                                    cardStyle,
+                                ]}>
+                                {itemContent}
+                            </View>
+                        );
+                    }
+
+                    return itemContent;
                 }}
                 onEndReached={() => {
                     if (state === RequestStateCode.IDLE || state === RequestStateCode.PARTLY_DONE) {
@@ -174,6 +214,18 @@ export default function MusicList(props: IMusicListProps) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+    },
+    cardWrapper: {
+        borderRadius: rpx(12),
+        overflow: "hidden",
+        shadowColor: "#000",
+        shadowOffset: {
+            width: 0,
+            height: rpx(2),
+        },
+        shadowOpacity: 0.08,
+        shadowRadius: rpx(4),
+        elevation: 3,
     },
     badge: {
         position: "absolute",

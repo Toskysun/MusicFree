@@ -58,7 +58,9 @@ export default function NavBar() {
                         style.searchBar,
                         {
                             color: colors.text,
-                            backgroundColor: colors.pageBackground,
+                            backgroundColor: colors.surface,
+                            borderWidth: rpx(2),
+                            borderColor: colors.border,
                         },
                     ]}
                     accessible
@@ -126,6 +128,14 @@ const style = StyleSheet.create({
         height: rpx(64),
         maxHeight: rpx(64),
         alignItems: "center",
+        shadowColor: "#000",
+        shadowOffset: {
+            width: 0,
+            height: rpx(2),
+        },
+        shadowOpacity: 0.05,
+        shadowRadius: rpx(4),
+        elevation: 2,
     },
     magnify: {
         position: "absolute",

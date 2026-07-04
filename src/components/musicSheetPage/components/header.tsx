@@ -6,6 +6,9 @@ import { ImgAsset } from "@/constants/assetsConst";
 import FastImage from "@/components/base/fastImage";
 import PlayAllBar from "@/components/base/playAllBar";
 import useColors from "@/hooks/useColors";
+import { useI18N } from "@/core/i18n";
+import Tag from "@/components/base/tag";
+import Color from "color";
 
 interface IHeaderProps {
     musicSheet: IMusic.IMusicSheetItem | null;
@@ -15,8 +18,18 @@ interface IHeaderProps {
 export default function Header(props: IHeaderProps) {
     const { musicSheet, musicList, canStar } = props;
     const colors = useColors();
+    const { t } = useI18N();
 
     const [maxLines, setMaxLines] = useState<number | undefined>(6);
+    const count = musicSheet?.worksNum ?? (musicList ? musicList.length ?? 0 : 0);
+    const platformTag =
+        musicSheet?.platform && musicSheet.platform !== "local"
+            ? musicSheet.platform
+            : null;
+    const accentBackground = Color(colors.primary).alpha(0.1).toString();
+    const detailBackground = Color(colors.surfaceElevated ?? colors.card)
+        .alpha(0.9)
+        .toString();
 
     const toggleShowMore = () => {
         if (maxLines) {
@@ -27,36 +40,84 @@ export default function Header(props: IHeaderProps) {
     };
 
     return (
-        <View style={{ backgroundColor: colors.card }}>
-            <View style={style.wrapper}>
+        <View style={style.wrapper}>
+            <View
+                style={[
+                    style.infoCard,
+                    {
+                        backgroundColor: colors.surface,
+                        shadowColor: colors.shadow,
+                    },
+                ]}>
                 <View style={style.content}>
-                    <FastImage
-                        style={style.coverImg}
-                        source={musicSheet?.artwork ?? musicSheet?.coverImg}
-                        placeholderSource={ImgAsset.albumDefault}
-                    />
+                    <View
+                        style={[
+                            style.coverShell,
+                            {
+                                backgroundColor: detailBackground,
+                            },
+                        ]}>
+                        <FastImage
+                            style={style.coverImg}
+                            source={musicSheet?.artwork ?? musicSheet?.coverImg}
+                            placeholderSource={ImgAsset.albumDefault}
+                        />
+                    </View>
                     <View style={style.details}>
-                        <ThemeText numberOfLines={3}>
-                            {musicSheet?.title}
-                        </ThemeText>
+                        <View style={style.metaRow}>
+                            <View
+                                style={[
+                                    style.typeBadge,
+                                    {
+                                        backgroundColor: accentBackground,
+                                    },
+                                ]}>
+                                <ThemeText
+                                    color={colors.primary}
+                                    fontSize="caption"
+                                    fontWeight="bold">
+                                    {t("common.sheet")}
+                                </ThemeText>
+                            </View>
+                            {platformTag ? (
+                                <Tag tagName={platformTag} />
+                            ) : null}
+                        </View>
                         <ThemeText
-                            fontColor="textSecondary"
-                            fontSize="description">
-                            共
-                            {musicSheet?.worksNum ??
-                                (musicList ? musicList.length ?? 0 : "-")}
-                            首{" "}
+                            fontSize="title"
+                            fontWeight="bold"
+                            numberOfLines={3}>
+                            {musicSheet?.title ?? t("common.unknownName")}
                         </ThemeText>
+                        <View style={style.summaryRow}>
+                            <ThemeText
+                                fontColor="textSecondary"
+                                fontSize="subTitle">
+                                {t("sheetDetail.totalMusicCount", {
+                                    count,
+                                })}
+                            </ThemeText>
+                            {musicSheet?.artist ? (
+                                <ThemeText
+                                    fontColor="textSecondary"
+                                    fontSize="subTitle"
+                                    numberOfLines={1}
+                                    style={style.artistText}>
+                                    {musicSheet.artist}
+                                </ThemeText>
+                            ) : null}
+                        </View>
                     </View>
                 </View>
                 {musicSheet?.description ? (
                     <Pressable onPress={toggleShowMore}>
                         <View
-                            style={style.albumDesc}
-                            // onLayout={evt => {
-                            //     console.log(evt.nativeEvent.layout);
-                            // }}
-                        >
+                            style={[
+                                style.albumDesc,
+                                {
+                                    backgroundColor: detailBackground,
+                                },
+                            ]}>
                             <ThemeText
                                 fontColor="textSecondary"
                                 fontSize="description"
@@ -67,11 +128,20 @@ export default function Header(props: IHeaderProps) {
                     </Pressable>
                 ) : null}
             </View>
-            <PlayAllBar
-                canStar={canStar}
-                musicList={musicList}
-                musicSheet={musicSheet}
-            />
+            <View
+                style={[
+                    style.actionCard,
+                    {
+                        backgroundColor: colors.surface,
+                        shadowColor: colors.shadow,
+                    },
+                ]}>
+                <PlayAllBar
+                    canStar={canStar}
+                    musicList={musicList}
+                    musicSheet={musicSheet}
+                />
+            </View>
         </View>
     );
 }
@@ -79,33 +149,78 @@ export default function Header(props: IHeaderProps) {
 const style = StyleSheet.create({
     wrapper: {
         width: "100%",
-        padding: rpx(24),
-        justifyContent: "center",
-        alignItems: "flex-start",
+        paddingHorizontal: rpx(12),
+        paddingTop: rpx(12),
+        paddingBottom: rpx(8),
+    },
+    infoCard: {
+        borderRadius: rpx(22),
+        padding: rpx(22),
+        shadowOffset: {
+            width: 0,
+            height: rpx(2),
+        },
+        shadowOpacity: 0.08,
+        shadowRadius: rpx(4),
+        elevation: 3,
     },
     content: {
-        flex: 1,
         flexDirection: "row",
-        justifyContent: "flex-start",
-        alignItems: "center",
+        alignItems: "flex-start",
+    },
+    coverShell: {
+        width: rpx(238),
+        height: rpx(238),
+        borderRadius: rpx(28),
+        padding: rpx(14),
+        marginRight: rpx(22),
     },
     coverImg: {
-        width: rpx(210),
-        height: rpx(210),
+        width: "100%",
+        height: "100%",
         borderRadius: rpx(24),
     },
     details: {
         flex: 1,
-        height: rpx(140),
-        paddingHorizontal: rpx(36),
+        minHeight: rpx(238),
         justifyContent: "space-between",
     },
-    divider: {
-        marginVertical: rpx(18),
+    metaRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        flexWrap: "wrap",
+        marginBottom: rpx(14),
     },
-
+    typeBadge: {
+        minHeight: rpx(36),
+        paddingHorizontal: rpx(14),
+        borderRadius: rpx(18),
+        justifyContent: "center",
+        alignItems: "center",
+    },
+    summaryRow: {
+        marginTop: rpx(18),
+        gap: rpx(8),
+    },
+    artistText: {
+        lineHeight: rpx(34),
+    },
     albumDesc: {
         width: "100%",
-        marginTop: rpx(28),
+        marginTop: rpx(20),
+        paddingHorizontal: rpx(18),
+        paddingVertical: rpx(16),
+        borderRadius: rpx(18),
+    },
+    actionCard: {
+        marginTop: rpx(12),
+        borderRadius: rpx(22),
+        shadowOffset: {
+            width: 0,
+            height: rpx(2),
+        },
+        shadowOpacity: 0.08,
+        shadowRadius: rpx(4),
+        elevation: 3,
     },
 });

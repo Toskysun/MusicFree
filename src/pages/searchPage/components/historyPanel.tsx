@@ -100,13 +100,17 @@ const style = StyleSheet.create({
     header: {
         width: "100%",
         flexDirection: "row",
-        paddingVertical: rpx(28),
+        paddingVertical: rpx(20),
+        paddingBottom: rpx(16),
         justifyContent: "space-between",
         alignItems: "center",
+        borderBottomWidth: rpx(1),
+        borderBottomColor: "rgba(0,0,0,0.06)",
     },
     historyContent: {
         width: "100%",
         flex: 1,
+        paddingTop: rpx(24),
     },
     historyContentConainer: {
         flexDirection: "row",
@@ -114,7 +118,7 @@ const style = StyleSheet.create({
     },
     chip: {
         flexGrow: 0,
-        marginRight: rpx(24),
-        marginBottom: rpx(24),
+        marginRight: rpx(12),
+        marginBottom: rpx(12),
     },
 });

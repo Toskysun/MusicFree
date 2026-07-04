@@ -17,12 +17,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import StatusBar from "@/components/base/statusBar";
 import NoPlugin from "../../components/base/noPlugin";
 import { useI18N } from "@/core/i18n";
+import useColors from "@/hooks/useColors";
 
 export default function () {
     const [pageStatus, setPageStatus] = useAtom(pageStatusAtom);
     const setQuery = useSetAtom(queryAtom);
     const setSearchResultsState = useSetAtom(searchResultsAtom);
     const { t } = useI18N();
+    const colors = useColors();
 
     useEffect(() => {
         setSearchResultsState(initSearchResults);
@@ -33,7 +35,9 @@ export default function () {
     }, [setPageStatus, setQuery, setSearchResultsState]);
 
     return (
-        <SafeAreaView edges={["bottom", "top"]} style={style.wrapper}>
+        <SafeAreaView
+            edges={["bottom", "top"]}
+            style={[style.wrapper, { backgroundColor: colors.pageBackground }]}>
             <StatusBar />
             <NavBar />
             <SafeAreaView edges={["left", "right"]} style={style.wrapper}>

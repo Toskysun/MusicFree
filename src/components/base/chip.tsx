@@ -52,6 +52,14 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",
+        shadowColor: "#000",
+        shadowOffset: {
+            width: 0,
+            height: rpx(1),
+        },
+        shadowOpacity: 0.06,
+        shadowRadius: rpx(3),
+        elevation: 1,
     },
     icon: {
         marginLeft: rpx(8),

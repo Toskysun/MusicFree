@@ -39,7 +39,7 @@ export default function Body() {
             pressColor="transparent"
             inactiveColor={colors.text}
             activeColor={colors.primary}
-            renderLabel={({ route, focused, color }) => (
+            renderLabel={({ route, focused }) => (
                 <Text
                     numberOfLines={1}
                     // eslint-disable-next-line react-native/no-inline-styles -- Dynamic focused state styles
@@ -48,7 +48,9 @@ export default function Body() {
                         fontWeight: focused
                             ? fontWeightConst.bolder
                             : fontWeightConst.medium,
-                        color,
+                        color: focused
+                            ? colors.primary
+                            : colors.textSecondary ?? colors.text,
                          
                         textAlign: "center",
                     }}>

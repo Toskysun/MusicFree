@@ -21,8 +21,8 @@ export const lightTheme = {
         shadow: "#201D18",
         appBar: "#F3F0E9",
         appBarText: "#191815",
-        musicBar: "#1B1A17",
-        musicBarText: "#FAF6ED",
+        musicBar: "#FAF7F0",
+        musicBarText: "#191815",
         divider: "rgba(25,24,21,0.13)",
         border: "rgba(25,24,21,0.14)",
         listActive: "rgba(217,75,50,0.10)", // 在手机上表现是ripple

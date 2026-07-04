@@ -2,9 +2,9 @@
  * 搜索结果面板 一级页
  */
 import React, { memo, useState } from "react";
-import { Text } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import rpx, { vw } from "@/utils/rpx";
-import { SceneMap, TabBar, TabView } from "react-native-tab-view";
+import { SceneMap, TabView } from "react-native-tab-view";
 import ResultSubPanel from "./resultSubPanel";
 import results from "./results";
 import { fontWeightConst } from "@/constants/uiConst";
@@ -31,57 +31,91 @@ function ResultPanel() {
     const { t } = useI18N();
 
     return (
-        <TabView
-            lazy
-            navigationState={{
-                index,
-                routes,
-            }}
-            renderTabBar={props => (
-                <TabBar
-                    {...props}
-                    scrollEnabled
-                    // eslint-disable-next-line react-native/no-inline-styles -- Dynamic transparent styles for tab appearance
-                    style={{
-                        backgroundColor: colors.tabBar,
-                         
-                        shadowColor: "transparent",
-                        borderColor: "transparent",
-                    }}
-                    inactiveColor={colors.text}
-                    activeColor={colors.primary}
-                    // eslint-disable-next-line react-native/no-inline-styles -- Dynamic width for tab flexibility
-                    tabStyle={{
-                         
-                        width: "auto",
-                    }}
-                    renderLabel={({ route, focused, color }) => (
-                        <Text
-                            numberOfLines={1}
-                            // eslint-disable-next-line react-native/no-inline-styles -- Dynamic focused state styles
-                            style={{
-                                width: rpx(160),
-                                fontWeight: focused
-                                    ? fontWeightConst.bolder
-                                    : fontWeightConst.medium,
-                                color,
-                                 
-                                textAlign: "center",
-                            }}>
-                            {route.i18nKey ? t(route.i18nKey as any) : route.title}
-                        </Text>
-                    )}
-                    indicatorStyle={{
-                        backgroundColor: colors.primary,
-                        height: rpx(4),
-                    }}
-                />
-            )}
-            renderScene={renderScene}
-            onIndexChange={setIndex}
-            initialLayout={{ width: vw(100) }}
-        />
+        <View style={styles.container}>
+            <View
+                style={[
+                    styles.primaryTabs,
+                    {
+                        borderBottomColor: colors.divider,
+                    },
+                ]}>
+                {routes.map((route, routeIndex) => {
+                    const focused = routeIndex === index;
+
+                    return (
+                        <Pressable
+                            key={route.key}
+                            style={styles.primaryTabItem}
+                            onPress={() => setIndex(routeIndex)}>
+                            <Text
+                                numberOfLines={1}
+                                style={{
+                                    fontSize: rpx(28),
+                                    fontWeight: focused
+                                        ? fontWeightConst.bolder
+                                        : fontWeightConst.medium,
+                                    color: focused
+                                        ? colors.primary
+                                        : colors.textSecondary ?? colors.text,
+                                    textAlign: "center",
+                                }}>
+                                {route.i18nKey
+                                    ? t(route.i18nKey as any)
+                                    : route.title}
+                            </Text>
+                            <View
+                                style={[
+                                    styles.primaryTabIndicator,
+                                    {
+                                        backgroundColor: focused
+                                            ? colors.primary
+                                            : "transparent",
+                                    },
+                                ]}
+                            />
+                        </Pressable>
+                    );
+                })}
+            </View>
+            <TabView
+                lazy
+                navigationState={{
+                    index,
+                    routes,
+                }}
+                renderTabBar={() => null}
+                renderScene={renderScene}
+                onIndexChange={setIndex}
+                initialLayout={{ width: vw(100) }}
+            />
+        </View>
     );
 }
+
+const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+    },
+    primaryTabs: {
+        flexDirection: "row",
+        alignItems: "center",
+        paddingHorizontal: rpx(20),
+        paddingTop: rpx(4),
+        borderBottomWidth: StyleSheet.hairlineWidth,
+    },
+    primaryTabItem: {
+        flex: 1,
+        alignItems: "center",
+        paddingHorizontal: rpx(8),
+        paddingTop: rpx(12),
+        paddingBottom: rpx(10),
+    },
+    primaryTabIndicator: {
+        width: rpx(40),
+        height: rpx(6),
+        borderRadius: rpx(999),
+        marginTop: rpx(10),
+    },
+});
 
 export default memo(ResultPanel);

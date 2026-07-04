@@ -16,6 +16,8 @@ export default function LocalMusicList() {
                 musicList={musicList}
                 showIndex
                 state={RequestStateCode.IDLE}
+                variant="card"
+                itemSpacing={12}
                 musicSheet={{
                     id: localMusicSheetId,
                     title: t("common.local"),

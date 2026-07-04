@@ -5,7 +5,7 @@ import { ImgAsset } from "@/constants/assetsConst";
 import globalStyle from "@/constants/globalStyle";
 import pathConst from "@/constants/pathConst";
 import { useI18N } from "@/core/i18n";
-import Theme from "@/core/theme";
+import Theme, { darkTheme } from "@/core/theme";
 import { CustomizedColors } from "@/hooks/useColors";
 import { grayRate } from "@/utils/colorUtil";
 import rpx from "@/utils/rpx";
@@ -64,6 +64,9 @@ export default function Body() {
             };
 
             const primaryGrayRate = grayRate(colors.primary!);
+            const neutralMusicBar = Color(darkTheme.colors.musicBar)
+                .alpha(0.92)
+                .toString();
 
             let themeColors: Partial<CustomizedColors>;
             if (primaryGrayRate < -0.4) {
@@ -82,7 +85,7 @@ export default function Body() {
                     primary: primaryColor
                         .darken(primaryGrayRate * 5)
                         .toString(),
-                    musicBar: colors.primary,
+                    musicBar: neutralMusicBar,
                     card: "rgba(0,0,0,0.2)",
                     tabBar: primaryColor.alpha(0.2).toString(),
                 };
@@ -92,7 +95,7 @@ export default function Body() {
                     primary: Color(colors.primary)
                         .darken(primaryGrayRate * 5)
                         .toString(),
-                    musicBar: colors.primary,
+                    musicBar: neutralMusicBar,
                     card: "rgba(0,0,0,0.2)",
                 };
             } else {
@@ -103,7 +106,7 @@ export default function Body() {
                     primary: Color(colors.primary)
                         .saturate(Math.abs(primaryGrayRate) * 2 + 2)
                         .toString(),
-                    musicBar: colors.primary,
+                    musicBar: neutralMusicBar,
                     card: "rgba(0,0,0,0.2)",
                 };
             }
