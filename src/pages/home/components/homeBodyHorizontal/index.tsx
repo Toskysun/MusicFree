@@ -4,13 +4,17 @@ import Operations from "./operations";
 import { View } from "react-native";
 import Sheets from "../homeBody/sheets";
 import HomeHero from "../HomeHero";
+import { useAppConfig } from "@/core/appConfig";
 
 export default function HomeBodyHorizontal() {
+    const hideHomeHeroCard = useAppConfig("theme.hideHomeHeroCard") ?? false;
+    const hideHomeOperations = useAppConfig("theme.hideHomeOperations") ?? false;
+
     return (
         <View style={globalStyle.rowfwflex1}>
-            <Operations />
+            {!hideHomeOperations && <Operations />}
             <View style={globalStyle.fwflex1}>
-                <Sheets header={<HomeHero />} />
+                <Sheets header={!hideHomeHeroCard ? <HomeHero /> : undefined} />
             </View>
         </View>
     );
