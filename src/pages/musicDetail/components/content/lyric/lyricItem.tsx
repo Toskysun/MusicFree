@@ -6,6 +6,7 @@ import Animated, {
     withTiming,
     withRepeat,
     useDerivedValue,
+    interpolateColor,
     Easing,
     type SharedValue,
 } from "react-native-reanimated";

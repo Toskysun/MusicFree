@@ -6,6 +6,11 @@ export const basePath =
         ? RNFS.ExternalDirectoryPath
         : RNFS.DocumentDirectoryPath;
 
+const defaultDownloadMusicPath =
+    Platform.OS === "android"
+        ? "/storage/emulated/0/Music/MusicFree"
+        : `${basePath}/download`;
+
 export default {
     basePath,
     pluginPath: `${basePath}/plugins/`,
@@ -18,7 +23,7 @@ export default {
     lrcCachePath: `${basePath}/cache/lrc/`,
     downloadCachePath: `${basePath}/cache/download/`,
     downloadPath: `${basePath}/download/`,
-    downloadMusicPath: `/storage/emulated/0/Music/MusicFree`,
+    downloadMusicPath: defaultDownloadMusicPath,
     mmkvPath: `${basePath}/mmkv`,
     mmkvCachePath: `${basePath}/cache/mmkv`,
 };
