@@ -11,14 +11,15 @@ import Color from "color";
 interface ITopListResultsProps {
     pluginHash: string;
     topListItem: IMusic.IMusicSheetItemBase;
+    rank: number;
     style?: StyleProp<ViewStyle>;
 }
 
 export default function TopListItem(props: ITopListResultsProps) {
-    const { pluginHash, topListItem, style } = props;
+    const { pluginHash, topListItem, rank, style } = props;
     const navigate = useNavigate();
     const colors = useColors();
-    const description = `${topListItem.description ?? ""}`.trim();
+    const rankBackgroundColor = Color(colors.background).alpha(0.86).toString();
 
     return (
         <Pressable
@@ -48,29 +49,37 @@ export default function TopListItem(props: ITopListResultsProps) {
                         styles.coverShade,
                         {
                             backgroundColor: Color(colors.background)
-                                .alpha(0.12)
+                                .alpha(0.1)
                                 .toString(),
                         },
                     ]}
                 />
+                <View
+                    style={[
+                        styles.rankBadge,
+                        {
+                            backgroundColor: rankBackgroundColor,
+                            borderColor: Color(colors.text)
+                                .alpha(0.08)
+                                .toString(),
+                        },
+                    ]}>
+                    <ThemeText
+                        fontSize="tag"
+                        fontWeight="bold"
+                        color={colors.primary}>
+                        {`${rank}`.padStart(2, "0")}
+                    </ThemeText>
+                </View>
             </View>
             <View style={styles.content}>
                 <ThemeText
-                    fontSize="subTitle"
+                    fontSize="description"
                     fontWeight="bold"
                     numberOfLines={2}
                     style={styles.title}>
                     {topListItem.title}
                 </ThemeText>
-                {description ? (
-                    <ThemeText
-                        fontSize="description"
-                        fontColor="textSecondary"
-                        numberOfLines={4}
-                        style={styles.description}>
-                        {description}
-                    </ThemeText>
-                ) : null}
             </View>
         </Pressable>
     );
@@ -79,7 +88,7 @@ export default function TopListItem(props: ITopListResultsProps) {
 const styles = StyleSheet.create({
     wrapper: {
         width: "100%",
-        borderRadius: rpx(24),
+        borderRadius: rpx(20),
         borderWidth: StyleSheet.hairlineWidth,
         overflow: "hidden",
     },
@@ -87,6 +96,7 @@ const styles = StyleSheet.create({
         width: "100%",
         aspectRatio: 1,
         position: "relative",
+        overflow: "hidden",
     },
     cover: {
         width: "100%",
@@ -96,15 +106,23 @@ const styles = StyleSheet.create({
         ...StyleSheet.absoluteFillObject,
     },
     content: {
-        paddingHorizontal: rpx(18),
-        paddingTop: rpx(18),
-        paddingBottom: rpx(20),
+        paddingHorizontal: rpx(12),
+        paddingTop: rpx(10),
+        paddingBottom: rpx(12),
     },
     title: {
-        lineHeight: rpx(34),
+        lineHeight: rpx(28),
     },
-    description: {
-        marginTop: rpx(10),
-        lineHeight: rpx(32),
+    rankBadge: {
+        position: "absolute",
+        top: rpx(8),
+        left: rpx(8),
+        minWidth: rpx(42),
+        height: rpx(32),
+        borderRadius: rpx(16),
+        paddingHorizontal: rpx(10),
+        borderWidth: StyleSheet.hairlineWidth,
+        alignItems: "center",
+        justifyContent: "center",
     },
 });
