@@ -928,11 +928,11 @@ static NSString *MFMflacMimeType(NSString *src) {
       return;
     }
     NSUInteger wanted = range.hasEnd ? static_cast<NSUInteger>(range.end - range.start + 1) : body.length - static_cast<NSUInteger>(range.start);
-    body = [[MFMflacSubdata(body, static_cast<NSUInteger>(range.start), wanted) mutableCopy];
+    body = [MFMflacSubdata(body, static_cast<NSUInteger>(range.start), wanted) mutableCopy];
   } else if (range.valid && range.hasEnd) {
     NSUInteger wanted = static_cast<NSUInteger>(range.end - range.start + 1);
     if (body.length > wanted) {
-      body = [[MFMflacSubdata(body, 0, wanted) mutableCopy];
+      body = [MFMflacSubdata(body, 0, wanted) mutableCopy];
     }
   }
 
