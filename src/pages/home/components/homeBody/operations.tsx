@@ -1,15 +1,19 @@
 import { useI18N } from "@/core/i18n";
 import { ROUTE_PATH, useNavigate } from "@/core/router";
 import rpx from "@/utils/rpx";
-import React from "react";
+import React, { useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import ActionButton from "../ActionButton";
 import useColors from "@/hooks/useColors";
+
+const HORIZONTAL_PADDING = rpx(24);
+const BUTTON_GAP = rpx(14);
 
 export default function Operations() {
     const navigate = useNavigate();
     const { t } = useI18N();
     const colors = useColors();
+    const [containerWidth, setContainerWidth] = useState(0);
 
     const actionButtons = [
         {
@@ -46,14 +50,34 @@ export default function Operations() {
         },
     ] as const;
 
+    const buttonWidth = useMemo(() => {
+        if (!containerWidth) return undefined;
+        const contentWidth = Math.max(0, containerWidth - HORIZONTAL_PADDING * 2);
+        return Math.max(0, (contentWidth - BUTTON_GAP) / 2);
+    }, [containerWidth]);
+
     return (
-        <View style={styles.container}>
+        <View
+            style={styles.container}
+            onLayout={e => {
+                const nextWidth = e.nativeEvent.layout.width;
+                setContainerWidth(prev =>
+                    Math.abs(prev - nextWidth) < 0.5 ? prev : nextWidth,
+                );
+            }}>
             {actionButtons.map(action => (
-                <ActionButton
-                    style={styles.actionButtonStyle}
+                <View
                     key={action.title}
-                    {...action}
-                />
+                    style={[
+                        styles.actionButtonItem,
+                        buttonWidth !== undefined ? { width: buttonWidth } : null,
+                    ]}>
+                    <ActionButton
+                        style={styles.actionButtonStyle}
+                        {...action}
+                    />
+                </View>
+                
             ))}
         </View>
     );
@@ -62,14 +86,18 @@ export default function Operations() {
 const styles = StyleSheet.create({
     container: {
         width: "100%",
-        paddingHorizontal: rpx(24),
+        paddingHorizontal: HORIZONTAL_PADDING,
         marginTop: rpx(20),
         marginBottom: rpx(12),
         flexDirection: "row",
         flexWrap: "wrap",
-        gap: rpx(14),
+        justifyContent: "space-between",
+    },
+    actionButtonItem: {
+        marginBottom: BUTTON_GAP,
     },
     actionButtonStyle: {
-        width: rpx(344),
+        width: "100%",
+        flexGrow: 0,
     },
 });
