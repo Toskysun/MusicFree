@@ -15,6 +15,10 @@ import com.facebook.react.bridge.ReactContext
 
 
 class LyricView(private val reactContext: ReactContext) : Activity() {
+    private companion object {
+        const val MIN_FONT_SP = 2f
+        const val MAX_FONT_SP = 56f
+    }
 
     private var windowManager: WindowManager? = null
     private var orientationEventListener: OrientationEventListener? = null
@@ -115,14 +119,15 @@ class LyricView(private val reactContext: ReactContext) : Activity() {
                 layoutParams?.flags = baseFlags
                 layoutParams?.format = PixelFormat.TRANSPARENT
 
-                val textSizePx = (fontSize?.toString()?.toFloat() ?: 14f) * reactContext.resources.displayMetrics.scaledDensity
+                val initialFontSp = (fontSize?.toString()?.toFloat() ?: 14f).coerceIn(MIN_FONT_SP, MAX_FONT_SP)
+                val textSizePx = initialFontSp * reactContext.resources.displayMetrics.scaledDensity
                 val secondaryFontRatio = options["secondaryFontRatio"]?.toString()?.toFloat() ?: 0.85f
                 val secondaryAlphaRatio = options["secondaryAlphaRatio"]?.toString()?.toFloat() ?: 0.90f
                 val unsungColorParsed = parseColor(color?.toString(), "#FFE9D2")
                 val bgColorParsed = parseColor(backgroundColor?.toString(), "#84888153")
                 val sungColorParsed = parseColor(sungColor?.toString(), "#FFFFFFFF")
                 val alignGravity = align?.toString()?.toInt() ?: Gravity.CENTER
-                this.currentFontSp = fontSize?.toString()?.toFloat() ?: 14f
+                this.currentFontSp = initialFontSp
 
                 container = LyricContainerView(reactContext, object : LyricContainerView.Callbacks {
                     override fun onRequestLockStateChange(locked: Boolean) {
@@ -215,12 +220,12 @@ class LyricView(private val reactContext: ReactContext) : Activity() {
                 onPresetLongPressed?.invoke(index)
             }
             onMinusClick = {
-                setFontSize((currentFontSp - 1f).coerceAtLeast(12f))
+                setFontSize((currentFontSp - 1f).coerceAtLeast(MIN_FONT_SP))
                 onFontSizeChanged?.invoke(currentFontSp)
                 scheduleAutoHide()
             }
             onPlusClick = {
-                setFontSize((currentFontSp + 1f).coerceAtMost(56f))
+                setFontSize((currentFontSp + 1f).coerceAtMost(MAX_FONT_SP))
                 onFontSizeChanged?.invoke(currentFontSp)
                 scheduleAutoHide()
             }
@@ -486,10 +491,11 @@ class LyricView(private val reactContext: ReactContext) : Activity() {
     }
 
     fun setFontSize(fontSize: Float) {
-        val textSizePx = fontSize * reactContext.resources.displayMetrics.scaledDensity
+        val nextFontSize = fontSize.coerceIn(MIN_FONT_SP, MAX_FONT_SP)
+        val textSizePx = nextFontSize * reactContext.resources.displayMetrics.scaledDensity
         container?.lyricView?.setTextSize(textSizePx)
-        container?.currentFontSp = fontSize
-        this.currentFontSp = fontSize
+        container?.currentFontSp = nextFontSize
+        this.currentFontSp = nextFontSize
         requestLayoutUpdate()
     }
 
