@@ -15,7 +15,11 @@ import LyricOperations from "./lyricOperations";
 import { IParsedLrcItem } from "@/utils/lrcParser";
 import { IconButtonWithGesture } from "@/components/base/iconButton.tsx";
 import { getMediaExtraProperty } from "@/utils/mediaExtra";
-import lyricManager, { useCurrentLyricItem, useLyricState } from "@/core/lyricManager";
+import lyricManager, {
+    useCurrentLyricItem,
+    useCurrentPositionMs,
+    useLyricState,
+} from "@/core/lyricManager";
 import { useI18N } from "@/core/i18n";
 import { useAppConfig } from "@/core/appConfig";
 import { devLog } from "@/utils/log";
@@ -24,6 +28,7 @@ import useOrientation from "@/hooks/useOrientation";
 
 const ITEM_HEIGHT = rpx(92);
 const AUTO_FOLLOW_RESTORE_DELAY_MS = 120;
+const SCROLL_FOLLOW_LEAD_MS = 120;
 const DEFAULT_LYRIC_ORDER = ["romanization", "original", "translation"] as const;
 
 /** Scroll state machine */
@@ -140,6 +145,33 @@ interface IProps {
     onTurnPageClick?: () => void;
 }
 
+function getLyricIndexAtPosition(
+    lyrics: IParsedLrcItem[],
+    positionMs: number,
+    offsetSeconds: number,
+) {
+    if (!lyrics.length) return -1;
+
+    const targetSeconds =
+        positionMs / 1000 + SCROLL_FOLLOW_LEAD_MS / 1000 - offsetSeconds;
+    if (targetSeconds < lyrics[0].time) {
+        return 0;
+    }
+
+    let left = 0;
+    let right = lyrics.length - 1;
+    while (left < right) {
+        const mid = (left + right + 1) >>> 1;
+        if (lyrics[mid].time <= targetSeconds) {
+            left = mid;
+        } else {
+            right = mid - 1;
+        }
+    }
+
+    return left;
+}
+
 const fontSizeMap = {
     0: rpx(24),
     1: rpx(30),
@@ -155,6 +187,7 @@ export default function Lyric(props: IProps) {
     const { loading, meta, lyrics, hasTranslation, hasRomanization } =
         useLyricState();
     const currentLrcItem = useCurrentLyricItem();
+    const currentPositionMs = useCurrentPositionMs();
     const showTranslation = PersistStatus.useValue(
         "lyric.showTranslation",
         true,
@@ -178,6 +211,10 @@ export default function Lyric(props: IProps) {
         [fontSizeKey],
     );
     const lyricAlign = useAppConfig("lyric.detailAlign") ?? "left";
+    const lyricOffsetSecondsRaw = Number(meta?.offset ?? 0);
+    const lyricOffsetSeconds = Number.isFinite(lyricOffsetSecondsRaw)
+        ? lyricOffsetSecondsRaw
+        : 0;
 
     const [draggingIndex, setDraggingIndex, setDraggingIndexImmi] =
         useDelayFalsy<number | undefined>(undefined, 2000);
@@ -198,6 +235,9 @@ export default function Lyric(props: IProps) {
     const restoreTrackingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const isMomentumScrollingRef = useRef(false);
     const activeLyricIndex = currentLrcItem?.index ?? lyricManager.currentLyricItem?.index ?? -1;
+    const scrollTargetIndex = useMemo(() => {
+        return getLyricIndexAtPosition(lyrics, currentPositionMs, lyricOffsetSeconds);
+    }, [currentPositionMs, lyricOffsetSeconds, lyrics]);
     const activeLyricIndexRef = useRef(activeLyricIndex);
     activeLyricIndexRef.current = activeLyricIndex;
     const lyricsIdentity = `${currentMusicItem?.platform ?? ""}:${currentMusicItem?.id ?? ""}:${lyrics.length}:${lyrics[0]?.time ?? ""}:${lyrics[lyrics.length - 1]?.time ?? ""}`;
@@ -402,11 +442,19 @@ export default function Lyric(props: IProps) {
             return;
         }
 
-        const targetIndex = getActiveLyricIndex();
+        const targetIndex =
+            scrollTargetIndex === -1 ? getActiveLyricIndex() : scrollTargetIndex;
         if (targetIndex === -1) return;
 
         scrollToIndex(targetIndex, true);
-    }, [currentLrcItem?.index, draggingIndex, getActiveLyricIndex, lyrics, musicState, scrollToIndex]);
+    }, [
+        draggingIndex,
+        getActiveLyricIndex,
+        lyrics,
+        musicState,
+        scrollTargetIndex,
+        scrollToIndex,
+    ]);
 
     // --- Drag handlers ---
     const onScrollBeginDrag = useCallback(() => {

@@ -7,8 +7,6 @@ import Animated, {
     withRepeat,
     useDerivedValue,
     Easing,
-    interpolate,
-    interpolateColor,
     type SharedValue,
 } from "react-native-reanimated";
 import rpx from "@/utils/rpx";
@@ -181,6 +179,7 @@ const HIGHLIGHT_SCALE = 1;
 
 // Font size ratio for secondary lines (smaller than primary/first line)
 const SECONDARY_FONT_RATIO = 0.75;
+const TRANSLATION_HIGHLIGHT_OPACITY = 0.72;
 
 // AMll motion constants, ported from amll-core/lyric-player/dom/lyric-line.ts.
 const AMLL_MIN_DURATION_MS = 1000;
@@ -838,60 +837,39 @@ const KaraokeWord = memo(({
     ) : content;
 });
 
-// Translation line with smooth native-driven animation
-// Reads currentPositionMsShared directly for zero-JS-overhead progress tracking
-const FollowingTranslationLine = memo(({
+const TranslationTextLine = memo(({
     text,
-    lineStart,
-    lineDuration,
     fontSize,
     highlightColor,
+    highlight = false,
+    inactiveOpacity = 0.5,
     align = "center",
 }: {
     text: string;
-    lineStart: number;
-    lineDuration: number;
     fontSize: number;
     highlightColor: string;
+    highlight?: boolean;
+    inactiveOpacity?: number;
     align?: LyricAlign;
 }) => {
-    const currentPositionMsShared = useCurrentPositionShared();
-
-    // Animated style for color + opacity interpolation — derived from SharedValue on UI thread
-    const overlayStyle = useAnimatedStyle(() => {
-        'worklet';
-        if (lineDuration <= 0) return { opacity: 0 };
-        const t = currentPositionMsShared.value;
-        const progress = Math.min(1, Math.max(0, (t - lineStart) / lineDuration));
-
-        const color = interpolateColor(
-            progress,
-            [0, 1],
-            ['white', highlightColor],
-        );
-        const opacity = interpolate(
-            progress,
-            [0, 0.1, 1],
-            [0.35, 0.5, 0.95],
-        );
-
-        return { color, opacity };
-    }, [lineStart, lineDuration, highlightColor]);
-
     return (
         <View style={[
             styles.translationLineContainer,
             { alignItems: align === "left" ? "flex-start" : "center" },
         ]}>
-            <Animated.Text
+            <Text
                 style={[
                     styles.wordText,
-                    { fontSize },
-                    overlayStyle,
+                    {
+                        fontSize,
+                        textAlign: align,
+                        color: highlight ? highlightColor : "white",
+                        opacity: highlight ? TRANSLATION_HIGHLIGHT_OPACITY : inactiveOpacity,
+                    },
                 ]}
             >
                 {text}
-            </Animated.Text>
+            </Text>
         </View>
     );
 });
@@ -982,16 +960,18 @@ function StaticWordByWordLine({
                     : null;
             case "translation":
                 return translation ? (
-                    <Text
+                    <View
                         key="translation"
-                        style={[
-                            lyricStyles.compactItem,
-                            { fontSize: getLineFontSize(isFirst), textAlign: align },
-                            !isFirst && lyricStyles.secondaryLine,
-                        ]}
+                        style={[{ width: "100%" }, !isFirst && lyricStyles.secondaryLine]}
                     >
-                        {translation}
-                    </Text>
+                        <TranslationTextLine
+                            text={translation}
+                            fontSize={getLineFontSize(isFirst)}
+                            highlightColor="white"
+                            inactiveOpacity={1}
+                            align={align}
+                        />
+                    </View>
                 ) : null;
             default:
                 return null;
@@ -1041,8 +1021,6 @@ function WordByWordLyricLine({
     romanizationWords,
     isRomanizationPseudo,
     translation,
-    translationWords,
-    hasTranslationWordByWord,
     lyricOrder = ["romanization", "original", "translation"],
     fontSize,
     highlightColor,
@@ -1058,10 +1036,6 @@ function WordByWordLyricLine({
         () => romanizationWords ? normalizeWordSpaces(romanizationWords) : undefined,
         [romanizationWords],
     );
-    const normalizedTranslationWords = useMemo(
-        () => translationWords ? normalizeWordSpaces(translationWords) : undefined,
-        [translationWords],
-    );
     const originalEmphasisTimings = useMemo(
         () => buildAmllEmphasisTimings(normalizedWords),
         [normalizedWords],
@@ -1072,22 +1046,12 @@ function WordByWordLyricLine({
             : [],
         [normalizedRomanizationWords],
     );
-    const translationEmphasisTimings = useMemo(
-        () => normalizedTranslationWords
-            ? buildAmllEmphasisTimings(normalizedTranslationWords)
-            : [],
-        [normalizedTranslationWords],
-    );
 
     // Build flat timing arrays and char offset maps for each word list
     const originalFlatTimings = useMemo(() => buildFlatTimings(normalizedWords), [normalizedWords]);
     const romanizationFlatTimings = useMemo(
         () => normalizedRomanizationWords ? buildFlatTimings(normalizedRomanizationWords) : [],
         [normalizedRomanizationWords],
-    );
-    const translationFlatTimings = useMemo(
-        () => normalizedTranslationWords ? buildFlatTimings(normalizedTranslationWords) : [],
-        [normalizedTranslationWords],
     );
 
     // Compute per-word char offsets (cumulative char count before each word)
@@ -1112,27 +1076,9 @@ function WordByWordLyricLine({
         return offsets;
     }, [normalizedRomanizationWords]);
 
-    const translationCharOffsets = useMemo(() => {
-        if (!normalizedTranslationWords) return [];
-        const offsets: number[] = [];
-        let acc = 0;
-        for (const w of normalizedTranslationWords) {
-            offsets.push(acc);
-            acc += splitWordToChars(w).length;
-        }
-        return offsets;
-    }, [normalizedTranslationWords]);
-
     // Line-level active state tracking — ONE useDerivedValue per word list reads currentPositionMsShared
     const originalActive = useLineActiveState(originalFlatTimings);
     const romanizationActive = useLineActiveState(romanizationFlatTimings);
-    const translationActive = useLineActiveState(translationFlatTimings);
-
-    // Line timing for translation progress (passed to FollowingTranslationLine)
-    const lineStart = normalizedWords?.[0]?.startTime ?? 0;
-    const lastWord = normalizedWords?.[normalizedWords.length - 1];
-    const lineEnd = lastWord ? lastWord.startTime + lastWord.duration : 0;
-    const lineDuration = lineEnd - lineStart;
 
     // Font size based on order: first line uses full fontSize, others use smaller
     const getLineFontSize = (isFirst: boolean) => isFirst ? fontSize : fontSize * SECONDARY_FONT_RATIO;
@@ -1187,37 +1133,13 @@ function WordByWordLyricLine({
     // Translation line component
     const translationLine = (isFirst: boolean) => translation && (
         <View style={[{ width: '100%' }, !isFirst && lyricStyles.secondaryLine]} key="translation">
-            {hasTranslationWordByWord && normalizedTranslationWords && normalizedTranslationWords.length > 0 ? (
-                <View style={[lyricStyles.wordByWordLine, { justifyContent }]}>
-                    {normalizedTranslationWords.map((word, wordIndex) => (
-                        <KaraokeWordSplit
-                            key={wordIndex}
-                            word={word}
-                            primaryColor="white"
-                            highlightColor={highlightColor}
-                            fontSize={getLineFontSize(isFirst)}
-                            isCurrentLine={isCurrentLine}
-                            enableFloat={enableFloat}
-            
-                            isPseudo={true}
-                            charFlatOffset={translationCharOffsets[wordIndex]}
-                            activeCharIndex={translationActive.activeCharIndex}
-                            activeCharProgress={translationActive.activeCharProgress}
-                            emphasisTimings={translationEmphasisTimings[wordIndex]}
-                        />
-                    ))}
-                </View>
-            ) : (
-                <FollowingTranslationLine
-                    text={translation}
-                    lineStart={lineStart}
-                    lineDuration={lineDuration}
-                    fontSize={getLineFontSize(isFirst)}
-                    highlightColor={highlightColor}
-    
-                    align={align}
-                />
-            )}
+            <TranslationTextLine
+                text={translation}
+                fontSize={getLineFontSize(isFirst)}
+                highlightColor={highlightColor}
+                highlight={isCurrentLine}
+                align={align}
+            />
         </View>
     );
 
@@ -1444,9 +1366,16 @@ function MultiLineRegularLyric({
 
     // Translation line component
     const translationLine = (isFirst: boolean) => translation && (
-        <Text key="translation" style={getLineStyle(isFirst)}>
-            {translation}
-        </Text>
+        <View key="translation" style={[{ width: "100%" }, !isFirst && lyricStyles.secondaryLine]}>
+            <TranslationTextLine
+                text={translation}
+                fontSize={getLineFontSize(isFirst)}
+                highlightColor={primaryColor}
+                highlight={highlight}
+                inactiveOpacity={1}
+                align={align}
+            />
+        </View>
     );
 
     // Render line based on type

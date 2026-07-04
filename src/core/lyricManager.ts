@@ -70,9 +70,6 @@ const POSITION_CLOCK_RUNWAY_MS = 60_000;
 const POSITION_CLOCK_RESYNC_INTERVAL_MS = 5_000;
 const POSITION_CLOCK_MAX_DRIFT_MS = 160;
 const POSITION_CLOCK_CORRECTION_MS = 2_000;
-const LYRIC_LINE_SWITCH_LEAD_MS = 300;
-
-
 class LyricManager implements IInjectable {
 
     private trackPlayer!: ITrackPlayer;
@@ -106,10 +103,6 @@ class LyricManager implements IInjectable {
 
     get lyricState() {
         return getDefaultStore().get(lyricStateAtom);
-    }
-
-    private getLineSwitchPosition(positionSeconds: number) {
-        return positionSeconds + LYRIC_LINE_SWITCH_LEAD_MS / 1000;
     }
 
     injectDependencies(trackPlayerService: ITrackPlayer, appConfigService: IAppConfig, pluginManager: IPluginManager): void {
@@ -296,7 +289,7 @@ class LyricManager implements IInjectable {
             }
 
             const currentLyricItem = getDefaultStore().get(currentLyricItemAtom);
-            const newLyricItem = parser.getPosition(this.getLineSwitchPosition(evt.position));
+            const newLyricItem = parser.getPosition(evt.position);
 
             // Use index-based comparison to handle duplicate lyric lines
             const newIndex = newLyricItem?.index ?? -1;
@@ -806,7 +799,7 @@ class LyricManager implements IInjectable {
             const progress = await this.trackPlayer.getProgress();
             const currentLyric = ignoreProgress
                 ? (this.lyricParser.getLyricItems()?.[0] ?? null)
-                : this.lyricParser.getPosition(this.getLineSwitchPosition(progress.position));
+                : this.lyricParser.getPosition(progress.position);
             getDefaultStore().set(currentLyricItemAtom, currentLyric || null);
 
             devLog('info', 'Lyric refresh completed successfully', {
