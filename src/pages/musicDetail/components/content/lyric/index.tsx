@@ -241,31 +241,12 @@ export default function Lyric(props: IProps) {
     const restoreScrollIndexRef = useRef(-1);
     const activeLyricIndexRef = useRef(activeLyricIndex);
     activeLyricIndexRef.current = activeLyricIndex;
-    const lyricsIdentity = `${currentMusicItem?.platform ?? ""}:${currentMusicItem?.id ?? ""}:${lyrics.length}:${lyrics[0]?.time ?? ""}:${lyrics[lyrics.length - 1]?.time ?? ""}`;
-    const initialContentOffsetRef = useRef<{
-        key: string;
-        value?: { x: number; y: number };
-    }>({
-        key: "",
-        value: undefined,
-    });
-    if (initialContentOffsetRef.current.key !== lyricsIdentity) {
-        const targetIndex = activeLyricIndex === -1 ? 0 : activeLyricIndex;
-        initialContentOffsetRef.current = {
-            key: lyricsIdentity,
-            value: targetIndex > 0 && lyrics.length
-                ? { x: 0, y: Math.max(0, targetIndex * ITEM_HEIGHT) }
-                : undefined,
-        };
-    }
 
     // Layout cache (prefix-sum based)
     const layoutCacheRef = useRef(new LayoutCache(lyrics.length));
 
     // Track if list is ready to show (positioned correctly)
     const [isListReady, setIsListReady] = useState(false);
-    const [shouldApplyInitialContentOffset, setShouldApplyInitialContentOffset] =
-        useState(true);
     const setListReadyState = useCallback((ready: boolean) => {
         setIsListReady(ready);
     }, []);
@@ -328,7 +309,6 @@ export default function Lyric(props: IProps) {
 
         if (!listRef.current || !lyrics.length) {
             setListReadyState(true);
-            setShouldApplyInitialContentOffset(false);
             scrollPhaseRef.current = ScrollPhase.Tracking;
             return;
         }
@@ -340,7 +320,6 @@ export default function Lyric(props: IProps) {
         }
 
         setListReadyState(true);
-        setShouldApplyInitialContentOffset(false);
         scrollPhaseRef.current = ScrollPhase.Tracking;
     }, [getRestoreScrollIndex, lyrics.length, scrollToIndex, setListReadyState]);
 
@@ -371,12 +350,7 @@ export default function Lyric(props: IProps) {
         lastScrollIndexRef.current = -1;
         restoreScrollIndexRef.current = -1;
         setListReadyState(false);
-        setShouldApplyInitialContentOffset(true);
     }, [currentMusicItem?.id, setListReadyState]);
-
-    useEffect(() => {
-        setShouldApplyInitialContentOffset(true);
-    }, [lyricsIdentity]);
 
     useEffect(() => {
         restoreScrollIndexRef.current =
@@ -405,11 +379,6 @@ export default function Lyric(props: IProps) {
             clearTrackingRestoreTimer();
         };
     }, [cancelInitialPositionFrame, clearTrackingRestoreTimer]);
-
-    // Approximate initial offset to prevent visible scroll-from-top flash.
-    // Keep it stable for the current lyric payload; changing this every line
-    // makes FlatList jump before auto-follow centers the active line.
-    const initialContentOffset = initialContentOffsetRef.current.value;
 
     // 设置空白组件，获取组件高度
     const blankComponent = useMemo(() => {
@@ -623,18 +592,12 @@ export default function Lyric(props: IProps) {
                                     return nextLayout;
                                 });
                             }}
-                            // Start at approximate position to prevent visible scroll
-                            contentOffset={
-                                shouldApplyInitialContentOffset
-                                    ? initialContentOffset
-                                    : undefined
-                            }
                             onScrollToIndexFailed={({ index }) => {
                                 requestAnimationFrame(() => {
                                     scrollToIndex(index, false, true);
                                     restoreScrollIndexRef.current = index;
                                     setListReadyState(true);
-                                    setShouldApplyInitialContentOffset(false);
+                                    scrollPhaseRef.current = ScrollPhase.Tracking;
                                 });
                             }}
                             fadingEdgeLength={isHorizontal ? 80 : 120}
