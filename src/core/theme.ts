@@ -142,6 +142,89 @@ function normalizeCustomBackgroundColors(
     return normalized;
 }
 
+function getCardDerivedSurfaceElevated(card: string, dark: boolean) {
+    try {
+        return Color(card).lighten(dark ? 0.24 : 0.12).toString();
+    } catch {
+        return card;
+    }
+}
+
+function isDefaultLikeColor(
+    color: string | undefined,
+    candidates: Array<string | undefined>,
+) {
+    if (!color) {
+        return true;
+    }
+    return candidates.some(candidate => sameColor(color, candidate));
+}
+
+function syncCardSurfaceColors(
+    colors: CustomizedColors,
+    options: {
+        force?: boolean;
+        dark?: boolean;
+    } = {},
+) {
+    const { force = false, dark = true } = options;
+    if (!colors.card) {
+        return {
+            colors,
+            changed: false,
+        };
+    }
+
+    const cardIsCustomized =
+        force ||
+        !isDefaultLikeColor(colors.card, [
+            darkTheme.colors.card,
+            lightTheme.colors.card,
+            customBackgroundSurfaceColors.card,
+        ]);
+
+    if (!cardIsCustomized) {
+        return {
+            colors,
+            changed: false,
+        };
+    }
+
+    let changed = false;
+    const nextColors = { ...colors };
+    if (
+        force ||
+        isDefaultLikeColor(nextColors.surface, [
+            darkTheme.colors.surface,
+            lightTheme.colors.surface,
+            customBackgroundSurfaceColors.surface,
+        ])
+    ) {
+        nextColors.surface = colors.card;
+        changed = true;
+    }
+
+    if (
+        force ||
+        isDefaultLikeColor(nextColors.surfaceElevated, [
+            darkTheme.colors.surfaceElevated,
+            lightTheme.colors.surfaceElevated,
+            customBackgroundSurfaceColors.surfaceElevated,
+        ])
+    ) {
+        nextColors.surfaceElevated = getCardDerivedSurfaceElevated(
+            colors.card,
+            dark,
+        );
+        changed = true;
+    }
+
+    return {
+        colors: nextColors,
+        changed,
+    };
+}
+
 function setup() {
     const currentTheme = Config.getConfig("theme.selectedTheme") ?? "p-dark";
     const bgUrl = Config.getConfig("theme.background");
@@ -178,11 +261,16 @@ function setup() {
             }
         }
 
+        const cardSynced = syncCardSurfaceColors(fixedColors);
+        if (cardSynced.changed) {
+            Config.setConfig("theme.colors", cardSynced.colors);
+        }
+
         themeStore.setValue({
             id: currentTheme,
             dark: true,
             // @ts-ignore
-            colors: normalizeCustomBackgroundColors(fixedColors, !!bgUrl),
+            colors: normalizeCustomBackgroundColors(cardSynced.colors, !!bgUrl),
         });
     }
 
@@ -267,12 +355,16 @@ function setColors(colors: Partial<CustomizedColors>) {
         colorsWithListActive.listActive = Color(colors.primary).alpha(0.12).toString();
     }
 
-    const newColors = {
+    const mergedColors = {
         ...darkTheme.colors,
         ...(persistedColors ?? {}),
         ...currentTheme.colors,
         ...colorsWithListActive,
     } as CustomizedColors;
+    const newColors = syncCardSurfaceColors(mergedColors, {
+        force: !!colors.card,
+        dark: currentTheme.dark,
+    }).colors;
 
     Config.setConfig("theme.customColors", newColors);
     Config.setConfig("theme.colors", newColors);
