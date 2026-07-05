@@ -15,6 +15,7 @@ import MusicListEditor from "@/pages/musicListEditor";
 import FileSelector from "@/pages/fileSelector";
 import RecommendSheets from "@/pages/recommendSheets";
 import PluginSheetDetail from "@/pages/pluginSheetDetail";
+import SheetBrowser from "@/pages/sheetBrowser";
 import History from "@/pages/history";
 import SetCustomTheme from "@/pages/setCustomTheme";
 import Permissions from "@/pages/permissions";
@@ -93,6 +94,10 @@ export const routes: Array<IRoutes> = [
     {
         path: ROUTE_PATH.PLUGIN_SHEET_DETAIL,
         component: PluginSheetDetail,
+    },
+    {
+        path: ROUTE_PATH.SHEET_BROWSER,
+        component: SheetBrowser,
     },
     {
         path: ROUTE_PATH.HISTORY,

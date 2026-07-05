@@ -103,6 +103,7 @@ class AppConfig implements IAppConfig {
                 ["setting.theme.customColors", "theme.customColors"],
                 ["setting.theme.followSystem", "theme.followSystem"],
                 ["setting.theme.selectedTheme", "theme.selectedTheme"],
+                ["setting.theme.homeLayout", "theme.homeLayout"],
 
                 // Backup
                 ["setting.backup.resumeMode", "backup.resumeMode"],

@@ -9,8 +9,10 @@ import { useI18N } from "@/core/i18n";
 
 export default function HomeDisplay() {
     const { t } = useI18N();
+    const homeLayout = useAppConfig("theme.homeLayout") ?? "overview";
     const hideHomeHeroCard = useAppConfig("theme.hideHomeHeroCard") ?? false;
     const hideHomeOperations = useAppConfig("theme.hideHomeOperations") ?? false;
+    const useHomeOverview = homeLayout === "overview";
 
     return (
         <View>
@@ -21,6 +23,22 @@ export default function HomeDisplay() {
                 {t("themeSettings.homeDisplay")}
             </ThemeText>
             <View style={styles.sectionWrapper}>
+                <ListItem withHorizontalPadding>
+                    <ListItem.Content>
+                        <View style={styles.itemRow}>
+                            <ThemeText>{t("themeSettings.useNewHomeUI")}</ThemeText>
+                            <ThemeSwitch
+                                value={useHomeOverview}
+                                onValueChange={value => {
+                                    Config.setConfig(
+                                        "theme.homeLayout",
+                                        value ? "overview" : "classic",
+                                    );
+                                }}
+                            />
+                        </View>
+                    </ListItem.Content>
+                </ListItem>
                 <ListItem withHorizontalPadding>
                     <ListItem.Content>
                         <View style={styles.itemRow}>

@@ -40,6 +40,8 @@ export const ROUTE_PATH = {
     RECOMMEND_SHEETS: "recommend-sheets",
     /** 歌单详情 */
     PLUGIN_SHEET_DETAIL: "plugin-sheet-detail",
+    /** 歌单浏览 */
+    SHEET_BROWSER: "sheet-browser",
     /** 历史记录 */
     HISTORY: "history",
     /** 自定义主题 */
@@ -101,6 +103,9 @@ interface RouterParams extends RouterParamsBase {
     "plugin-sheet-detail": {
         pluginHash?: string;
         sheetInfo: IMusic.IMusicSheetItemBase;
+    };
+    "sheet-browser": {
+        sheetType: "local" | "starred";
     };
 }
 

@@ -76,6 +76,16 @@ export interface ILanguageData {
     "home.welcomeTitle": string;
     "home.welcomeSubtitle": string;
     "home.viewAll": string;
+    "home.recentListening": string;
+    "home.quickAccess": string;
+    "home.discovery": string;
+    "home.myMusic": string;
+    "home.scanLocal": string;
+    "home.import.short": string;
+    "home.playById.short": string;
+    "home.manageSources.short": string;
+    "home.favoriteSheet": string;
+    "home.playlistCount": string;
     "home.playById.a11y": string; // 通过ID播放
 
     // 对话框相关
@@ -251,6 +261,10 @@ export interface ILanguageData {
     "themeSettings.coverStyle": string; // 封面样式
     "themeSettings.coverStyleSquare": string; // 方形
     "themeSettings.coverStyleCircle": string; // 圆形
+    "themeSettings.homeDisplay": string; // 首页显示
+    "themeSettings.useNewHomeUI": string; // 使用新版首页
+    "themeSettings.hideHomeHeroCard": string; // 隐藏首页顶部音乐卡片
+    "themeSettings.hideHomeOperations": string; // 隐藏首页快捷按钮
 
 
     // 自定义主题相关
@@ -573,6 +587,7 @@ export interface ILanguageData {
 
     // 面板相关 - 通过ID播放
     "panel.playById.title": string; // 通过ID播放
+    "panel.playById.currentPlugin": string; // 当前插件
     "panel.playById.selectPluginFirst": string; // 请先选择插件
     "panel.playById.inputIdFirst": string; // 请先输入ID
     "panel.playById.unknownArtist": string; // 未知歌手
