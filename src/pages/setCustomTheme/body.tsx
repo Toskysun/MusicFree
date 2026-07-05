@@ -85,7 +85,6 @@ export default function Body() {
                 });
                 themeColors = {
                     ...customBackgroundSurfaceColors,
-                    appBar: colors.primary,
                     primary: primaryColor
                         .darken(primaryGrayRate * 5)
                         .toString(),
@@ -95,7 +94,6 @@ export default function Body() {
             } else if (primaryGrayRate > 0.4) {
                 themeColors = {
                     ...customBackgroundSurfaceColors,
-                    appBar: colors.primary,
                     primary: Color(colors.primary)
                         .darken(primaryGrayRate * 5)
                         .toString(),
@@ -106,7 +104,6 @@ export default function Body() {
 
                 themeColors = {
                     ...customBackgroundSurfaceColors,
-                    appBar: colors.primary,
                     primary: Color(colors.primary)
                         .saturate(Math.abs(primaryGrayRate) * 2 + 2)
                         .toString(),

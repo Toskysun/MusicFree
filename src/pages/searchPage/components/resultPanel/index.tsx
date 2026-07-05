@@ -55,7 +55,7 @@ function ResultPanel() {
                                         ? fontWeightConst.bolder
                                         : fontWeightConst.medium,
                                     color: focused
-                                        ? colors.primary
+                                        ? colors.text
                                         : colors.textSecondary ?? colors.text,
                                     textAlign: "center",
                                 }}>
@@ -68,7 +68,7 @@ function ResultPanel() {
                                     styles.primaryTabIndicator,
                                     {
                                         backgroundColor: focused
-                                            ? colors.primary
+                                            ? colors.text
                                             : "transparent",
                                     },
                                 ]}

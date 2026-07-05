@@ -83,6 +83,7 @@ interface IBackgroundInfo {
 }
 
 export const customBackgroundSurfaceColors: Partial<CustomizedColors> = {
+    pageBackground: "rgba(0,0,0,0.12)",
     card: "rgba(0,0,0,0.22)",
     surface: "rgba(0,0,0,0.18)",
     surfaceElevated: "rgba(0,0,0,0.30)",
@@ -117,6 +118,13 @@ function normalizeCustomBackgroundColors(
     }
 
     const normalized = { ...colors };
+    if (
+        sameColor(normalized.appBar, normalized.primary) ||
+        sameColor(normalized.appBar, darkTheme.colors.appBar)
+    ) {
+        normalized.appBar = customBackgroundSurfaceColors.appBar;
+    }
+
     (Object.keys(customBackgroundSurfaceColors) as Array<
         keyof CustomizedColors
     >).forEach(key => {

@@ -105,7 +105,7 @@ function ResultSubPanel(props: IResultSubPanelProps) {
                         paddingBottom: rpx(6),
                     }}
                     inactiveColor={colors.text}
-                    activeColor={colors.primary}
+                    activeColor={colors.text}
                     // eslint-disable-next-line react-native/no-inline-styles -- Dynamic width for tab flexibility
                     tabStyle={{
                         width: "auto",
@@ -123,7 +123,7 @@ function ResultSubPanel(props: IResultSubPanelProps) {
                                     ? fontWeightConst.bolder
                                     : fontWeightConst.medium,
                                 color: focused
-                                    ? colors.primary
+                                    ? colors.text
                                     : colors.textSecondary ?? colors.text,
                                 textAlign: "center",
                                 paddingVertical: rpx(8),
