@@ -8,7 +8,7 @@ import { fontSizeConst } from "@/constants/uiConst";
 import { useI18N } from "@/core/i18n";
 import { useParams } from "@/core/router";
 import useColors from "@/hooks/useColors";
-import rpx from "@/utils/rpx";
+import rpx, { fontRpx } from "@/utils/rpx";
 import React, { useState } from "react";
 import { StyleSheet } from "react-native";
 import SearchResult from "./searchResult";
@@ -70,7 +70,7 @@ const style = StyleSheet.create({
         flex: 1,
         borderRadius: rpx(64),
         height: rpx(64),
-        fontSize: rpx(32),
+        fontSize: fontRpx(32),
     },
     input: {
         padding: 0,

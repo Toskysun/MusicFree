@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import ThemeText from "@/components/base/themeText";
 import { StyleSheet, View } from "react-native";
-import rpx, { vh } from "@/utils/rpx";
+import rpx, { fontRpx, vh } from "@/utils/rpx";
 import { ScrollView, TouchableOpacity } from "react-native-gesture-handler";
 import { hideDialog } from "../useDialog";
 import Checkbox from "@/components/base/checkbox";
@@ -75,7 +75,7 @@ export default function CheckStorage() {
 const styles = StyleSheet.create({
     item: {
         marginBottom: rpx(20),
-        lineHeight: rpx(36),
+        lineHeight: fontRpx(36),
     },
 
     scrollView: {

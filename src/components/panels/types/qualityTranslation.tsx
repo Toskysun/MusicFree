@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from "react";
 import { Modal, Pressable, StyleSheet, TextInput, View } from "react-native";
 import { ScrollView } from "react-native-gesture-handler";
-import rpx, { vmax } from "@/utils/rpx";
+import rpx, { fontRpx, vmax } from "@/utils/rpx";
 import { fontSizeConst } from "@/constants/uiConst";
 import useColors from "@/hooks/useColors";
 import ThemeText from "@/components/base/themeText";
@@ -409,7 +409,7 @@ const styles = StyleSheet.create({
         paddingBottom: rpx(8),
     },
     descriptionText: {
-        lineHeight: rpx(36),
+        lineHeight: fontRpx(36),
     },
     itemContainer: {
         paddingHorizontal: rpx(24),
@@ -432,7 +432,7 @@ const styles = StyleSheet.create({
     },
     builtinTag: {
         marginLeft: rpx(10),
-        fontSize: rpx(18),
+        fontSize: fontRpx(18),
     },
     itemActions: {
         flexDirection: "row",

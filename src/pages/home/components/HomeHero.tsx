@@ -10,7 +10,7 @@ import TrackPlayer, {
     useProgress,
 } from "@/core/trackPlayer";
 import useColors from "@/hooks/useColors";
-import rpx from "@/utils/rpx";
+import rpx, { fontRpx } from "@/utils/rpx";
 import { musicIsPaused } from "@/utils/trackUtils";
 import Color from "color";
 import React, { useEffect, useMemo, useState } from "react";
@@ -358,7 +358,7 @@ const styles = StyleSheet.create({
     title: {
         flex: 1,
         minWidth: 0,
-        lineHeight: rpx(48),
+        lineHeight: fontRpx(48),
     },
     platformBadge: {
         minHeight: rpx(34),
@@ -372,7 +372,7 @@ const styles = StyleSheet.create({
     },
     desc: {
         marginTop: rpx(12),
-        lineHeight: rpx(36),
+        lineHeight: fontRpx(36),
     },
     bottomRow: {
         flexDirection: "row",

@@ -2,7 +2,7 @@ import React, { Component, ReactNode, useEffect, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Image, Platform } from "react-native";
 import DeviceInfo from "react-native-device-info";
 import useColors from "@/hooks/useColors";
-import rpx from "@/utils/rpx";
+import rpx, { fontRpx } from "@/utils/rpx";
 import LinkText from "@/components/base/linkText";
 import { ImgAsset } from "@/constants/assetsConst";
 import ThemeText from "@/components/base/themeText";
@@ -291,7 +291,7 @@ const styles = StyleSheet.create({
     },
     subtitle: {
         textAlign: "center",
-        lineHeight: rpx(40),
+        lineHeight: fontRpx(40),
     },
     deviceInfoBox: {
         borderRadius: rpx(16),
@@ -311,11 +311,11 @@ const styles = StyleSheet.create({
         alignItems: "center",
     },
     deviceInfoLabel: {
-        fontSize: rpx(28),
+        fontSize: fontRpx(28),
         flex: 1,
     },
     deviceInfoValue: {
-        fontSize: rpx(28),
+        fontSize: fontRpx(28),
         flex: 2,
         textAlign: "right",
         fontWeight: "500",
@@ -330,7 +330,7 @@ const styles = StyleSheet.create({
         marginBottom: rpx(16),
     },
     errorText: {
-        lineHeight: rpx(36),
+        lineHeight: fontRpx(36),
         marginBottom: rpx(16),
     },
     stackContainer: {
@@ -340,9 +340,9 @@ const styles = StyleSheet.create({
         padding: rpx(16),
     },
     stackText: {
-        fontSize: rpx(24),
+        fontSize: fontRpx(24),
         fontFamily: "monospace",
-        lineHeight: rpx(32),
+        lineHeight: fontRpx(32),
     },
     feedbackSection: {
         marginBottom: rpx(48),
@@ -367,7 +367,7 @@ const styles = StyleSheet.create({
         fontStyle: "italic",
     },
     link: {
-        lineHeight: rpx(36),
+        lineHeight: fontRpx(36),
     },
     qrCodeContainer: {
         alignItems: "center",

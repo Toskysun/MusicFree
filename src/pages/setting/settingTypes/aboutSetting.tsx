@@ -8,7 +8,7 @@ import {
     Animated,
     Easing,
 } from "react-native";
-import rpx from "@/utils/rpx";
+import rpx, { fontRpx } from "@/utils/rpx";
 import { ImgAsset } from "@/constants/assetsConst";
 import ThemeText from "@/components/base/themeText";
 import LinkText from "@/components/base/linkText";
@@ -351,7 +351,7 @@ const style = StyleSheet.create({
         marginTop: rpx(8),
         marginBottom: rpx(32),
         opacity: 0.6,
-        fontSize: rpx(24),
+        fontSize: fontRpx(24),
     },
     scrollView: {
         flex: 1,
@@ -379,6 +379,6 @@ const style = StyleSheet.create({
         opacity: 0.7,
     },
     cardContent: {
-        fontSize: rpx(28),
+        fontSize: fontRpx(28),
     },
 });

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
-import rpx from "@/utils/rpx";
+import rpx, { fontRpx } from "@/utils/rpx";
 import ThemeText from "@/components/base/themeText";
 import { ImgAsset } from "@/constants/assetsConst";
 import FastImage from "@/components/base/fastImage";
@@ -203,7 +203,7 @@ const style = StyleSheet.create({
         gap: rpx(8),
     },
     artistText: {
-        lineHeight: rpx(34),
+        lineHeight: fontRpx(34),
     },
     albumDesc: {
         width: "100%",

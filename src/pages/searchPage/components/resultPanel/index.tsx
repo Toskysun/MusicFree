@@ -3,7 +3,7 @@
  */
 import React, { memo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import rpx, { vw } from "@/utils/rpx";
+import rpx, { fontRpx, vw } from "@/utils/rpx";
 import { SceneMap, TabView } from "react-native-tab-view";
 import ResultSubPanel from "./resultSubPanel";
 import results from "./results";
@@ -50,7 +50,7 @@ function ResultPanel() {
                             <Text
                                 numberOfLines={1}
                                 style={{
-                                    fontSize: rpx(28),
+                                    fontSize: fontRpx(28),
                                     fontWeight: focused
                                         ? fontWeightConst.bolder
                                         : fontWeightConst.medium,

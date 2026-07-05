@@ -10,7 +10,7 @@ import { useI18N } from "@/core/i18n";
 import MusicSheet, { useSheetsBase, useStarredSheets } from "@/core/musicSheet";
 import { ROUTE_PATH, useNavigate } from "@/core/router";
 import useColors from "@/hooks/useColors";
-import rpx from "@/utils/rpx";
+import rpx, { fontRpx } from "@/utils/rpx";
 import Toast from "@/utils/toast";
 import { FlashList } from "@shopify/flash-list";
 import React, { ReactNode, useMemo, useState } from "react";
@@ -252,7 +252,7 @@ const styles = StyleSheet.create({
     },
 
     tabText: {
-        lineHeight: rpx(58),
+        lineHeight: fontRpx(58),
     },
     selectTabText: {
         fontWeight: "bold",

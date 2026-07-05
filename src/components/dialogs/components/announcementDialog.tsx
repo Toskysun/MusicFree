@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { hideDialog } from "../useDialog";
 import Dialog from "./base";
 import { useI18N } from "@/core/i18n";
-import rpx, { vh } from "@/utils/rpx";
+import rpx, { fontRpx, vh } from "@/utils/rpx";
 import { StyleSheet, View, TouchableOpacity } from "react-native";
 import { ScrollView } from "react-native-gesture-handler";
 import announcementService from "@/services/announcementService";
@@ -109,7 +109,7 @@ const styles = StyleSheet.create({
     },
     item: {
         marginBottom: rpx(20),
-        lineHeight: rpx(36),
+        lineHeight: fontRpx(36),
     },
     dialogActions: {
         marginTop: rpx(24),

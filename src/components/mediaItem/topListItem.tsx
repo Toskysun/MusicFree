@@ -5,7 +5,7 @@ import { ROUTE_PATH, useNavigate } from "@/core/router";
 import FastImage from "@/components/base/fastImage";
 import ThemeText from "@/components/base/themeText";
 import useColors from "@/hooks/useColors";
-import rpx from "@/utils/rpx";
+import rpx, { fontRpx } from "@/utils/rpx";
 import Color from "color";
 
 interface ITopListResultsProps {
@@ -111,7 +111,7 @@ const styles = StyleSheet.create({
         paddingBottom: rpx(12),
     },
     title: {
-        lineHeight: rpx(28),
+        lineHeight: fontRpx(28),
     },
     rankBadge: {
         position: "absolute",

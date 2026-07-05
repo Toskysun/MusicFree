@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { StyleSheet, View, TouchableOpacity } from "react-native";
 import { ScrollView } from "react-native-gesture-handler";
-import rpx, { vmax } from "@/utils/rpx";
+import rpx, { fontRpx, vmax } from "@/utils/rpx";
 import { fontSizeConst } from "@/constants/uiConst";
 import useColors from "@/hooks/useColors";
 import ThemeText from "@/components/base/themeText";
@@ -468,7 +468,7 @@ const styles = StyleSheet.create({
         paddingBottom: rpx(16),
     },
     headerDescription: {
-        lineHeight: rpx(40),
+        lineHeight: fontRpx(40),
     },
     card: {
         marginHorizontal: rpx(16),
@@ -507,7 +507,7 @@ const styles = StyleSheet.create({
     },
     itemIcon: {
         marginRight: rpx(12),
-        fontSize: rpx(40),
+        fontSize: fontRpx(40),
     },
     textContent: {
         flex: 1,

@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import ThemeText from "@/components/base/themeText";
 import { StyleSheet, View } from "react-native";
-import rpx, { vh } from "@/utils/rpx";
+import rpx, { fontRpx, vh } from "@/utils/rpx";
 import openUrl from "@/utils/openUrl";
 import Clipboard from "@react-native-clipboard/clipboard";
 import { ScrollView, TouchableOpacity } from "react-native-gesture-handler";
@@ -94,7 +94,7 @@ export default function DownloadDialog(props: IDownloadDialogProps) {
 const style = StyleSheet.create({
     item: {
         marginBottom: rpx(20),
-        lineHeight: rpx(36),
+        lineHeight: fontRpx(36),
     },
     content: {
         flex: 1,

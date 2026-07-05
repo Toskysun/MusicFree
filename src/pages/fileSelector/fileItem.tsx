@@ -1,6 +1,6 @@
 import React, { memo } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
-import rpx from "@/utils/rpx";
+import rpx, { fontRpx } from "@/utils/rpx";
 import ThemeText from "@/components/base/themeText";
 import useTextColor from "@/hooks/useTextColor";
 import Checkbox from "@/components/base/checkbox";
@@ -87,7 +87,7 @@ const styles = StyleSheet.create({
         justifyContent: "space-between",
     },
     folderIcon: {
-        fontSize: rpx(32),
+        fontSize: fontRpx(32),
         marginRight: rpx(14),
     },
     pathWrapper: {

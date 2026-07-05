@@ -1,12 +1,31 @@
 import { Dimensions } from "react-native";
 
-const windowWidth = Dimensions.get("window").width;
-const windowHeight = Dimensions.get("window").height;
-const minWindowEdge = Math.min(windowHeight, windowWidth);
-const maxWindowEdge = Math.max(windowHeight, windowWidth);
+const DESIGN_WIDTH = 750;
+const MAX_FONT_BASE_SIZE = 430;
+
+function getWindowEdge() {
+    const { width, height } = Dimensions.get("window");
+
+    return {
+        min: Math.min(height, width),
+        max: Math.max(height, width),
+    };
+}
+
+function scale(rpx: number, baseSize: number) {
+    return (rpx / DESIGN_WIDTH) * baseSize;
+}
+
+function getRpxBaseSize() {
+    return getWindowEdge().min;
+}
+
+function getFontBaseSize() {
+    return Math.min(getRpxBaseSize(), MAX_FONT_BASE_SIZE);
+}
 
 export default function (rpx: number) {
-    return (rpx / 750) * minWindowEdge;
+    return scale(rpx, getRpxBaseSize());
 }
 
 /**
@@ -14,7 +33,18 @@ export default function (rpx: number) {
  * 避免浮点数尺寸导致的 SVG 渲染伪影（如横线/竖线）
  */
 export function rpxRound(rpx: number) {
-    return Math.round((rpx / 750) * minWindowEdge);
+    return Math.round(scale(rpx, getRpxBaseSize()));
+}
+
+/**
+ * 字体和常用图标的缩放需要封顶，避免平板短边过大时看起来像 DPI 异常。
+ */
+export function fontRpx(rpx: number) {
+    return scale(rpx, getFontBaseSize());
+}
+
+export function fontRpxRound(rpx: number) {
+    return Math.round(fontRpx(rpx));
 }
 
 export function vh(pct: number) {
@@ -26,11 +56,11 @@ export function vw(pct: number) {
 }
 
 export function vmin(pct: number) {
-    return (pct / 100) * minWindowEdge;
+    return (pct / 100) * getWindowEdge().min;
 }
 
 export function vmax(pct: number) {
-    return (pct / 100) * maxWindowEdge;
+    return (pct / 100) * getWindowEdge().max;
 }
 
 export function sh(pct: number) {

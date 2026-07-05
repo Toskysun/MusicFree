@@ -8,7 +8,7 @@ import Animated, {
     runOnJS,
 } from "react-native-reanimated";
 import Portal from "./portal";
-import rpx from "@/utils/rpx";
+import rpx, { fontRpx } from "@/utils/rpx";
 import useColors from "@/hooks/useColors";
 import { timingConfig } from "@/constants/commonConst";
 
@@ -297,8 +297,8 @@ const styles = StyleSheet.create({
         top: -1000,
     },
     tipText: {
-        fontSize: rpx(24),
-        lineHeight: rpx(32),
+        fontSize: fontRpx(24),
+        lineHeight: fontRpx(32),
         textAlign: "center",
     },
     triangle: {

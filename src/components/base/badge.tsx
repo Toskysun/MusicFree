@@ -1,6 +1,6 @@
 import React, { memo, useMemo } from "react";
 import { StyleSheet, Text, View, StyleProp, ViewStyle } from "react-native";
-import rpx from "@/utils/rpx";
+import rpx, { fontRpx } from "@/utils/rpx";
 import Color from "color";
 
 export type BadgeType = "quality" | "vip" | "source" | "hires" | "master" | "atmos" | "flac24bit";
@@ -71,7 +71,7 @@ const styles = StyleSheet.create({
         alignItems: "center",
     },
     text: {
-        fontSize: rpx(16),
+        fontSize: fontRpx(16),
         fontWeight: "500",
     },
 });

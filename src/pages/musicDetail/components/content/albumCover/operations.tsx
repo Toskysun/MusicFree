@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
-import rpx from "@/utils/rpx";
+import rpx, { fontRpx } from "@/utils/rpx";
 
 import LocalMusicSheet from "@/core/localMusicSheet";
 import { ROUTE_PATH } from "@/core/router";
@@ -193,8 +193,8 @@ const styles = StyleSheet.create({
     },
     qualityText: {
         color: "white",
-        fontSize: rpx(26),
+        fontSize: fontRpx(26),
         fontWeight: "400",
-        lineHeight: rpx(42),
+        lineHeight: fontRpx(42),
     },
 });
