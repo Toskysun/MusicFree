@@ -6,11 +6,12 @@ interface IStatusBarProps extends StatusBarProps {}
 
 export default function (props: IStatusBarProps) {
     const colors = useColors();
-    const { backgroundColor, barStyle } = props;
+    const { backgroundColor, barStyle, ...statusBarProps } = props;
 
     return (
         <>
             <StatusBar
+                {...statusBarProps}
                 backgroundColor={"rgba(0,0,0,0)"}
                 barStyle={barStyle ?? "light-content"}
             />

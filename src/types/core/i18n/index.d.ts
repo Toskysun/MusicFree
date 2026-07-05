@@ -261,6 +261,9 @@ export interface ILanguageData {
     "themeSettings.coverStyle": string; // 封面样式
     "themeSettings.coverStyleSquare": string; // 方形
     "themeSettings.coverStyleCircle": string; // 圆形
+    "themeSettings.musicDetailCoverStyle": string; // 播放详情页封面样式
+    "themeSettings.musicDetailCoverStyleClassic": string; // 默认
+    "themeSettings.musicDetailCoverStyleImmersive": string; // 融合
     "themeSettings.homeDisplay": string; // 首页显示
     "themeSettings.useNewHomeUI": string; // 使用新版首页
     "themeSettings.hideHomeHeroCard": string; // 隐藏首页顶部音乐卡片

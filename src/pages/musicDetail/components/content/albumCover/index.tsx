@@ -12,6 +12,11 @@ import { useAppConfig } from "@/core/appConfig";
 import MiniLyric from "./miniLyric";
 import SongInfo from "./songInfo";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { NAV_BAR_HEIGHT } from "../../navBar";
+import {
+    getImmersiveCoverHeight,
+    IMMERSIVE_CONTENT_TOP_GAP,
+} from "../../immersiveCover";
 
 const ROTATION_DURATION = 25000; // 25秒转一圈
 export const COVER_SIZE = rpx(600); // 大封面尺寸
@@ -36,9 +41,15 @@ export default function AlbumCover(props: IProps) {
     const { height: windowHeight, width: windowWidth } = useWindowDimensions();
     const safeAreaInsets = useSafeAreaInsets();
     const coverStyle = useAppConfig("theme.coverStyle") ?? "square";
+    const musicDetailCoverStyle =
+        useAppConfig("theme.musicDetailCoverStyle") ?? "classic";
     const musicState = useMusicState();
     const isPlaying = musicState === MusicState.Playing;
     const isCircle = coverStyle === "circle";
+    const useImmersiveCover =
+        orientation === "vertical" &&
+        coverStyle === "square" &&
+        musicDetailCoverStyle === "immersive";
 
     const [containerHeight, setContainerHeight] = useState<number | null>(null);
     const [operationsBottom, setOperationsBottom] = useState<number | null>(null);
@@ -141,6 +152,22 @@ export default function AlbumCover(props: IProps) {
         outputRange: ["0deg", "360deg"],
     });
 
+    const immersiveCoverHeight = useMemo(
+        () => getImmersiveCoverHeight(windowWidth),
+        [windowWidth],
+    );
+    const immersiveGestureHeight = Math.max(
+        0,
+        immersiveCoverHeight - safeAreaInsets.top - NAV_BAR_HEIGHT,
+    );
+    const immersiveContentPaddingTop = Math.max(
+        rpx(160),
+        immersiveCoverHeight -
+            safeAreaInsets.top -
+            NAV_BAR_HEIGHT +
+            IMMERSIVE_CONTENT_TOP_GAP,
+    );
+
     const artworkStyle = useMemo(() => {
         if (orientation === "vertical") {
             const size = isCircle ? COVER_SIZE : COVER_SIZE - rpx(30);
@@ -205,6 +232,50 @@ export default function AlbumCover(props: IProps) {
                 </View>
                 <View style={styles.horizontalOperations}>
                     <Operations />
+                </View>
+            </View>
+        );
+    }
+
+    if (useImmersiveCover) {
+        return (
+            <View
+                style={styles.verticalRoot}
+                onLayout={(event) => {
+                    setContainerHeight(event.nativeEvent.layout.height);
+                }}>
+                <GestureDetector gesture={combineGesture}>
+                    <Animated.View
+                        style={[
+                            styles.immersiveGestureArea,
+                            { height: immersiveGestureHeight },
+                        ]}
+                    />
+                </GestureDetector>
+                <View
+                    pointerEvents="box-none"
+                    style={[
+                        styles.immersiveForeground,
+                        {
+                            paddingTop: immersiveContentPaddingTop,
+                        },
+                    ]}>
+                    <SongInfo showHeart immersive />
+                    <View style={miniLyricLayout === "hidden" ? styles.hidden : null}>
+                        <MiniLyric
+                            onPress={onTurnPageClick}
+                            disableMaskedView={disableMaskedView}
+                            layout={miniLyricLayout === "compact" ? "compact" : "normal"}
+                        />
+                    </View>
+                    <View style={{ flex: 1 }} />
+                    <View
+                        onLayout={(event) => {
+                            const layout = event.nativeEvent.layout;
+                            setOperationsBottom(layout.y + layout.height);
+                        }}>
+                        <Operations />
+                    </View>
                 </View>
             </View>
         );
@@ -277,5 +348,17 @@ const styles = {
     },
     hidden: {
         display: "none" as const,
+    },
+    immersiveGestureArea: {
+        position: "absolute" as const,
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 0,
+    },
+    immersiveForeground: {
+        width: "100%" as const,
+        flex: 1,
+        zIndex: 1,
     },
 } as const;

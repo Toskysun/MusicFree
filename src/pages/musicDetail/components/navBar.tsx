@@ -10,6 +10,8 @@ interface INavBarProps {
     onBack?: () => void;
 }
 
+export const NAV_BAR_HEIGHT = rpx(100);
+
 export default function NavBar(props: INavBarProps) {
     const { onBack } = props;
     const navigation = useNavigation();
@@ -42,10 +44,11 @@ export default function NavBar(props: INavBarProps) {
 const styles = StyleSheet.create({
     container: {
         width: "100%",
-        height: rpx(100),
+        height: NAV_BAR_HEIGHT,
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
+        zIndex: 2,
     },
     button: {
         marginHorizontal: rpx(24),

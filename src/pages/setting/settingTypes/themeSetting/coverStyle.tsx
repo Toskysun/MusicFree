@@ -10,6 +10,8 @@ import useColors from "@/hooks/useColors";
 export default function CoverStyle() {
     const { t } = useI18N();
     const coverStyle = useAppConfig("theme.coverStyle") ?? "square";
+    const musicDetailCoverStyle =
+        useAppConfig("theme.musicDetailCoverStyle") ?? "classic";
     const colors = useColors();
 
     return (
@@ -60,6 +62,80 @@ export default function CoverStyle() {
                     </ListItem.Content>
                 </ListItem>
             </View>
+            <ThemeText
+                fontSize="subTitle"
+                fontWeight="bold"
+                style={styles.header}>
+                {t("themeSettings.musicDetailCoverStyle")}
+            </ThemeText>
+            <View style={styles.sectionWrapper}>
+                <ListItem withHorizontalPadding>
+                    <ListItem.Content>
+                        <View style={styles.optionsRow}>
+                            <TouchableOpacity
+                                style={[
+                                    styles.optionItem,
+                                    musicDetailCoverStyle === "classic" && {
+                                        borderColor: colors.primary,
+                                        borderWidth: 2,
+                                    },
+                                ]}
+                                onPress={() => {
+                                    Config.setConfig(
+                                        "theme.musicDetailCoverStyle",
+                                        "classic",
+                                    );
+                                }}>
+                                <View
+                                    style={[
+                                        styles.previewClassic,
+                                        { backgroundColor: colors.card },
+                                    ]}>
+                                    <View
+                                        style={[
+                                            styles.previewClassicCover,
+                                            { backgroundColor: colors.surface },
+                                        ]}
+                                    />
+                                </View>
+                                <ThemeText fontSize="description" style={styles.optionText}>
+                                    {t("themeSettings.musicDetailCoverStyleClassic")}
+                                </ThemeText>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[
+                                    styles.optionItem,
+                                    musicDetailCoverStyle === "immersive" && {
+                                        borderColor: colors.primary,
+                                        borderWidth: 2,
+                                    },
+                                ]}
+                                onPress={() => {
+                                    Config.setConfig(
+                                        "theme.musicDetailCoverStyle",
+                                        "immersive",
+                                    );
+                                }}>
+                                <View
+                                    style={[
+                                        styles.previewImmersive,
+                                        { backgroundColor: colors.card },
+                                    ]}>
+                                    <View
+                                        style={[
+                                            styles.previewImmersiveCover,
+                                            { backgroundColor: colors.surface },
+                                        ]}
+                                    />
+                                </View>
+                                <ThemeText fontSize="description" style={styles.optionText}>
+                                    {t("themeSettings.musicDetailCoverStyleImmersive")}
+                                </ThemeText>
+                            </TouchableOpacity>
+                        </View>
+                    </ListItem.Content>
+                </ListItem>
+            </View>
         </View>
     );
 }
@@ -94,6 +170,28 @@ const styles = StyleSheet.create({
         width: rpx(80),
         height: rpx(80),
         borderRadius: rpx(40),
+    },
+    previewClassic: {
+        width: rpx(80),
+        height: rpx(80),
+        borderRadius: rpx(12),
+        justifyContent: "center",
+        alignItems: "center",
+    },
+    previewClassicCover: {
+        width: rpx(48),
+        height: rpx(48),
+        borderRadius: rpx(8),
+    },
+    previewImmersive: {
+        width: rpx(80),
+        height: rpx(80),
+        borderRadius: rpx(12),
+        overflow: "hidden",
+    },
+    previewImmersiveCover: {
+        width: "100%",
+        height: rpx(58),
     },
     optionText: {
         marginTop: rpx(12),

@@ -1,20 +1,20 @@
-import React, { useState } from "react";
+import React from "react";
 import { StyleSheet, View } from "react-native";
 import AlbumCover from "./albumCover";
 import Lyric from "./lyric";
 import useOrientation from "@/hooks/useOrientation";
-import Config from "@/core/appConfig";
 import globalStyle from "@/constants/globalStyle";
+
+export type MusicDetailContentTab = "album" | "lyric";
 
 interface IContentProps {
     disableMaskedView?: boolean;
+    tab: MusicDetailContentTab;
+    selectTab: React.Dispatch<React.SetStateAction<MusicDetailContentTab>>;
 }
 
 export default function Content(props: IContentProps) {
-    const { disableMaskedView } = props;
-    const [tab, selectTab] = useState<"album" | "lyric">(
-        Config.getConfig("basic.musicDetailDefault") || "album",
-    );
+    const { disableMaskedView, tab, selectTab } = props;
     const orientation = useOrientation();
 
     const showAlbumCover = tab === "album" || orientation === "horizontal";

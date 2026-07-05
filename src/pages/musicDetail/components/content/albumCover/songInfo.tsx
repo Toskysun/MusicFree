@@ -15,13 +15,15 @@ import pluginManager from "@/core/pluginManager";
 
 interface ISongInfoProps {
     showHeart?: boolean;
+    immersive?: boolean;
 }
 
 export default function SongInfo(props: ISongInfoProps) {
-    const { showHeart = false } = props;
+    const { showHeart = false, immersive = false } = props;
     const musicItem = useCurrentMusic();
     const orientation = useOrientation();
     const isHorizontal = orientation === "horizontal";
+    const isImmersive = immersive && !isHorizontal;
     const coverStyle = useAppConfig("theme.coverStyle") ?? "square";
     const isFavorite = useFavorite(musicItem);
     const navigate = useNavigate();
@@ -32,10 +34,15 @@ export default function SongInfo(props: ISongInfoProps) {
                 paddingHorizontal: rpx(24),
             };
         }
+        if (isImmersive) {
+            return {
+                paddingHorizontal: rpx(64),
+            };
+        }
         return {
             paddingHorizontal: getCoverLeftMargin(coverStyle),
         };
-    }, [coverStyle, isHorizontal]);
+    }, [coverStyle, isHorizontal, isImmersive]);
 
     // 处理歌手点击
     // 使用 musicItem.singerList 获取完整的歌手信息（包含 id/mid）
@@ -123,11 +130,16 @@ export default function SongInfo(props: ISongInfoProps) {
             styles.container,
             containerStyle,
             isHorizontal ? styles.horizontalContainer : null,
+            isImmersive ? styles.immersiveContainer : null,
         ]}>
             <View style={[styles.titleRow, isHorizontal ? styles.titleRowHorizontal : null]}>
                 <Text
-                    numberOfLines={isHorizontal ? 1 : 2}
-                    style={[styles.title, isHorizontal ? styles.horizontalTitle : null]}>
+                    numberOfLines={isHorizontal || isImmersive ? 1 : 2}
+                    style={[
+                        styles.title,
+                        isHorizontal ? styles.horizontalTitle : null,
+                        isImmersive ? styles.immersiveTitle : null,
+                    ]}>
                     {musicItem?.title ?? "--"}
                 </Text>
                 {showHeart && (
@@ -253,5 +265,14 @@ const styles = StyleSheet.create({
     },
     horizontalTitle: {
         fontSize: fontSizeConst.appbar,
+    },
+    immersiveContainer: {
+        marginTop: 0,
+        paddingTop: rpx(10),
+        paddingBottom: rpx(18),
+    },
+    immersiveTitle: {
+        fontSize: fontSizeConst.hero,
+        fontWeight: fontWeightConst.bolder,
     },
 });

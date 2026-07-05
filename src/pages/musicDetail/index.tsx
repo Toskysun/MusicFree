@@ -6,10 +6,10 @@ import { StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Background from "./components/background";
 import Bottom from "./components/bottom";
-import Content from "./components/content";
+import Content, { MusicDetailContentTab } from "./components/content";
 import Lyric from "./components/content/lyric";
 import NavBar from "./components/navBar";
-import Config from "@/core/appConfig";
+import Config, { useAppConfig } from "@/core/appConfig";
 import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import { useNavigation } from "@react-navigation/native";
 
@@ -17,7 +17,19 @@ export default function MusicDetail() {
     const orientation = useOrientation();
     const navigation = useNavigation<any>();
     const [isExiting, setIsExiting] = useState(false);
+    const [tab, selectTab] = useState<MusicDetailContentTab>(
+        Config.getConfig("basic.musicDetailDefault") || "album",
+    );
     const isHorizontal = orientation === "horizontal";
+    const showAlbumCover = tab === "album" || isHorizontal;
+    const coverStyle = useAppConfig("theme.coverStyle") ?? "square";
+    const musicDetailCoverStyle =
+        useAppConfig("theme.musicDetailCoverStyle") ?? "classic";
+    const useImmersiveCover =
+        showAlbumCover &&
+        !isHorizontal &&
+        coverStyle === "square" &&
+        musicDetailCoverStyle === "immersive";
 
     useEffect(() => {
         const needAwake = Config.getConfig("basic.musicDetailAwake");
@@ -59,9 +71,12 @@ export default function MusicDetail() {
 
     return (
         <>
-            <Background />
+            <Background showImmersiveCover={useImmersiveCover} />
             <SafeAreaView style={globalStyle.fwflex1}>
-                <StatusBar backgroundColor={"transparent"} />
+                <StatusBar
+                    backgroundColor={"transparent"}
+                    translucent={useImmersiveCover}
+                />
                 <View style={style.bodyWrapper}>
                     <View
                         style={[
@@ -69,7 +84,11 @@ export default function MusicDetail() {
                             isHorizontal ? style.leftPane : null,
                         ]}>
                         <NavBar onBack={() => setIsExiting(true)} />
-                        <Content disableMaskedView={isExiting} />
+                        <Content
+                            disableMaskedView={isExiting}
+                            tab={tab}
+                            selectTab={selectTab}
+                        />
                         <Bottom />
                     </View>
                     {isHorizontal ? <View style={style.divider} /> : null}
