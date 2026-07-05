@@ -151,10 +151,27 @@ class TrackPlayer extends EventEmitter<{
         const repeatMode = PersistStatus.get("music.repeatMode");
         const progress = PersistStatus.get("music.progress");
         const track = PersistStatus.get("music.musicItem");
-        const quality =
-            PersistStatus.get("music.quality") ||
-            this.configService.getConfig("basic.defaultPlayQuality") ||
-            "master";
+        // 偏好音质：优先用户设置的默认播放音质，回退到 master。
+        // 不要直接使用 PersistStatus 里的 music.quality —— 它是上一首歌经
+        // getSmartQuality 降级后的实际音质，若上一首只支持到 320k(HQ)，会把恢复的
+        // 第一首歌也强制用 320k 请求音源，造成真实降级。改为对当前恢复歌曲自身的
+        // 可用音质智能选择，行为与 play() 保持一致。
+        const preferredQuality =
+            (this.configService.getConfig("basic.defaultPlayQuality") ||
+                "master") as IMusic.IQualityKey;
+        const restorePlugin = track
+            ? this.pluginManagerService.getByMedia(track)
+            : undefined;
+        const quality: IMusic.IQualityKey =
+            track && (track.qualities || track.source)
+                ? getSmartQuality(
+                      preferredQuality,
+                      (track.qualities || track.source) as
+                          | IMusic.IQuality
+                          | undefined,
+                      restorePlugin?.supportedQualities,
+                  )
+                : preferredQuality;
 
         // 状态恢复
         if (rate) {
@@ -199,6 +216,8 @@ class TrackPlayer extends EventEmitter<{
             }
 
             this.setCurrentMusic(track);
+            // 同步本次智能选择的音质，保证音质标签与实际请求的音源一致
+            this.setQuality(quality);
             void appendStartupBreadcrumb("trackplayer-restore-current-set", {
                 title: track.title,
             });
