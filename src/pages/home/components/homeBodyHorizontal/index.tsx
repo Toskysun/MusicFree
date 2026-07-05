@@ -8,7 +8,7 @@ import { useAppConfig } from "@/core/appConfig";
 import HomeOverview from "../homeBody/homeOverview";
 
 export default function HomeBodyHorizontal() {
-    const homeLayout = useAppConfig("theme.homeLayout") ?? "overview";
+    const homeLayout = useAppConfig("theme.homeLayout") ?? "classic";
     const hideHomeHeroCard = useAppConfig("theme.hideHomeHeroCard") ?? false;
     const hideHomeOperations = useAppConfig("theme.hideHomeOperations") ?? false;
 

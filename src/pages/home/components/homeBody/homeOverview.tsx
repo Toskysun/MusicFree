@@ -167,10 +167,7 @@ function ContinueListening(props: {
                                         .toString(),
                                 },
                             ]}>
-                            <ThemeText
-                                numberOfLines={1}
-                                fontSize="tag"
-                                color={colors.primary}>
+                            <ThemeText fontSize="tag" color={colors.primary}>
                                 {featuredMusic.platform}
                             </ThemeText>
                         </View>
@@ -681,6 +678,23 @@ function MyMusic(props: {
                                     .toString(),
                             },
                         ]}
+                        onPress={() => showPanel("PlayById")}
+                        accessibilityLabel={t("home.playById.a11y")}>
+                        <Icon
+                            name="id"
+                            size={rpx(28)}
+                            color={colors.text}
+                        />
+                    </Pressable>
+                    <Pressable
+                        style={[
+                            styles.headerIconAction,
+                            {
+                                backgroundColor: Color(colors.text)
+                                    .alpha(0.07)
+                                    .toString(),
+                            },
+                        ]}
                         onPress={() => showPanel("CreateMusicSheet")}
                         accessibilityLabel={t("home.newPlaylist.a11y")}>
                         <Icon
@@ -904,16 +918,16 @@ const styles = StyleSheet.create({
         minWidth: 0,
     },
     platformBadge: {
-        maxWidth: rpx(132),
         minHeight: rpx(34),
         paddingHorizontal: rpx(12),
         borderRadius: rpx(17),
+        flexShrink: 0,
         alignItems: "center",
         justifyContent: "center",
         marginLeft: rpx(10),
     },
     continueDesc: {
-        marginTop: rpx(12),
+        marginTop: rpx(10),
     },
     progressRow: {
         flexDirection: "row",

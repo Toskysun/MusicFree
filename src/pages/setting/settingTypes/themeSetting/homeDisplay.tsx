@@ -9,7 +9,7 @@ import { useI18N } from "@/core/i18n";
 
 export default function HomeDisplay() {
     const { t } = useI18N();
-    const homeLayout = useAppConfig("theme.homeLayout") ?? "overview";
+    const homeLayout = useAppConfig("theme.homeLayout") ?? "classic";
     const hideHomeHeroCard = useAppConfig("theme.hideHomeHeroCard") ?? false;
     const hideHomeOperations = useAppConfig("theme.hideHomeOperations") ?? false;
     const useHomeOverview = homeLayout === "overview";
