@@ -9,6 +9,8 @@ import useColors from "@/hooks/useColors";
 import { useI18N } from "@/core/i18n";
 import Tag from "@/components/base/tag";
 import Color from "color";
+import useCardStyle from "@/hooks/useCardStyle";
+import useHasCustomBackground from "@/hooks/useHasCustomBackground";
 
 interface IHeaderProps {
     musicSheet: IMusic.IMusicSheetItem | null;
@@ -18,6 +20,11 @@ interface IHeaderProps {
 export default function Header(props: IHeaderProps) {
     const { musicSheet, musicList, canStar } = props;
     const colors = useColors();
+    const cardStyle = useCardStyle({
+        borderWidth: 0,
+        elevation: 3,
+    });
+    const hasCustomBackground = useHasCustomBackground();
     const { t } = useI18N();
 
     const [maxLines, setMaxLines] = useState<number | undefined>(6);
@@ -27,9 +34,10 @@ export default function Header(props: IHeaderProps) {
             ? musicSheet.platform
             : null;
     const accentBackground = Color(colors.primary).alpha(0.1).toString();
-    const detailBackground = Color(colors.surfaceElevated ?? colors.card)
-        .alpha(0.9)
-        .toString();
+    const detailBackground = colors.surfaceElevated ?? colors.card;
+    const coverBackground = hasCustomBackground
+        ? colors.surface
+        : detailBackground;
 
     const toggleShowMore = () => {
         if (maxLines) {
@@ -46,15 +54,15 @@ export default function Header(props: IHeaderProps) {
                     style.infoCard,
                     {
                         backgroundColor: colors.surface,
-                        shadowColor: colors.shadow,
                     },
+                    cardStyle,
                 ]}>
                 <View style={style.content}>
                     <View
                         style={[
                             style.coverShell,
                             {
-                                backgroundColor: detailBackground,
+                                backgroundColor: coverBackground,
                             },
                         ]}>
                         <FastImage
@@ -133,8 +141,8 @@ export default function Header(props: IHeaderProps) {
                     style.actionCard,
                     {
                         backgroundColor: colors.surface,
-                        shadowColor: colors.shadow,
                     },
+                    cardStyle,
                 ]}>
                 <PlayAllBar
                     canStar={canStar}
@@ -160,9 +168,7 @@ const style = StyleSheet.create({
             width: 0,
             height: rpx(2),
         },
-        shadowOpacity: 0.08,
         shadowRadius: rpx(4),
-        elevation: 3,
     },
     content: {
         flexDirection: "row",
@@ -219,8 +225,6 @@ const style = StyleSheet.create({
             width: 0,
             height: rpx(2),
         },
-        shadowOpacity: 0.08,
         shadowRadius: rpx(4),
-        elevation: 3,
     },
 });

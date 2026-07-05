@@ -15,6 +15,7 @@ import NoPlugin from "@/components/base/noPlugin";
 import { useI18N } from "@/core/i18n";
 import ThemeText from "@/components/base/themeText";
 import Color from "color";
+import useCardStyle from "@/hooks/useCardStyle";
 
 interface INewMusicSheetProps {
     musicItem?: IMusic.IMusicItem | null;
@@ -26,6 +27,10 @@ export default function SearchLrc(props: INewMusicSheetProps) {
         musicItem?.alias ?? musicItem?.title ?? "",
     );
     const colors = useColors();
+    const cardStyle = useCardStyle({
+        borderWidth: 0,
+        elevation: 3,
+    });
     const { t } = useI18N();
     const activeButtonColor = Color(colors.primary).alpha(0.14).toString();
 
@@ -49,8 +54,8 @@ export default function SearchLrc(props: INewMusicSheetProps) {
                             style.searchCard,
                             {
                                 backgroundColor: colors.surface,
-                                shadowColor: colors.shadow,
                             },
+                            cardStyle,
                         ]}>
                         <View style={style.headerTextRow}>
                             <View style={style.headerTextBlock}>
@@ -126,9 +131,7 @@ const style = StyleSheet.create({
             width: 0,
             height: rpx(2),
         },
-        shadowOpacity: 0.08,
         shadowRadius: rpx(4),
-        elevation: 3,
     },
     headerTextRow: {
         flexDirection: "row",
@@ -168,9 +171,7 @@ const style = StyleSheet.create({
             width: 0,
             height: rpx(2),
         },
-        shadowOpacity: 0.08,
         shadowRadius: rpx(4),
-        elevation: 3,
     },
     pluginSectionTitle: {
         marginBottom: rpx(8),
@@ -186,6 +187,10 @@ function LyricResultBodyWrapper() {
     const [index, setIndex] = useState(0);
     const { t } = useI18N();
     const colors = useColors();
+    const cardStyle = useCardStyle({
+        borderWidth: 0,
+        elevation: 3,
+    });
 
     const routes = useMemo(() => PluginManager.getSortedSearchablePlugins("lyric")?.map?.(
         _ => ({
@@ -212,8 +217,8 @@ function LyricResultBodyWrapper() {
                         style.pluginSectionCard,
                         {
                             backgroundColor: colors.card,
-                            shadowColor: colors.shadow,
                         },
+                        cardStyle,
                     ]}>
                 <ThemeText
                     fontSize="caption"
@@ -289,8 +294,8 @@ function LyricResultBodyWrapper() {
                 style.emptyStateCard,
                 {
                     backgroundColor: colors.card,
-                    shadowColor: colors.shadow,
                 },
+                cardStyle,
             ]}>
             <NoPlugin notSupportType={t("panel.searchLrc.notSupported")} />
         </View>

@@ -7,6 +7,8 @@ import { useI18N } from "@/core/i18n";
 import { useSheetItem } from "@/core/musicSheet";
 import { useParams } from "@/core/router";
 import useColors from "@/hooks/useColors";
+import useCardStyle from "@/hooks/useCardStyle";
+import useHasCustomBackground from "@/hooks/useHasCustomBackground";
 import Color from "color";
 import rpx from "@/utils/rpx";
 import React, { useState } from "react";
@@ -16,12 +18,18 @@ export default function Header() {
     const { id = "favorite" } = useParams<"local-sheet-detail">();
     const sheet = useSheetItem(id);
     const colors = useColors();
+    const cardStyle = useCardStyle({
+        borderWidth: 0,
+        elevation: 3,
+    });
+    const hasCustomBackground = useHasCustomBackground();
     const { t } = useI18N();
     const [maxLines, setMaxLines] = useState<number | undefined>(6);
     const accentBackground = Color(colors.primary).alpha(0.1).toString();
-    const detailBackground = Color(colors.surfaceElevated ?? colors.card)
-        .alpha(0.9)
-        .toString();
+    const detailBackground = colors.surfaceElevated ?? colors.card;
+    const coverBackground = hasCustomBackground
+        ? colors.surface
+        : detailBackground;
     const count = sheet?.musicList?.length ?? 0;
 
     return (
@@ -31,15 +39,15 @@ export default function Header() {
                     style.infoCard,
                     {
                         backgroundColor: colors.surface,
-                        shadowColor: colors.shadow,
                     },
+                    cardStyle,
                 ]}>
                 <View style={style.content}>
                     <View
                         style={[
                             style.coverShell,
                             {
-                                backgroundColor: detailBackground,
+                                backgroundColor: coverBackground,
                             },
                         ]}>
                         <FastImage
@@ -110,8 +118,8 @@ export default function Header() {
                     style.actionCard,
                     {
                         backgroundColor: colors.surface,
-                        shadowColor: colors.shadow,
                     },
+                    cardStyle,
                 ]}>
                 <PlayAllBar musicList={sheet?.musicList} musicSheet={sheet} />
             </View>
@@ -133,9 +141,7 @@ const style = StyleSheet.create({
             width: 0,
             height: rpx(2),
         },
-        shadowOpacity: 0.08,
         shadowRadius: rpx(4),
-        elevation: 3,
     },
     content: {
         flexDirection: "row",
@@ -189,8 +195,6 @@ const style = StyleSheet.create({
             width: 0,
             height: rpx(2),
         },
-        shadowOpacity: 0.08,
         shadowRadius: rpx(4),
-        elevation: 3,
     },
 });

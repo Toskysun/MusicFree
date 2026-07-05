@@ -4,6 +4,7 @@ import rpx from "@/utils/rpx";
 import ThemeText from "./themeText";
 import useColors from "@/hooks/useColors";
 import IconButton from "./iconButton";
+import useCardStyle from "@/hooks/useCardStyle";
 
 interface IChipProps {
     containerStyle?: StyleProp<ViewStyle>;
@@ -14,6 +15,11 @@ interface IChipProps {
 export default function Chip(props: IChipProps) {
     const { containerStyle, children, onPress, onClose } = props;
     const colors = useColors();
+    const cardStyle = useCardStyle({
+        borderWidth: StyleSheet.hairlineWidth,
+        elevation: 1,
+        shadowOpacity: 0.06,
+    });
 
     return (
         <Pressable
@@ -22,8 +28,8 @@ export default function Chip(props: IChipProps) {
                 styles.container,
                 {
                     backgroundColor: colors.surface,
-                    borderColor: colors.border,
                 },
+                cardStyle,
                 containerStyle,
             ]}>
             {typeof children === "string" ? (
@@ -52,14 +58,11 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",
-        shadowColor: "#000",
         shadowOffset: {
             width: 0,
             height: rpx(1),
         },
-        shadowOpacity: 0.06,
         shadowRadius: rpx(3),
-        elevation: 1,
     },
     icon: {
         marginLeft: rpx(8),

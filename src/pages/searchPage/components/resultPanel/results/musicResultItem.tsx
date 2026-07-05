@@ -7,6 +7,7 @@ import timeformat from "@/utils/timeformat";
 import { View, StyleSheet } from "react-native";
 import rpx from "@/utils/rpx";
 import useColors from "@/hooks/useColors";
+import useCardStyle from "@/hooks/useCardStyle";
 
 interface IMusicResultsProps {
     item: IMusic.IMusicItem;
@@ -17,6 +18,10 @@ interface IMusicResultsProps {
 export default function MusicResultItem(props: IMusicResultsProps) {
     const { item: musicItem, pluginSearchResultRef } = props;
     const colors = useColors();
+    const cardStyle = useCardStyle({
+        borderWidth: rpx(1),
+        elevation: 2,
+    });
 
     return (
         <View
@@ -24,8 +29,8 @@ export default function MusicResultItem(props: IMusicResultsProps) {
                 styles.cardWrapper,
                 {
                     backgroundColor: colors.surface,
-                    borderColor: colors.border,
                 },
+                cardStyle,
             ]}>
             <MusicItem
                 musicItem={musicItem}
@@ -59,15 +64,11 @@ const styles = StyleSheet.create({
         marginHorizontal: rpx(16),
         marginVertical: rpx(6),
         borderRadius: rpx(12),
-        borderWidth: rpx(1),
         overflow: "hidden",
-        shadowColor: "#000",
         shadowOffset: {
             width: 0,
             height: rpx(2),
         },
-        shadowOpacity: 0.08,
         shadowRadius: rpx(4),
-        elevation: 2,
     },
 });

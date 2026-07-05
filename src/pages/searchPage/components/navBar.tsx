@@ -5,6 +5,7 @@ import Input from "@/components/base/input";
 import Button from "@/components/base/textButton.tsx";
 import { iconSizeConst } from "@/constants/uiConst";
 import { useI18N } from "@/core/i18n";
+import useCardStyle from "@/hooks/useCardStyle";
 import useColors from "@/hooks/useColors";
 import rpx from "@/utils/rpx";
 import Color from "color";
@@ -26,6 +27,11 @@ export default function NavBar() {
     const [query, setQuery] = useAtom(queryAtom);
     const setPageStatus = useSetAtom(pageStatusAtom);
     const colors = useColors();
+    const searchBarCardStyle = useCardStyle({
+        borderWidth: rpx(2),
+        elevation: 2,
+        shadowOpacity: 0.05,
+    });
     const setSearchResultsState = useSetAtom(searchResultsAtom);
     const { t } = useI18N();
 
@@ -59,9 +65,8 @@ export default function NavBar() {
                         {
                             color: colors.text,
                             backgroundColor: colors.surface,
-                            borderWidth: rpx(2),
-                            borderColor: colors.border,
                         },
+                        searchBarCardStyle,
                     ]}
                     accessible
                     accessibilityLabel={t("searchPage.searchLabel.a11y")}
@@ -128,14 +133,11 @@ const style = StyleSheet.create({
         height: rpx(64),
         maxHeight: rpx(64),
         alignItems: "center",
-        shadowColor: "#000",
         shadowOffset: {
             width: 0,
             height: rpx(2),
         },
-        shadowOpacity: 0.05,
         shadowRadius: rpx(4),
-        elevation: 2,
     },
     magnify: {
         position: "absolute",

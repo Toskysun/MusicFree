@@ -13,6 +13,7 @@ import ListFooter from "@/components/base/listFooter";
 import { FlashList } from "@shopify/flash-list";
 import { useI18N } from "@/core/i18n";
 import useColors from "@/hooks/useColors";
+import useCardStyle from "@/hooks/useCardStyle";
 import { StyleSheet, View } from "react-native";
 
 interface ILyricListWrapperProps {
@@ -36,6 +37,10 @@ function LyricListImpl(props: ILyricListProps) {
     const data = props.data;
     const searchState = data?.state ?? RequestStateCode.IDLE;
     const colors = useColors();
+    const cardStyle = useCardStyle({
+        borderWidth: StyleSheet.hairlineWidth,
+        elevation: 3,
+    });
     const { t } = useI18N();
 
     return searchState === RequestStateCode.PENDING_FIRST_PAGE ? (
@@ -49,9 +54,8 @@ function LyricListImpl(props: ILyricListProps) {
                         styles.cardWrapper,
                         {
                             backgroundColor: colors.surface,
-                            borderColor: colors.border,
-                            shadowColor: colors.shadow,
                         },
+                        cardStyle,
                     ]}>
                     <LyricItem
                         lyricItem={item}
@@ -79,9 +83,8 @@ function LyricListImpl(props: ILyricListProps) {
                         styles.emptyCard,
                         {
                             backgroundColor: colors.surface,
-                            borderColor: colors.border,
-                            shadowColor: colors.shadow,
                         },
+                        cardStyle,
                     ]}>
                     <ListEmpty state={searchState} />
                 </View>
@@ -104,29 +107,23 @@ const styles = StyleSheet.create({
         marginHorizontal: rpx(12),
         marginVertical: rpx(6),
         borderRadius: rpx(22),
-        borderWidth: StyleSheet.hairlineWidth,
         overflow: "hidden",
         shadowOffset: {
             width: 0,
             height: rpx(2),
         },
-        shadowOpacity: 0.08,
         shadowRadius: rpx(4),
-        elevation: 3,
     },
     emptyCard: {
         marginHorizontal: rpx(12),
         marginTop: rpx(8),
         borderRadius: rpx(22),
-        borderWidth: StyleSheet.hairlineWidth,
         minHeight: rpx(260),
         justifyContent: "center",
         shadowOffset: {
             width: 0,
             height: rpx(2),
         },
-        shadowOpacity: 0.08,
         shadowRadius: rpx(4),
-        elevation: 3,
     },
 });

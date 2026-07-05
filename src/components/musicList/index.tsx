@@ -12,6 +12,7 @@ import { isSameMediaItem } from "@/utils/mediaUtils";
 import Icon from "../base/icon";
 import { iconSizeConst } from "@/constants/uiConst";
 import useColors from "@/hooks/useColors";
+import useCardStyle from "@/hooks/useCardStyle";
 
 interface IMusicListProps {
     /** 顶部 */
@@ -59,11 +60,14 @@ export default function MusicList(props: IMusicListProps) {
         onLoadMore,
         highlightMusicItem,
         variant = "default",
-        showCover = false,
         itemSpacing = 0,
-        cardStyle,
+        cardStyle: customCardStyle,
     } = props;
     const colors = useColors();
+    const cardShadowStyle = useCardStyle({
+        borderWidth: 0,
+        elevation: 3,
+    });
     const flashListRef = useRef<FlashList<IMusic.IMusicItem>>(null);
     const [showBadge, setShowBadge] = useState(false);
     const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -177,7 +181,8 @@ export default function MusicList(props: IMusicListProps) {
                                         marginHorizontal: rpx(12),
                                         marginVertical: itemSpacing / 2,
                                     },
-                                    cardStyle,
+                                    cardShadowStyle,
+                                    customCardStyle,
                                 ]}>
                                 {itemContent}
                             </View>
@@ -218,14 +223,11 @@ const styles = StyleSheet.create({
     cardWrapper: {
         borderRadius: rpx(12),
         overflow: "hidden",
-        shadowColor: "#000",
         shadowOffset: {
             width: 0,
             height: rpx(2),
         },
-        shadowOpacity: 0.08,
         shadowRadius: rpx(4),
-        elevation: 3,
     },
     badge: {
         position: "absolute",
