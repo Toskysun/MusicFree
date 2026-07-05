@@ -1,7 +1,13 @@
 {
-  "version": "0.6.66",
+  "version": "0.6.70",
   "changeLog": [
     "【交流】欢迎加入 Q 群：1064805856",
+    "【界面】自定义背景下，侧边栏点击颜色跟随主题色",
+    "【界面】首页音乐卡片重新设计，融合新版视觉与原首页布局风格",
+    "【界面】主题设置新增新版首页开关，可在经典首页与新版首页之间切换",
+    "【优化】自定义背景下卡片、搜索页与底部 Tab 改为半透明显示，提升可读性",
+    "【修复】修复自定义背景下主题色第二次保存不生效的问题",
+    "--------以上为v0.6.70新特性--------",
     "【美化】主题设置新增隐藏首页顶部音乐卡片、隐藏首页快捷按钮开关",
     "【歌词】桌面歌词支持极小字号",
     "【IOS】尝试基本支持ios",
@@ -82,7 +88,7 @@
     "【优化】优化了软件启动速度 (需要在【侧边栏-基本设置-插件】中打开【启用插件懒加载】开关)"
   ],
   "download": [
-    "https://github.com/Toskysun/MusicFree/releases/download/v0.6.66/MusicFree-v0.6.66-arm64-v8a-release.apk",
-    "https://github.com/Toskysun/MusicFree/releases/download/v0.6.66/MusicFree-v0.6.66-universal-release.apk"
+    "https://github.com/Toskysun/MusicFree/releases/download/v0.6.70/MusicFree-v0.6.70-arm64-v8a-release.apk",
+    "https://github.com/Toskysun/MusicFree/releases/download/v0.6.70/MusicFree-v0.6.70-universal-release.apk"
   ]
 }

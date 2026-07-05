@@ -65,6 +65,9 @@ export default function useColors() {
                     ? Color(colors.card).lighten(0.24).toString()
                     : Color(colors.card).lighten(0.12).toString()),
             border: colors.border ?? Color(colors.text).alpha(0.12).toString(),
+            listActive:
+                customColors.listActive ??
+                Color(colors.primary).alpha(0.12).toString(),
             accentWarm: customColors.accentWarm ?? colors.primary,
             accentCool:
                 customColors.accentCool ?? customColors.info ?? colors.primary,

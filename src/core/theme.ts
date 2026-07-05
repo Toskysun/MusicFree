@@ -25,7 +25,7 @@ export const lightTheme = {
         musicBarText: "#191815",
         divider: "rgba(25,24,21,0.13)",
         border: "rgba(25,24,21,0.14)",
-        listActive: "rgba(217,75,50,0.10)", // 在手机上表现是ripple
+        listActive: "rgba(25,24,21,0.08)", // 使用文本颜色的半透明
         mask: "rgba(25,24,21,0.24)",
         backdrop: "#E9E4DA",
         surface: "#ECE7DD",
@@ -59,7 +59,7 @@ export const darkTheme = {
         musicBarText: "#F8F5EE",
         divider: "rgba(245,242,235,0.11)",
         border: "rgba(245,242,235,0.12)",
-        listActive: "rgba(255,118,80,0.13)", // 在手机上表现是ripple
+        listActive: "rgba(245,242,235,0.10)", // 使用文本颜色的半透明
         mask: "rgba(8,11,14,0.82)",
         backdrop: "#171C22",
         surface: "#171D24",
@@ -151,16 +151,38 @@ function setup() {
     } else if (currentTheme === "p-light") {
         themeStore.setValue(lightTheme);
     } else {
+        const savedColors = (Config.getConfig("theme.colors") as CustomizedColors) ??
+            darkTheme.colors;
+
+        // 修复旧版本中错误的 listActive 配置
+        // 如果 listActive 存在但与 primary 不匹配，重新生成
+        const fixedColors = { ...savedColors };
+        if (fixedColors.primary && fixedColors.listActive) {
+            const expectedListActive = Color(fixedColors.primary).alpha(0.12).toString();
+            // 检查现有的 listActive 是否基于 primary 颜色
+            try {
+                const currentListActiveColor = Color(fixedColors.listActive);
+                const primaryColor = Color(fixedColors.primary);
+                // 如果色相差异超过10度，或者不是半透明，则重新生成
+                if (
+                    Math.abs(currentListActiveColor.hue() - primaryColor.hue()) > 10 ||
+                    currentListActiveColor.alpha() > 0.2
+                ) {
+                    fixedColors.listActive = expectedListActive;
+                    Config.setConfig("theme.colors", fixedColors);
+                }
+            } catch {
+                // 解析失败，重新生成
+                fixedColors.listActive = expectedListActive;
+                Config.setConfig("theme.colors", fixedColors);
+            }
+        }
+
         themeStore.setValue({
             id: currentTheme,
             dark: true,
             // @ts-ignore
-            colors:
-                normalizeCustomBackgroundColors(
-                    (Config.getConfig("theme.colors") as CustomizedColors) ??
-                        darkTheme.colors,
-                    !!bgUrl,
-                ),
+            colors: normalizeCustomBackgroundColors(fixedColors, !!bgUrl),
         });
     }
 
@@ -235,15 +257,37 @@ function setTheme(
 
 function setColors(colors: Partial<CustomizedColors>) {
     const currentTheme = themeStore.getValue();
+    const persistedColors = Config.getConfig("theme.colors") as
+        | CustomizedColors
+        | undefined;
+
+    // 如果设置了 primary 但没有明确设置 listActive，自动生成 listActive
+    const colorsWithListActive = { ...colors };
+    if (colors.primary && !colors.listActive) {
+        colorsWithListActive.listActive = Color(colors.primary).alpha(0.12).toString();
+    }
+
+    const newColors = {
+        ...darkTheme.colors,
+        ...(persistedColors ?? {}),
+        ...currentTheme.colors,
+        ...colorsWithListActive,
+    } as CustomizedColors;
+
+    Config.setConfig("theme.customColors", newColors);
+    Config.setConfig("theme.colors", newColors);
+
     if (currentTheme.id !== "p-light" && currentTheme.id !== "p-dark") {
+        const hasBackground = !!(
+            backgroundStore.getValue()?.url ?? Config.getConfig("theme.background")
+        );
         const newTheme = {
             ...currentTheme,
-            colors: {
-                ...currentTheme.colors,
-                ...colors,
-            },
+            colors: normalizeCustomBackgroundColors(
+                newColors,
+                hasBackground,
+            ) as typeof currentTheme.colors,
         };
-        Config.setConfig("theme.customColors", newTheme.colors);
         Config.setConfig("theme.colors", newTheme.colors);
         themeStore.setValue(newTheme);
     }

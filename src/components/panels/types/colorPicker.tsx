@@ -42,6 +42,17 @@ export default function ColorPicker(props: IColorPickerProps) {
         Color(defaultColor).rgb().hexa().toString()
     );
 
+    useEffect(() => {
+        const color = Color(defaultColor);
+        const hsl = color.hsl();
+
+        setCurrentHue(hsl.hue() || 0);
+        setCurrentSaturation(hsl.saturationl());
+        setCurrentLightness(hsl.lightness());
+        setCurrentAlpha(color.alpha());
+        setInputValue(color.rgb().hexa().toString());
+    }, [defaultColor]);
+
     const hueColor = useMemo(
         () => Color.hsl(currentHue, 100, 50),
         [currentHue]
