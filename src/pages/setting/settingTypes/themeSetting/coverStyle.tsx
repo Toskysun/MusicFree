@@ -13,6 +13,9 @@ export default function CoverStyle() {
     const musicDetailCoverStyle =
         useAppConfig("theme.musicDetailCoverStyle") ?? "classic";
     const colors = useColors();
+    const isSquareImmersive =
+        coverStyle === "square" && musicDetailCoverStyle === "immersive";
+    const isSquareClassic = coverStyle === "square" && !isSquareImmersive;
 
     return (
         <View>
@@ -29,13 +32,17 @@ export default function CoverStyle() {
                             <TouchableOpacity
                                 style={[
                                     styles.optionItem,
-                                    coverStyle === "square" && {
+                                    isSquareClassic && {
                                         borderColor: colors.primary,
                                         borderWidth: 2,
                                     },
                                 ]}
                                 onPress={() => {
                                     Config.setConfig("theme.coverStyle", "square");
+                                    Config.setConfig(
+                                        "theme.musicDetailCoverStyle",
+                                        "classic",
+                                    );
                                 }}>
                                 <View style={[styles.previewSquare, { backgroundColor: colors.card }]} />
                                 <ThemeText fontSize="description" style={styles.optionText}>
@@ -45,72 +52,13 @@ export default function CoverStyle() {
                             <TouchableOpacity
                                 style={[
                                     styles.optionItem,
-                                    coverStyle === "circle" && {
+                                    isSquareImmersive && {
                                         borderColor: colors.primary,
                                         borderWidth: 2,
                                     },
                                 ]}
                                 onPress={() => {
-                                    Config.setConfig("theme.coverStyle", "circle");
-                                }}>
-                                <View style={[styles.previewCircle, { backgroundColor: colors.card }]} />
-                                <ThemeText fontSize="description" style={styles.optionText}>
-                                    {t("themeSettings.coverStyleCircle")}
-                                </ThemeText>
-                            </TouchableOpacity>
-                        </View>
-                    </ListItem.Content>
-                </ListItem>
-            </View>
-            <ThemeText
-                fontSize="subTitle"
-                fontWeight="bold"
-                style={styles.header}>
-                {t("themeSettings.musicDetailCoverStyle")}
-            </ThemeText>
-            <View style={styles.sectionWrapper}>
-                <ListItem withHorizontalPadding>
-                    <ListItem.Content>
-                        <View style={styles.optionsRow}>
-                            <TouchableOpacity
-                                style={[
-                                    styles.optionItem,
-                                    musicDetailCoverStyle === "classic" && {
-                                        borderColor: colors.primary,
-                                        borderWidth: 2,
-                                    },
-                                ]}
-                                onPress={() => {
-                                    Config.setConfig(
-                                        "theme.musicDetailCoverStyle",
-                                        "classic",
-                                    );
-                                }}>
-                                <View
-                                    style={[
-                                        styles.previewClassic,
-                                        { backgroundColor: colors.card },
-                                    ]}>
-                                    <View
-                                        style={[
-                                            styles.previewClassicCover,
-                                            { backgroundColor: colors.surface },
-                                        ]}
-                                    />
-                                </View>
-                                <ThemeText fontSize="description" style={styles.optionText}>
-                                    {t("themeSettings.musicDetailCoverStyleClassic")}
-                                </ThemeText>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={[
-                                    styles.optionItem,
-                                    musicDetailCoverStyle === "immersive" && {
-                                        borderColor: colors.primary,
-                                        borderWidth: 2,
-                                    },
-                                ]}
-                                onPress={() => {
+                                    Config.setConfig("theme.coverStyle", "square");
                                     Config.setConfig(
                                         "theme.musicDetailCoverStyle",
                                         "immersive",
@@ -129,7 +77,27 @@ export default function CoverStyle() {
                                     />
                                 </View>
                                 <ThemeText fontSize="description" style={styles.optionText}>
-                                    {t("themeSettings.musicDetailCoverStyleImmersive")}
+                                    {t("themeSettings.coverStyleSquareImmersive")}
+                                </ThemeText>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[
+                                    styles.optionItem,
+                                    coverStyle === "circle" && {
+                                        borderColor: colors.primary,
+                                        borderWidth: 2,
+                                    },
+                                ]}
+                                onPress={() => {
+                                    Config.setConfig("theme.coverStyle", "circle");
+                                    Config.setConfig(
+                                        "theme.musicDetailCoverStyle",
+                                        "classic",
+                                    );
+                                }}>
+                                <View style={[styles.previewCircle, { backgroundColor: colors.card }]} />
+                                <ThemeText fontSize="description" style={styles.optionText}>
+                                    {t("themeSettings.coverStyleCircle")}
                                 </ThemeText>
                             </TouchableOpacity>
                         </View>
@@ -150,13 +118,14 @@ const styles = StyleSheet.create({
     },
     optionsRow: {
         flexDirection: "row",
-        justifyContent: "space-around",
+        justifyContent: "space-between",
         alignItems: "center",
         width: "100%",
     },
     optionItem: {
+        width: rpx(170),
         alignItems: "center",
-        padding: rpx(16),
+        padding: rpx(12),
         borderRadius: rpx(12),
         borderWidth: 1,
         borderColor: "transparent",
@@ -171,18 +140,6 @@ const styles = StyleSheet.create({
         height: rpx(80),
         borderRadius: rpx(40),
     },
-    previewClassic: {
-        width: rpx(80),
-        height: rpx(80),
-        borderRadius: rpx(12),
-        justifyContent: "center",
-        alignItems: "center",
-    },
-    previewClassicCover: {
-        width: rpx(48),
-        height: rpx(48),
-        borderRadius: rpx(8),
-    },
     previewImmersive: {
         width: rpx(80),
         height: rpx(80),
@@ -195,5 +152,7 @@ const styles = StyleSheet.create({
     },
     optionText: {
         marginTop: rpx(12),
+        textAlign: "center",
+        width: "100%",
     },
 });
