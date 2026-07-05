@@ -82,11 +82,61 @@ interface IBackgroundInfo {
     opacity?: number;
 }
 
+export const customBackgroundSurfaceColors: Partial<CustomizedColors> = {
+    card: "rgba(0,0,0,0.22)",
+    surface: "rgba(0,0,0,0.18)",
+    surfaceElevated: "rgba(0,0,0,0.30)",
+    appBar: "rgba(0,0,0,0.18)",
+    tabBar: "rgba(0,0,0,0.22)",
+    notification: "rgba(0,0,0,0.32)",
+    backdrop: "rgba(0,0,0,0.62)",
+    placeholder: "rgba(0,0,0,0.20)",
+};
+
 const themeStore = new GlobalState(darkTheme);
 const backgroundStore = new GlobalState<IBackgroundInfo | null>(null);
 
+function sameColor(a?: string, b?: string) {
+    if (!a || !b) {
+        return false;
+    }
+
+    try {
+        return Color(a).hexa().toLowerCase() === Color(b).hexa().toLowerCase();
+    } catch {
+        return a.toLowerCase() === b.toLowerCase();
+    }
+}
+
+function normalizeCustomBackgroundColors(
+    colors: CustomizedColors,
+    hasBackground: boolean,
+) {
+    if (!hasBackground) {
+        return colors;
+    }
+
+    const normalized = { ...colors };
+    (Object.keys(customBackgroundSurfaceColors) as Array<
+        keyof CustomizedColors
+    >).forEach(key => {
+        const current = normalized[key] as string | undefined;
+        const preset =
+            (darkTheme.colors as CustomizedColors)[key] ??
+            (lightTheme.colors as CustomizedColors)[key];
+
+        if (!current || sameColor(current, preset as string | undefined)) {
+            // @ts-ignore key is constrained to CustomizedColors string colors here.
+            normalized[key] = customBackgroundSurfaceColors[key];
+        }
+    });
+
+    return normalized;
+}
+
 function setup() {
     const currentTheme = Config.getConfig("theme.selectedTheme") ?? "p-dark";
+    const bgUrl = Config.getConfig("theme.background");
 
     if (currentTheme === "p-dark") {
         themeStore.setValue(darkTheme);
@@ -98,12 +148,14 @@ function setup() {
             dark: true,
             // @ts-ignore
             colors:
-                (Config.getConfig("theme.colors") as CustomizedColors) ??
-                darkTheme.colors,
+                normalizeCustomBackgroundColors(
+                    (Config.getConfig("theme.colors") as CustomizedColors) ??
+                        darkTheme.colors,
+                    !!bgUrl,
+                ),
         });
     }
 
-    const bgUrl = Config.getConfig("theme.background");
     const bgBlur = Config.getConfig("theme.backgroundBlur");
     const bgOpacity = Config.getConfig("theme.backgroundOpacity");
 
@@ -126,13 +178,21 @@ function setTheme(
     } else if (themeName === "p-dark") {
         themeStore.setValue(darkTheme);
     } else {
+        const hasBackground = !!(
+            extra?.background?.url ??
+            backgroundStore.getValue()?.url ??
+            Config.getConfig("theme.background")
+        );
         themeStore.setValue({
             id: themeName,
             dark: true,
-            colors: {
-                ...darkTheme.colors,
-                ...(extra?.colors ?? {}),
-            },
+            colors: normalizeCustomBackgroundColors(
+                {
+                    ...darkTheme.colors,
+                    ...(extra?.colors ?? {}),
+                },
+                hasBackground,
+            ) as typeof darkTheme.colors,
         });
     }
 

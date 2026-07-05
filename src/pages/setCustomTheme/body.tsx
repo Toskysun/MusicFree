@@ -5,7 +5,10 @@ import { ImgAsset } from "@/constants/assetsConst";
 import globalStyle from "@/constants/globalStyle";
 import pathConst from "@/constants/pathConst";
 import { useI18N } from "@/core/i18n";
-import Theme, { darkTheme } from "@/core/theme";
+import Theme, {
+    customBackgroundSurfaceColors,
+    darkTheme,
+} from "@/core/theme";
 import { CustomizedColors } from "@/hooks/useColors";
 import { grayRate } from "@/utils/colorUtil";
 import rpx from "@/utils/rpx";
@@ -81,33 +84,33 @@ export default function Body() {
                         .toString()
                 });
                 themeColors = {
+                    ...customBackgroundSurfaceColors,
                     appBar: colors.primary,
                     primary: primaryColor
                         .darken(primaryGrayRate * 5)
                         .toString(),
                     musicBar: neutralMusicBar,
-                    card: "rgba(0,0,0,0.2)",
                     tabBar: primaryColor.alpha(0.2).toString(),
                 };
             } else if (primaryGrayRate > 0.4) {
                 themeColors = {
+                    ...customBackgroundSurfaceColors,
                     appBar: colors.primary,
                     primary: Color(colors.primary)
                         .darken(primaryGrayRate * 5)
                         .toString(),
                     musicBar: neutralMusicBar,
-                    card: "rgba(0,0,0,0.2)",
                 };
             } else {
                 // const primaryColor = Color(colors.primary!);
 
                 themeColors = {
+                    ...customBackgroundSurfaceColors,
                     appBar: colors.primary,
                     primary: Color(colors.primary)
                         .saturate(Math.abs(primaryGrayRate) * 2 + 2)
                         .toString(),
                     musicBar: neutralMusicBar,
-                    card: "rgba(0,0,0,0.2)",
                 };
             }
 
