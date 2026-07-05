@@ -3,8 +3,13 @@ import {
     internalSerializeKey,
     supportLocalMediaType,
 } from "@/constants/commonConst";
+import pathConst from "@/constants/pathConst";
 import mp3Util from "@/native/mp3Util";
-import { addFileScheme, getFileName } from "@/utils/fileUtils.ts";
+import {
+    addFileScheme,
+    getFileName,
+    removeFileScheme,
+} from "@/utils/fileUtils.ts";
 import {
     getLocalPath,
     isSameMediaItem,
@@ -14,22 +19,76 @@ import { getStorage, setStorage } from "@/utils/storage";
 import CryptoJs from "crypto-js";
 import { nanoid } from "@/utils/nanoid";
 import { useEffect, useState } from "react";
+import { Platform } from "react-native";
 import { ReadDirItem, exists, readDir, unlink } from "react-native-fs";
 
 let localSheet: IMusic.IMusicItem[] = [];
 const localSheetStateMapper = new StateMapper(() => localSheet);
 
+const iosDocumentsMarker = "/Documents/";
+
+function getLocalPathCandidates(localPath: string) {
+    const rawPath = removeFileScheme(localPath);
+    const candidates = [rawPath];
+
+    if (Platform.OS === "ios") {
+        const documentIndex = rawPath.indexOf(iosDocumentsMarker);
+        if (documentIndex !== -1) {
+            const relativePath = rawPath.slice(
+                documentIndex + iosDocumentsMarker.length,
+            );
+            candidates.push(`${pathConst.basePath}/${relativePath}`);
+        }
+    }
+
+    return [...new Set(candidates)];
+}
+
+async function getExistingLocalPath(localPath: string) {
+    const candidates = getLocalPathCandidates(localPath);
+    for (let candidate of candidates) {
+        if (await exists(candidate)) {
+            return candidate;
+        }
+    }
+    return null;
+}
+
+function isFileNotFoundError(error: any) {
+    const message = `${error?.message ?? error}`.toLowerCase();
+    return (
+        message.includes("enoent") ||
+        message.includes("no such file or directory") ||
+        message.includes("file does not exist")
+    );
+}
+
 export async function setup() {
     const sheet = await getStorage(StorageKeys.LocalMusicSheet);
     if (sheet) {
         let validSheet: IMusic.IMusicItem[] = [];
+        let hasChanged = false;
         for (let musicItem of sheet) {
             const localPath = getLocalPath(musicItem);
-            if (localPath && (await exists(localPath))) {
-                validSheet.push(musicItem);
+            if (localPath) {
+                const existingPath = await getExistingLocalPath(localPath);
+                if (existingPath) {
+                    hasChanged = hasChanged || existingPath !== removeFileScheme(localPath);
+                    validSheet.push({
+                        ...musicItem,
+                        [internalSerializeKey]: {
+                            ...(musicItem[internalSerializeKey] ?? {}),
+                            localPath: existingPath,
+                        },
+                    });
+                } else {
+                    hasChanged = true;
+                }
+            } else {
+                hasChanged = true;
             }
         }
-        if (validSheet.length !== sheet.length) {
+        if (hasChanged) {
             await setStorage(StorageKeys.LocalMusicSheet, validSheet);
         }
         localSheet = validSheet;
@@ -84,13 +143,16 @@ export async function removeMusic(
         const localMusicItem = localSheet[idx];
         newSheet.splice(idx, 1);
         const localPath =
-            musicItem[internalSerializeKey]?.localPath ??
-            localMusicItem[internalSerializeKey]?.localPath;
+            getLocalPath(localMusicItem) ??
+            getLocalPath(musicItem);
         if (deleteOriginalFile && localPath) {
             try {
-                await unlink(localPath);
+                const existingPath = await getExistingLocalPath(localPath);
+                if (existingPath) {
+                    await unlink(existingPath);
+                }
             } catch (e: any) {
-                if (e.message !== "File does not exist") {
+                if (!isFileNotFoundError(e)) {
                     throw e;
                 }
             }
