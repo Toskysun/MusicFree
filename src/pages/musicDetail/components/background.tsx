@@ -10,11 +10,15 @@ import {
 } from "./immersiveCover";
 
 interface IBackgroundProps {
+    immersiveCoverEnabled?: boolean;
     showImmersiveCover?: boolean;
 }
 
 export default function Background(props: IBackgroundProps) {
-    const { showImmersiveCover = false } = props;
+    const {
+        immersiveCoverEnabled = false,
+        showImmersiveCover = false,
+    } = props;
     const musicItem = useCurrentMusic();
     const { width: windowWidth } = useWindowDimensions();
 
@@ -43,16 +47,30 @@ export default function Background(props: IBackgroundProps) {
         <>
             <View style={style.background} />
             <Image
-                style={[
-                    style.blur,
-                    showImmersiveCover ? style.immersiveBaseBlur : null,
-                ]}
+                style={style.blur}
                 blurRadius={50}
-                resizeMode={showImmersiveCover ? "stretch" : "cover"}
+                resizeMode="cover"
                 source={artworkSource}
             />
-            {showImmersiveCover ? (
-                <View pointerEvents="none" style={style.immersiveLayer}>
+            {immersiveCoverEnabled ? (
+                <Image
+                    style={[
+                        style.blur,
+                        style.immersiveBaseBlur,
+                        !showImmersiveCover ? style.hiddenLayer : null,
+                    ]}
+                    blurRadius={50}
+                    resizeMode="stretch"
+                    source={artworkSource}
+                />
+            ) : null}
+            {immersiveCoverEnabled ? (
+                <View
+                    pointerEvents="none"
+                    style={[
+                        style.immersiveLayer,
+                        !showImmersiveCover ? style.hiddenLayer : null,
+                    ]}>
                     <MaskedView
                         style={[
                             style.immersiveArtworkMask,
@@ -153,6 +171,9 @@ const style = StyleSheet.create({
     },
     immersiveBaseBlur: {
         opacity: 0.5,
+    },
+    hiddenLayer: {
+        opacity: 0,
     },
     immersiveLayer: {
         ...StyleSheet.absoluteFillObject,

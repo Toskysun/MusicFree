@@ -25,11 +25,11 @@ export default function MusicDetail() {
     const coverStyle = useAppConfig("theme.coverStyle") ?? "square";
     const musicDetailCoverStyle =
         useAppConfig("theme.musicDetailCoverStyle") ?? "classic";
-    const useImmersiveCover =
-        showAlbumCover &&
+    const immersiveCoverEnabled =
         !isHorizontal &&
         coverStyle === "square" &&
         musicDetailCoverStyle === "immersive";
+    const useImmersiveCover = showAlbumCover && immersiveCoverEnabled;
 
     useEffect(() => {
         const needAwake = Config.getConfig("basic.musicDetailAwake");
@@ -71,11 +71,14 @@ export default function MusicDetail() {
 
     return (
         <>
-            <Background showImmersiveCover={useImmersiveCover} />
+            <Background
+                immersiveCoverEnabled={immersiveCoverEnabled}
+                showImmersiveCover={useImmersiveCover}
+            />
             <SafeAreaView style={globalStyle.fwflex1}>
                 <StatusBar
                     backgroundColor={"transparent"}
-                    translucent={useImmersiveCover}
+                    translucent={immersiveCoverEnabled}
                 />
                 <View style={style.bodyWrapper}>
                     <View
