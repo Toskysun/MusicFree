@@ -12,6 +12,7 @@ import MusicSheet, { useFavorite } from "@/core/musicSheet";
 import { ROUTE_PATH, useNavigate } from "@/core/router";
 import { showPanel } from "@/components/panels/usePanel";
 import pluginManager from "@/core/pluginManager";
+import { IMMERSIVE_CONTENT_HORIZONTAL_PADDING } from "../../immersiveCover";
 
 interface ISongInfoProps {
     showHeart?: boolean;
@@ -36,7 +37,7 @@ export default function SongInfo(props: ISongInfoProps) {
         }
         if (isImmersive) {
             return {
-                paddingHorizontal: rpx(64),
+                paddingHorizontal: IMMERSIVE_CONTENT_HORIZONTAL_PADDING,
             };
         }
         return {

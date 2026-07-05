@@ -7,6 +7,8 @@ import LinearGradient from "react-native-linear-gradient";
 import {
     getImmersiveCoverHeight,
     IMMERSIVE_CLEAR_VISIBLE_RATIO,
+    IMMERSIVE_STRETCH_BLEND_HEIGHT,
+    IMMERSIVE_STRETCH_BLEND_TOP_RATIO,
 } from "./immersiveCover";
 
 interface IBackgroundProps {
@@ -39,9 +41,13 @@ export default function Background(props: IBackgroundProps) {
     const immersiveClearHeight =
         immersiveCoverHeight * IMMERSIVE_CLEAR_VISIBLE_RATIO;
     const immersiveFadeHeight = immersiveCoverHeight - immersiveClearHeight;
-    const immersiveBlurSolidHeight = immersiveCoverHeight * 0.82;
+    const immersiveBlurSolidHeight = immersiveCoverHeight * 0.9;
     const immersiveBlurFadeHeight =
         immersiveCoverHeight - immersiveBlurSolidHeight;
+    const immersiveStretchBlendTop =
+        immersiveCoverHeight * IMMERSIVE_STRETCH_BLEND_TOP_RATIO;
+    const immersiveStretchBlendTotalHeight =
+        immersiveStretchBlendTop + IMMERSIVE_STRETCH_BLEND_HEIGHT;
 
     return (
         <>
@@ -53,24 +59,44 @@ export default function Background(props: IBackgroundProps) {
                 source={artworkSource}
             />
             {immersiveCoverEnabled ? (
-                <Image
-                    style={[
-                        style.blur,
-                        style.immersiveBaseBlur,
-                        !showImmersiveCover ? style.hiddenLayer : null,
-                    ]}
-                    blurRadius={50}
-                    resizeMode="stretch"
-                    source={artworkSource}
-                />
-            ) : null}
-            {immersiveCoverEnabled ? (
                 <View
                     pointerEvents="none"
                     style={[
                         style.immersiveLayer,
                         !showImmersiveCover ? style.hiddenLayer : null,
                     ]}>
+                    <MaskedView
+                        style={[
+                            style.immersiveStretchBlendMask,
+                            { height: immersiveStretchBlendTotalHeight },
+                        ]}
+                        androidRenderingMode="software"
+                        maskElement={
+                            <View style={style.immersiveMask}>
+                                <View style={{ height: immersiveStretchBlendTop }} />
+                                <LinearGradient
+                                    colors={[
+                                        "rgba(0,0,0,0)",
+                                        "rgba(0,0,0,0.72)",
+                                        "rgba(0,0,0,0)",
+                                    ]}
+                                    locations={[0, 0.34, 1]}
+                                    style={{
+                                        height: IMMERSIVE_STRETCH_BLEND_HEIGHT,
+                                    }}
+                                />
+                            </View>
+                        }>
+                        <Image
+                            blurRadius={70}
+                            resizeMode="stretch"
+                            style={[
+                                style.immersiveStretchBlendArtwork,
+                                { height: immersiveStretchBlendTotalHeight },
+                            ]}
+                            source={artworkSource}
+                        />
+                    </MaskedView>
                     <MaskedView
                         style={[
                             style.immersiveArtworkMask,
@@ -169,15 +195,22 @@ const style = StyleSheet.create({
         bottom: 0,
         opacity: 0.5,
     },
-    immersiveBaseBlur: {
-        opacity: 0.5,
-    },
     hiddenLayer: {
         opacity: 0,
     },
     immersiveLayer: {
         ...StyleSheet.absoluteFillObject,
         alignItems: "center",
+    },
+    immersiveStretchBlendMask: {
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+    },
+    immersiveStretchBlendArtwork: {
+        width: "100%",
+        opacity: 0.58,
     },
     immersiveArtworkMask: {
         position: "absolute",

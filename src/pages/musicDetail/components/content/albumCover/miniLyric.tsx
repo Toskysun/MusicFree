@@ -18,11 +18,13 @@ import PersistStatus from "@/utils/persistStatus";
 import { useAppConfig } from "@/core/appConfig";
 import { BreathingDots } from "../lyric/lyricItem";
 import { getCoverLeftMargin } from "./index";
+import { IMMERSIVE_CONTENT_HORIZONTAL_PADDING } from "../../immersiveCover";
 
 interface IMiniLyricProps {
     onPress?: () => void;
     disableMaskedView?: boolean;
     layout?: "normal" | "compact";
+    immersive?: boolean;
 }
 
 const LINE_HEIGHT = rpx(40);
@@ -38,6 +40,7 @@ const COMPACT_CONTAINER_MARGIN_TOP = rpx(12);
 export default function MiniLyric(props: IMiniLyricProps) {
     const { onPress, disableMaskedView } = props;
     const layout = props.layout ?? "normal";
+    const immersive = props.immersive ?? false;
     const colors = useColors();
     const currentLyricItem = useCurrentLyricItem();
     const { lyrics, loading, hasTranslation, hasRomanization } = useLyricState();
@@ -117,8 +120,10 @@ export default function MiniLyric(props: IMiniLyricProps) {
     const containerHeight = layout === "compact" ? COMPACT_CONTAINER_HEIGHT : DEFAULT_CONTAINER_HEIGHT;
 
     const dynamicContainerStyle = useMemo(() => ({
-        paddingHorizontal: getCoverLeftMargin(coverStyle),
-    }), [coverStyle]);
+        paddingHorizontal: immersive
+            ? IMMERSIVE_CONTENT_HORIZONTAL_PADDING
+            : getCoverLeftMargin(coverStyle),
+    }), [coverStyle, immersive]);
 
     // Handle position updates
     useEffect(() => {

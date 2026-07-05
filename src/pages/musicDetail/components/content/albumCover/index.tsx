@@ -266,6 +266,7 @@ export default function AlbumCover(props: IProps) {
                             onPress={onTurnPageClick}
                             disableMaskedView={disableMaskedView}
                             layout={miniLyricLayout === "compact" ? "compact" : "normal"}
+                            immersive
                         />
                     </View>
                     <View style={{ flex: 1 }} />
