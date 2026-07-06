@@ -26,6 +26,8 @@ let localSheet: IMusic.IMusicItem[] = [];
 const localSheetStateMapper = new StateMapper(() => localSheet);
 
 const iosDocumentsMarker = "/Documents/";
+const artworkHydrateGroupNum = 8;
+let artworkHydrateToken = 0;
 
 function getLocalPathCandidates(localPath: string) {
     const rawPath = removeFileScheme(localPath);
@@ -61,6 +63,79 @@ function isFileNotFoundError(error: any) {
         message.includes("no such file or directory") ||
         message.includes("file does not exist")
     );
+}
+
+function hasArtwork(musicItem: IMusic.IMusicItem) {
+    return (
+        typeof musicItem.artwork === "string" &&
+        musicItem.artwork.trim().length > 0
+    );
+}
+
+async function hydrateLocalArtwork(musicItems: IMusic.IMusicItem[] = localSheet) {
+    const token = ++artworkHydrateToken;
+    const candidates = musicItems.filter(
+        musicItem => !hasArtwork(musicItem) && !!getLocalPath(musicItem),
+    );
+
+    for (let i = 0; i < candidates.length; i += artworkHydrateGroupNum) {
+        if (token !== artworkHydrateToken) {
+            return;
+        }
+
+        const group = candidates.slice(i, i + artworkHydrateGroupNum);
+        const hydratedGroup = await Promise.all(
+            group.map(async musicItem => {
+                const localPath = getLocalPath(musicItem);
+                if (!localPath) {
+                    return null;
+                }
+
+                try {
+                    const artwork = await mp3Util.getMediaCoverImg(
+                        removeFileScheme(localPath),
+                    );
+                    return typeof artwork === "string" && artwork.trim()
+                        ? { musicItem, artwork }
+                        : null;
+                } catch {
+                    return null;
+                }
+            }),
+        );
+
+        if (token !== artworkHydrateToken) {
+            return;
+        }
+
+        let nextSheet = localSheet;
+        let hasChanged = false;
+        hydratedGroup.forEach(hydrated => {
+            if (!hydrated) {
+                return;
+            }
+            const targetIndex = nextSheet.findIndex(musicItem =>
+                isSameMediaItem(musicItem, hydrated.musicItem),
+            );
+            if (targetIndex === -1 || hasArtwork(nextSheet[targetIndex])) {
+                return;
+            }
+            if (!hasChanged) {
+                nextSheet = [...localSheet];
+                hasChanged = true;
+            }
+            nextSheet[targetIndex] = {
+                ...nextSheet[targetIndex],
+                artwork: hydrated.artwork,
+            };
+        });
+
+        if (hasChanged) {
+            localSheet = nextSheet;
+            localSheetStateMapper.notify();
+            await saveLocalSheet();
+        }
+    }
 }
 
 export async function setup() {
@@ -113,6 +188,7 @@ export async function addMusic(
     await setStorage(StorageKeys.LocalMusicSheet, newSheet);
     localSheet = newSheet;
     localSheetStateMapper.notify();
+    void hydrateLocalArtwork(musicItem);
 }
 
 function addMusicDraft(musicItem: IMusic.IMusicItem | IMusic.IMusicItem[]) {
@@ -263,7 +339,7 @@ async function importLocal(_folderPaths: string[]) {
     if (token !== importToken) {
         throw new Error("Import Broken");
     }
-    addMusic(musicItems);
+    await addMusic(musicItems);
 }
 
 /** 是否为本地音乐 */
@@ -299,6 +375,7 @@ async function updateMusicList(newSheet: IMusic.IMusicItem[]) {
         await setStorage(StorageKeys.LocalMusicSheet, _localSheet);
         localSheet = _localSheet;
         localSheetStateMapper.notify();
+        void hydrateLocalArtwork(_localSheet);
     } catch {}
 }
 
@@ -313,6 +390,7 @@ const LocalMusicSheet = {
     isLocalMusic,
     useIsLocal,
     getMusicList,
+    hydrateArtwork: hydrateLocalArtwork,
     useMusicList: localSheetStateMapper.useMappedState,
     updateMusicList,
 };

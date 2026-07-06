@@ -7,7 +7,7 @@ import pathConst from "@/constants/pathConst";
 import Mp3Util from "@/native/mp3Util";
 import Base64 from "@/utils/base64";
 import delay from "@/utils/delay";
-import { addFileScheme, getFileName } from "@/utils/fileUtils";
+import { addFileScheme, getFileName, removeFileScheme } from "@/utils/fileUtils";
 import { getMediaExtraProperty, patchMediaExtra } from "@/utils/mediaExtra";
 import { getLocalPath, isSameMediaItem, resetMediaItem } from "@/utils/mediaUtils";
 import notImplementedFunction from "@/utils/notImplementedFunction.ts";
@@ -1248,7 +1248,9 @@ const localFilePluginDefine: IPlugin.IPluginDefine = {
     async getMusicInfo(musicBase) {
         const localPath = getLocalPath(musicBase);
         if (localPath) {
-            const coverImg = await Mp3Util.getMediaCoverImg(localPath);
+            const coverImg = await Mp3Util.getMediaCoverImg(
+                removeFileScheme(localPath),
+            );
             return {
                 artwork: coverImg,
             };

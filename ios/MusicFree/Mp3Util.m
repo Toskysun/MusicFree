@@ -1274,7 +1274,20 @@ RCT_EXPORT_METHOD(getMediaMeta:(NSArray *)filePaths
 RCT_EXPORT_METHOD(getMediaCoverImg:(NSString *)filePath
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject) {
-  NSURL *url = [NSURL fileURLWithPath:filePath];
+  NSString *normalizedPath = MFNormalizePath(filePath);
+  NSArray<NSString *> *cachePaths = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES);
+  NSString *cacheRoot = cachePaths.firstObject ?: NSTemporaryDirectory();
+  NSString *coverDir = [cacheRoot stringByAppendingPathComponent:@"MusicFreeCoverCache"];
+  NSString *coverPath = [coverDir stringByAppendingPathComponent:
+                         [NSString stringWithFormat:@"%lu.jpg", (unsigned long)normalizedPath.hash]];
+  NSURL *coverURL = [NSURL fileURLWithPath:coverPath];
+
+  if ([[NSFileManager defaultManager] fileExistsAtPath:coverPath]) {
+    resolve(coverURL.absoluteString);
+    return;
+  }
+
+  NSURL *url = [NSURL fileURLWithPath:normalizedPath];
   AVAsset *asset = [AVAsset assetWithURL:url];
 
   for (AVMetadataItem *item in [asset commonMetadata]) {
@@ -1287,8 +1300,17 @@ RCT_EXPORT_METHOD(getMediaCoverImg:(NSString *)filePath
       }
 
       if (imageData) {
-        NSString *base64 = [imageData base64EncodedStringWithOptions:0];
-        resolve([NSString stringWithFormat:@"data:image/jpeg;base64,%@", base64]);
+        [[NSFileManager defaultManager] createDirectoryAtPath:coverDir
+                                  withIntermediateDirectories:YES
+                                                   attributes:nil
+                                                        error:nil];
+        UIImage *image = [UIImage imageWithData:imageData];
+        NSData *coverData = image ? UIImageJPEGRepresentation(image, 1.0) : imageData;
+        if (coverData && [coverData writeToFile:coverPath atomically:YES]) {
+          resolve(coverURL.absoluteString);
+        } else {
+          resolve(@"");
+        }
         return;
       }
     }
