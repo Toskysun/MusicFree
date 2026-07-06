@@ -1260,29 +1260,62 @@ const localFilePluginDefine: IPlugin.IPluginDefine = {
     async getLyric(musicBase) {
         const localPath = getLocalPath(musicBase);
         let rawLrc: string | null = null;
+        let translation: string | null = null;
+        let romanization: string | null = null;
         if (localPath) {
+            const normalizedLocalPath = removeFileScheme(localPath);
             // 读取内嵌歌词
             try {
-                rawLrc = await Mp3Util.getLyric(localPath);
+                rawLrc = await Mp3Util.getLyric(normalizedLocalPath);
             } catch (e) {
                 devLog("warn", "读取内嵌歌词失败", e);
             }
-            if (!rawLrc) {
-                // 读取配置歌词
-                const lastDot = localPath.lastIndexOf(".");
-                const lrcPath = localPath.slice(0, lastDot) + ".lrc";
 
-                try {
-                    if (await exists(lrcPath)) {
-                        rawLrc = await readFile(lrcPath, "utf8");
+            const lastDot = normalizedLocalPath.lastIndexOf(".");
+            const basePath = lastDot === -1
+                ? normalizedLocalPath
+                : normalizedLocalPath.slice(0, lastDot);
+            const lyricExts = [".lrc", ".LRC", ".txt", ".TXT"];
+            const readLocalLyric = async (basePaths: string[]) => {
+                for (const base of basePaths) {
+                    for (const ext of lyricExts) {
+                        const filePath = base + ext;
+                        try {
+                            const fileStat = await stat(filePath);
+                            if (!fileStat.isFile()) {
+                                continue;
+                            }
+                            const content = await readFile(filePath, "utf8");
+                            if (content.trim()) {
+                                return content;
+                            }
+                        } catch {
+                            // Try the next companion lyric file.
+                        }
                     }
-                } catch { }
+                }
+                return null;
+            };
+
+            if (!rawLrc) {
+                rawLrc = await readLocalLyric([basePath]);
             }
+
+            translation = await readLocalLyric([
+                `${basePath}-tr`,
+                `${basePath}.tran`,
+            ]);
+            romanization = await readLocalLyric([
+                `${basePath}.roma`,
+                `${basePath}-roma`,
+            ]);
         }
 
-        return rawLrc
+        return rawLrc || translation || romanization
             ? {
-                rawLrc,
+                rawLrc: rawLrc || undefined,
+                translation: translation || undefined,
+                romanization: romanization || undefined,
             }
             : null;
     },
