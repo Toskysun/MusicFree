@@ -9,16 +9,23 @@ export type MusicDetailContentTab = "album" | "lyric";
 
 interface IContentProps {
     disableMaskedView?: boolean;
+    keepAlbumCoverMounted?: boolean;
     tab: MusicDetailContentTab;
     selectTab: React.Dispatch<React.SetStateAction<MusicDetailContentTab>>;
 }
 
 export default function Content(props: IContentProps) {
-    const { disableMaskedView, tab, selectTab } = props;
+    const {
+        disableMaskedView,
+        keepAlbumCoverMounted = true,
+        tab,
+        selectTab,
+    } = props;
     const orientation = useOrientation();
 
     const showAlbumCover = tab === "album" || orientation === "horizontal";
     const showLyric = tab === "lyric" && orientation !== "horizontal";
+    const shouldRenderAlbumCover = showAlbumCover || keepAlbumCoverMounted;
 
     const onTurnPageClick = () => {
         if (orientation === "horizontal") {
@@ -33,16 +40,17 @@ export default function Content(props: IContentProps) {
 
     return (
         <View style={globalStyle.fwflex1}>
-            {/* Keep AlbumCover mounted to preserve mini lyric state, use display to hide */}
-            <View style={[
-                globalStyle.fwflex1,
-                !showAlbumCover && styles.hidden,
-            ]}>
-                <AlbumCover
-                    onTurnPageClick={onTurnPageClick}
-                    disableMaskedView={disableMaskedView}
-                />
-            </View>
+            {shouldRenderAlbumCover ? (
+                <View style={[
+                    globalStyle.fwflex1,
+                    !showAlbumCover && styles.hidden,
+                ]}>
+                    <AlbumCover
+                        onTurnPageClick={onTurnPageClick}
+                        disableMaskedView={disableMaskedView}
+                    />
+                </View>
+            ) : null}
             {/* Keep Lyric mounted to preserve scroll position, use display to hide */}
             <View style={[
                 globalStyle.fwflex1,
@@ -56,13 +64,13 @@ export default function Content(props: IContentProps) {
 
 const styles = StyleSheet.create({
     hidden: {
-        position: 'absolute',
+        position: "absolute",
         top: 0,
         left: 0,
         right: 0,
         bottom: 0,
         opacity: 0,
-        pointerEvents: 'none',
+        pointerEvents: "none",
         transform: [{ translateX: 10000 }],
     },
 });

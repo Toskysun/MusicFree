@@ -30,6 +30,7 @@ export default function MusicDetail() {
         coverStyle === "square" &&
         musicDetailCoverStyle === "immersive";
     const useImmersiveCover = showAlbumCover && immersiveCoverEnabled;
+    const renderImmersiveCover = useImmersiveCover && !isExiting;
 
     useEffect(() => {
         const needAwake = Config.getConfig("basic.musicDetailAwake");
@@ -73,6 +74,7 @@ export default function MusicDetail() {
         <>
             <Background
                 immersiveCoverEnabled={immersiveCoverEnabled}
+                renderImmersiveCover={renderImmersiveCover}
                 showImmersiveCover={useImmersiveCover}
             />
             <SafeAreaView style={globalStyle.fwflex1}>
@@ -89,6 +91,7 @@ export default function MusicDetail() {
                         <NavBar onBack={() => setIsExiting(true)} />
                         <Content
                             disableMaskedView={isExiting}
+                            keepAlbumCoverMounted={!immersiveCoverEnabled}
                             tab={tab}
                             selectTab={selectTab}
                         />

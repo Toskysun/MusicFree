@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo } from "react";
 import { Image, StyleSheet, useWindowDimensions, View } from "react-native";
 import { ImgAsset } from "@/constants/assetsConst";
 import { useCurrentMusic } from "@/core/trackPlayer";
@@ -11,12 +11,14 @@ import {
 
 interface IBackgroundProps {
     immersiveCoverEnabled?: boolean;
+    renderImmersiveCover?: boolean;
     showImmersiveCover?: boolean;
 }
 
 export default function Background(props: IBackgroundProps) {
     const {
         immersiveCoverEnabled = false,
+        renderImmersiveCover,
         showImmersiveCover = false,
     } = props;
     const musicItem = useCurrentMusic();
@@ -35,6 +37,14 @@ export default function Background(props: IBackgroundProps) {
         return musicItem.artwork;
 
     }, [musicItem?.artwork]);
+
+    useEffect(() => {
+        if (!immersiveCoverEnabled || typeof musicItem?.artwork !== "string") {
+            return;
+        }
+        Image.prefetch(musicItem.artwork);
+    }, [immersiveCoverEnabled, musicItem?.artwork]);
+
     const immersiveCoverHeight = getImmersiveCoverHeight(windowWidth);
     const immersiveClearHeight =
         immersiveCoverHeight * IMMERSIVE_CLEAR_VISIBLE_RATIO;
@@ -42,35 +52,34 @@ export default function Background(props: IBackgroundProps) {
     const immersiveBlurSolidHeight = immersiveCoverHeight * 0.82;
     const immersiveBlurFadeHeight =
         immersiveCoverHeight - immersiveBlurSolidHeight;
+    const shouldRenderImmersiveCover =
+        immersiveCoverEnabled && (renderImmersiveCover ?? showImmersiveCover);
 
     return (
         <>
             <View style={style.background} />
             <Image
+                fadeDuration={0}
                 style={style.blur}
                 blurRadius={50}
                 resizeMode="cover"
                 source={artworkSource}
             />
-            {immersiveCoverEnabled ? (
+            {shouldRenderImmersiveCover ? (
                 <Image
-                    style={[
-                        style.blur,
-                        style.immersiveBaseBlur,
-                        !showImmersiveCover ? style.hiddenLayer : null,
-                    ]}
+                    fadeDuration={0}
+                    style={[style.blur, style.immersiveBaseBlur]}
                     blurRadius={50}
                     resizeMode="stretch"
                     source={artworkSource}
                 />
             ) : null}
-            {immersiveCoverEnabled ? (
+            {shouldRenderImmersiveCover ? (
                 <View
                     pointerEvents="none"
-                    style={[
-                        style.immersiveLayer,
-                        !showImmersiveCover ? style.hiddenLayer : null,
-                    ]}>
+                    renderToHardwareTextureAndroid
+                    shouldRasterizeIOS
+                    style={style.immersiveLayer}>
                     <MaskedView
                         style={[
                             style.immersiveArtworkMask,
@@ -79,7 +88,9 @@ export default function Background(props: IBackgroundProps) {
                                 height: immersiveCoverHeight,
                             },
                         ]}
-                        androidRenderingMode="software"
+                        androidRenderingMode="hardware"
+                        collapsable={false}
+                        renderToHardwareTextureAndroid
                         maskElement={
                             <View style={style.immersiveMask}>
                                 <View
@@ -98,6 +109,7 @@ export default function Background(props: IBackgroundProps) {
                             </View>
                         }>
                         <Image
+                            fadeDuration={0}
                             blurRadius={34}
                             resizeMode="contain"
                             style={style.immersiveArtwork}
@@ -112,7 +124,9 @@ export default function Background(props: IBackgroundProps) {
                                 height: immersiveCoverHeight,
                             },
                         ]}
-                        androidRenderingMode="software"
+                        androidRenderingMode="hardware"
+                        collapsable={false}
+                        renderToHardwareTextureAndroid
                         maskElement={
                             <View style={style.immersiveMask}>
                                 <View
@@ -131,6 +145,7 @@ export default function Background(props: IBackgroundProps) {
                             </View>
                         }>
                         <Image
+                            fadeDuration={0}
                             style={[
                                 style.immersiveArtwork,
                                 {
@@ -171,9 +186,6 @@ const style = StyleSheet.create({
     },
     immersiveBaseBlur: {
         opacity: 0.5,
-    },
-    hiddenLayer: {
-        opacity: 0,
     },
     immersiveLayer: {
         ...StyleSheet.absoluteFillObject,
