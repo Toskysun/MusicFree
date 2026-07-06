@@ -1,7 +1,14 @@
 {
-  "version": "0.6.70",
+  "version": "0.6.77",
   "changeLog": [
     "【交流】欢迎加入 Q 群：1064805856",
+    "【美化】播放页封面样式新增沉浸式封面，可在主题设置中切换",
+    "【优化】优化沉浸式播放页封面过渡、背景融合与拉伸模糊层，减少切页闪烁",
+    "【优化】自定义背景下卡片颜色与表面色同步，列表与搜索页面显示更柔和",
+    "【修复】修复应用重启后第一首歌可能从偏好音质降级的问题",
+    "【修复】限制平板等大屏文字缩放，避免弹窗、标签和列表布局异常",
+    "【修复】迷你播放栏圆环进度条恢复跟随主题色",
+    "--------以上为v0.6.77新特性--------",
     "【界面】自定义背景下，侧边栏点击颜色跟随主题色",
     "【界面】首页音乐卡片重新设计，融合新版视觉与原首页布局风格",
     "【界面】主题设置新增新版首页开关，可在经典首页与新版首页之间切换",
@@ -88,7 +95,7 @@
     "【优化】优化了软件启动速度 (需要在【侧边栏-基本设置-插件】中打开【启用插件懒加载】开关)"
   ],
   "download": [
-    "https://github.com/Toskysun/MusicFree/releases/download/v0.6.70/MusicFree-v0.6.70-arm64-v8a-release.apk",
-    "https://github.com/Toskysun/MusicFree/releases/download/v0.6.70/MusicFree-v0.6.70-universal-release.apk"
+    "https://github.com/Toskysun/MusicFree/releases/download/v0.6.77/MusicFree-v0.6.77-arm64-v8a-release.apk",
+    "https://github.com/Toskysun/MusicFree/releases/download/v0.6.77/MusicFree-v0.6.77-universal-release.apk"
   ]
 }

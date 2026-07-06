@@ -35,7 +35,7 @@ function CircularPlayBtn() {
             }
             duration={100}
             radius={rpx(31)}
-            activeStrokeColor={colors.accentWarm}
+            activeStrokeColor={colors.primary}
             inActiveStrokeColor={colors.textSecondary}>
             <IconButton
                 accessibilityLabel={"播放或暂停歌曲"}
