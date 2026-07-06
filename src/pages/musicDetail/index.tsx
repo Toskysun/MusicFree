@@ -80,7 +80,7 @@ export default function MusicDetail() {
             <SafeAreaView style={globalStyle.fwflex1}>
                 <StatusBar
                     backgroundColor={"transparent"}
-                    translucent={immersiveCoverEnabled}
+                    translucent
                 />
                 <View style={style.bodyWrapper}>
                     <View
