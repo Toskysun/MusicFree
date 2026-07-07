@@ -52,6 +52,16 @@ axios.interceptors.response.use((response) => {
 
 const sha256 = CryptoJs.SHA256;
 
+function normalizeLyricText<T extends string | null | undefined>(text: T): T {
+    if (!text) {
+        return text;
+    }
+
+    return text
+        .replace(/\r/g, "")
+        .replace(/\\r\\n|\\n|\\r/g, "\n") as T;
+}
+
 const deprecatedCookieManager = {
     get: notImplementedFunction,
     set: notImplementedFunction,
@@ -468,6 +478,7 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
         let rawLrc: string | null = musicItem.rawLrc || null;
         let translation: string | null = null;
         let romanization: string | null = null;
+        rawLrc = normalizeLyricText(rawLrc);
 
         // 2. 本地手动设置的歌词
         const platformHash = CryptoJs.MD5(musicItem.platform).toString(
@@ -479,10 +490,10 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
                 pathConst.localLrcPath + platformHash + "/" + idHash + ".lrc",
             )
         ) {
-            rawLrc = await RNFS.readFile(
+            rawLrc = normalizeLyricText(await RNFS.readFile(
                 pathConst.localLrcPath + platformHash + "/" + idHash + ".lrc",
                 "utf8",
-            );
+            ));
 
             if (
                 await RNFS.exists(
@@ -494,14 +505,14 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
                 )
             ) {
                 translation =
-                    (await RNFS.readFile(
+                    normalizeLyricText((await RNFS.readFile(
                         pathConst.localLrcPath +
                         platformHash +
                         "/" +
                         idHash +
                         ".tran.lrc",
                         "utf8",
-                    )) || null;
+                    )) || null);
             }
 
             if (
@@ -514,14 +525,14 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
                 )
             ) {
                 romanization =
-                    (await RNFS.readFile(
+                    normalizeLyricText((await RNFS.readFile(
                         pathConst.localLrcPath +
                         platformHash +
                         "/" +
                         idHash +
                         ".roma.lrc",
                         "utf8",
-                    )) || null;
+                    )) || null);
             }
 
             return {
@@ -543,9 +554,9 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
             // 优先用缓存的结果
             if (cacheLyric.rawLrc || cacheLyric.translation || cacheLyric.romanization) {
                 return {
-                    rawLrc: cacheLyric.rawLrc,
-                    translation: cacheLyric.translation,
-                    romanization: cacheLyric.romanization,
+                    rawLrc: normalizeLyricText(cacheLyric.rawLrc),
+                    translation: normalizeLyricText(cacheLyric.translation),
+                    romanization: normalizeLyricText(cacheLyric.romanization),
                 };
             }
 
@@ -553,7 +564,7 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
             if (localLyric) {
                 let needRefetch = false;
                 if (localLyric.rawLrc && (await exists(localLyric.rawLrc))) {
-                    rawLrc = await readFile(localLyric.rawLrc, "utf8");
+                    rawLrc = normalizeLyricText(await readFile(localLyric.rawLrc, "utf8"));
                 } else if (localLyric.rawLrc) {
                     needRefetch = true;
                 }
@@ -561,10 +572,10 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
                     localLyric.translation &&
                     (await exists(localLyric.translation))
                 ) {
-                    translation = await readFile(
+                    translation = normalizeLyricText(await readFile(
                         localLyric.translation,
                         "utf8",
-                    );
+                    ));
                 } else if (localLyric.translation) {
                     needRefetch = true;
                 }
@@ -572,10 +583,10 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
                     localLyric.romanization &&
                     (await exists(localLyric.romanization))
                 ) {
-                    romanization = await readFile(
+                    romanization = normalizeLyricText(await readFile(
                         localLyric.romanization,
                         "utf8",
-                    );
+                    ));
                 } else if (localLyric.romanization) {
                     needRefetch = true;
                 }
@@ -607,9 +618,9 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
         }
 
         if (lrcSource) {
-            rawLrc = lrcSource?.rawLrc || rawLrc;
-            translation = lrcSource?.translation || null;
-            romanization = lrcSource?.romanization || null;
+            rawLrc = normalizeLyricText(lrcSource?.rawLrc || rawLrc);
+            translation = normalizeLyricText(lrcSource?.translation || null);
+            romanization = normalizeLyricText(lrcSource?.romanization || null);
 
             const deprecatedLrcUrl = lrcSource?.lrc || musicItem.lrc;
 
@@ -632,6 +643,7 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
                 } else if (musicItem.rawLrc) {
                     rawLrc = musicItem.rawLrc;
                 }
+                rawLrc = normalizeLyricText(rawLrc);
             }
 
             if (rawLrc) {
@@ -1271,7 +1283,7 @@ const localFilePluginDefine: IPlugin.IPluginDefine = {
             const normalizedLocalPath = removeFileScheme(localPath);
             // 读取内嵌歌词
             try {
-                rawLrc = await Mp3Util.getLyric(normalizedLocalPath);
+                rawLrc = normalizeLyricText(await Mp3Util.getLyric(normalizedLocalPath));
             } catch (e) {
                 devLog("warn", "读取内嵌歌词失败", e);
             }
@@ -1290,7 +1302,7 @@ const localFilePluginDefine: IPlugin.IPluginDefine = {
                             if (!fileStat.isFile()) {
                                 continue;
                             }
-                            const content = await readFile(filePath, "utf8");
+                            const content = normalizeLyricText(await readFile(filePath, "utf8"));
                             if (content.trim()) {
                                 return content;
                             }

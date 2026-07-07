@@ -3,17 +3,11 @@ import { devLog } from '@/utils/log';
 const timeReg = /\[[\d:.]+\]/g;
 const metaReg = /\[(.+):(.+)\]/g;
 // 逐字歌词格式1: [92260,4740](0,500,0)歌(500,300,0)词
-const LINE_TIME_PATTERN = /^\[(\d+),(\d+)\](.+)$/;
-const WORD_PATTERN = /\((\d+),(\d+),\d+\)([^(]*?)(?=\(|$)/g;
+const LINE_TIME_PATTERN = /^\[(\d+),(\d+)\](.*)$/;
 // 逐字歌词格式2: [00:01.181]<00:01.181>文字<00:01.339>文字...
 const ANGLE_BRACKET_TIME_PATTERN = /<([\d:.]+)>/g;
-const HAS_ANGLE_BRACKET_PATTERN = /\[[\d:.]+\]<[\d:.]+>/;
-
-// QRC 格式逐字歌词正则：字(ms,duration)
-// Uses negative lookahead to match any character until a timestamp pattern (digits,digits)
-// This correctly handles spaces, parentheses, and special characters
-// Pattern reference: LDDC project
-const QRC_WORD_PATTERN = /((?:(?!\(\d+,\d+\)).)*)\((\d+),\d+\)/g;
+const HAS_ANGLE_BRACKET_PATTERN = /\[[\d:.]+\]\s*<[\d:.]+>/;
+const INLINE_WORD_TIME_PATTERN = /^\[[\d:.]+\][^\r\n]*\(\d+,\d+(?:,\d+)?\)/;
 
 // Time tolerance for matching translation/romanization lines (in seconds)
 // Allows matching when timestamps differ by up to 50ms (0.05 seconds)
@@ -25,7 +19,28 @@ const HAN_REG = /[\u3400-\u9fff\uf900-\ufaff]/;
 const KANA_REG = /[\u3040-\u30ff\u31f0-\u31ff]/;
 const HANGUL_REG = /[\uac00-\ud7af]/;
 const LATIN_REG = /[A-Za-z\u00c0-\u024f]/;
+const CREDIT_LINE_REG = /^(?:(?:作)?词|(?:作)?詞|曲|作曲|编曲|編曲|词曲|詞曲|原唱|演唱|歌手|vocal|lyrics?|lyricist|composer|music|arrange(?:r|ment)?)\s*[:：]/i;
 const ROMANIZATION_HINT_REG = /(?:shi|chi|tsu|kyo|kyu|kya|ryo|ryu|rya|sho|shu|sha|cho|chu|cha|jyo|jyu|jya|dzu|desu|boku|kimi|kono|sono|ano|yume|sora|kokoro|namida|hikari|kaze|hana|machi|sekai|mirai|hoshi|koe|uta|sarang|hae)/i;
+const CREDIT_ROMANIZATION_PREFIXES = new Set([
+    "shi",
+    "ci",
+    "zuo ci",
+    "saku shi",
+    "sakushi",
+    "kyo ku",
+    "kyoku",
+    "qu",
+    "zuo qu",
+    "sa kyo ku",
+    "sa k kyo ku",
+    "sa kkyoku",
+    "sakkyoku",
+    "he n kyo ku",
+    "he n kyoku",
+    "hen kyo ku",
+    "henkyoku",
+    "bian qu",
+]);
 const COMMON_ENGLISH_WORDS = new Set([
     "a",
     "an",
@@ -148,6 +163,114 @@ function msToTimestamp(ms: number): string {
     return `${minutes.toString().padStart(2, '0')}:${seconds.toFixed(3).padStart(6, '0')}`;
 }
 
+function normalizeRawLyricText(raw: string) {
+    return raw
+        .replace(/\r/g, "")
+        .replace(/\\r\\n|\\n|\\r/g, "\n");
+}
+
+function createTimedWord(
+    text: string,
+    startTime: number,
+    duration: number,
+    index: number,
+): ILyric.IWordData {
+    return {
+        text,
+        startTime,
+        duration: Math.max(duration, 50),
+        space: !text.trim(),
+    };
+}
+
+function parsePrefixedTimedWords(body: string): ILyric.IWordData[] {
+    const words: ILyric.IWordData[] = [];
+    const wordRegex = /([^()]*)\((\d+),(\d+)(?:,\d+)?\)/g;
+    let wordMatch: RegExpExecArray | null;
+
+    while ((wordMatch = wordRegex.exec(body)) !== null) {
+        const text = wordMatch[1];
+        if (!text) {
+            continue;
+        }
+
+        words.push(createTimedWord(
+            text,
+            parseInt(wordMatch[2], 10),
+            parseInt(wordMatch[3], 10),
+            words.length,
+        ));
+    }
+
+    return words;
+}
+
+function parsePostfixedTimedWords(body: string): ILyric.IWordData[] {
+    const words: ILyric.IWordData[] = [];
+    const wordRegex = /\((\d+),(\d+)(?:,\d+)?\)([^()]*)/g;
+    let wordMatch: RegExpExecArray | null;
+
+    while ((wordMatch = wordRegex.exec(body)) !== null) {
+        const text = wordMatch[3];
+        if (!text) {
+            continue;
+        }
+
+        words.push(createTimedWord(
+            text,
+            parseInt(wordMatch[1], 10),
+            parseInt(wordMatch[2], 10),
+            words.length,
+        ));
+    }
+
+    return words;
+}
+
+function joinWordText(words: ILyric.IWordData[]) {
+    return words.map(word => word.text).join("");
+}
+
+function adjustRelativeWordTimes(words: ILyric.IWordData[], lineStartMs: number) {
+    if (!words.length || lineStartMs <= 0) {
+        return words;
+    }
+
+    const firstStart = words[0].startTime;
+    const lastStart = words[words.length - 1].startTime;
+    const shouldAdjust = firstStart <= 10
+        || (
+            firstStart < lineStartMs - 500
+            && lastStart < lineStartMs + 500
+        );
+
+    if (!shouldAdjust) {
+        return words;
+    }
+
+    return words.map(word => ({
+        ...word,
+        startTime: word.startTime + lineStartMs,
+    }));
+}
+
+function markWordSpaces(words: ILyric.IWordData[], fullText: string) {
+    let currentPos = 0;
+    return words.map(word => {
+        const wordIndex = fullText.indexOf(word.text, currentPos);
+        if (wordIndex === -1) {
+            return word;
+        }
+
+        const wordEndPos = wordIndex + word.text.length;
+        currentPos = wordEndPos;
+        return {
+            ...word,
+            space: wordEndPos < fullText.length && fullText[wordEndPos] === " ",
+        };
+    });
+}
+
 /**
  * 将 QRC 格式的逐字歌词行转换为尖括号格式
  *
@@ -170,17 +293,14 @@ export function formatQrcToAngleBracket(qrcLine: string): string {
     // 移除 [timestamp,duration] 前缀获取逐字内容
     const contentAfterTiming = qrcLine.replace(/^\[\d+,\d+\]/, '');
 
-    // 解析逐字时间: 字(start_ms,duration_ms)
-    QRC_WORD_PATTERN.lastIndex = 0;
-    const formattedWords: string[] = [];
-    let match: RegExpExecArray | null;
-
-    while ((match = QRC_WORD_PATTERN.exec(contentAfterTiming)) !== null) {
-        const word = match[1];
-        const wordStartMs = parseInt(match[2], 10);
-        const wordTimestamp = msToTimestamp(wordStartMs);
-        formattedWords.push(`<${wordTimestamp}>${word}`);
-    }
+    // 解析逐字时间: 字(start_ms,duration_ms) 或 (offset_ms,duration_ms,0)字
+    const words = adjustRelativeWordTimes(
+        contentAfterTiming.trim().startsWith("(")
+            ? parsePostfixedTimedWords(contentAfterTiming)
+            : parsePrefixedTimedWords(contentAfterTiming),
+        lineStartMs,
+    );
+    const formattedWords = words.map(word => `<${msToTimestamp(word.startTime)}>${word.text}`);
 
     // 如果没有解析到任何单词，返回空
     if (formattedWords.length === 0) {
@@ -197,7 +317,7 @@ export function formatQrcToAngleBracket(qrcLine: string): string {
  * @returns 尖括号格式的完整歌词内容
  */
 export function formatQrcContentToAngleBracket(qrcContent: string): string {
-    const lines = qrcContent.split('\n');
+    const lines = normalizeRawLyricText(qrcContent).split('\n');
     const formattedLines: string[] = [];
     let filteredCount = 0;
 
@@ -542,6 +662,46 @@ function isMostlyLatin(stats: ITextScriptStats) {
     return stats.latin > 0 && stats.latin / Math.max(1, stats.script) >= 0.65;
 }
 
+function hasKanaOrHangul(stats: ITextScriptStats) {
+    return stats.kana > 0 || stats.hangul > 0;
+}
+
+function isLyricCreditLine(text: string) {
+    return CREDIT_LINE_REG.test(text.trim());
+}
+
+function normalizeCreditRomanizationPrefix(text: string) {
+    const words = getLatinWords(text);
+    return words.join(" ");
+}
+
+function isCreditRomanizationLine(text: string) {
+    const trimmed = text.trim();
+    if (!/[:：]/.test(trimmed) || isLyricCreditLine(trimmed)) {
+        return false;
+    }
+
+    const prefix = trimmed.split(/[:：]/)[0];
+    return CREDIT_ROMANIZATION_PREFIXES.has(normalizeCreditRomanizationPrefix(prefix));
+}
+
+function isCreditSideLine(text: string) {
+    return isLyricCreditLine(text) || isCreditRomanizationLine(text);
+}
+
+function isMeaningfulSecondaryLine(item: IParsedLrcItem) {
+    const text = item.lrc?.trim();
+    return !!text && text !== "//";
+}
+
+function isMergeableSecondaryLine(item: IParsedLrcItem) {
+    return isMeaningfulSecondaryLine(item) && !isCreditSideLine(item.lrc);
+}
+
+function canReceiveLyricField(item: IParsedLrcItem) {
+    return !!item.lrc?.trim() && !isCreditSideLine(item.lrc);
+}
+
 function getLatinWords(text: string) {
     return text
         .toLowerCase()
@@ -578,6 +738,16 @@ function looksLikeRomanizationText(text: string) {
 }
 
 function chooseParallelMainIndex(group: IParsedLrcItem[]) {
+    if (group.length >= 3 && looksLikeRomanizationText(group[0].lrc)) {
+        const kanaOrHangulIndex = group.findIndex((item, index) =>
+            index > 0 && hasKanaOrHangul(getTextScriptStats(item.lrc)),
+        );
+
+        if (kanaOrHangulIndex > 0) {
+            return kanaOrHangulIndex;
+        }
+    }
+
     if (
         group.length >= 3 &&
         looksLikeRomanizationText(group[0].lrc) &&
@@ -587,6 +757,27 @@ function chooseParallelMainIndex(group: IParsedLrcItem[]) {
     }
 
     return 0;
+}
+
+function cloneParsedLrcItem(item: IParsedLrcItem): IParsedLrcItem {
+    return {
+        ...item,
+        words: item.words ? [...item.words] : undefined,
+    };
+}
+
+function cloneCreditItemWithRomanization(
+    creditItem: IParsedLrcItem,
+    romanizationItem: IParsedLrcItem,
+) {
+    const cloned = cloneParsedLrcItem(creditItem);
+    appendLyricField(cloned, "romanization", romanizationItem.lrc);
+    if (romanizationItem.words?.length) {
+        cloned.romanizationWords = romanizationItem.words;
+        cloned.hasRomanizationWordByWord = romanizationItem.hasWordByWord;
+        cloned.romanizationDuration = romanizationItem.duration;
+    }
+    return cloned;
 }
 
 function appendLyricField(
@@ -609,6 +800,33 @@ function appendLyricField(
     }
 }
 
+function stripDuplicatedTranslationSuffix(
+    baseItem: IParsedLrcItem,
+    translationText: string,
+) {
+    const baseText = baseItem.lrc?.trim();
+    const normalizedTranslation = translationText.trim();
+    if (
+        !baseText
+        || !normalizedTranslation
+        || baseText.length <= normalizedTranslation.length
+        || !baseText.endsWith(normalizedTranslation)
+    ) {
+        return;
+    }
+
+    const possibleMainText = baseText.slice(0, -normalizedTranslation.length).trim();
+    if (!possibleMainText) {
+        return;
+    }
+
+    const mainStats = getTextScriptStats(possibleMainText);
+    const translationStats = getTextScriptStats(normalizedTranslation);
+    if (hasKanaOrHangul(mainStats) && translationStats.han > 0) {
+        baseItem.lrc = possibleMainText;
+    }
+}
+
 function assignParallelSecondaryLine(
     base: IParsedLrcItem,
     source: IParsedLrcItem,
@@ -621,6 +839,7 @@ function assignParallelSecondaryLine(
         (source.hasWordByWord || looksLikeRomanizationText(source.lrc));
 
     if (!sourceIsRomanization) {
+        stripDuplicatedTranslationSuffix(base, source.lrc);
         appendLyricField(base, "translation", source.lrc);
         return;
     }
@@ -631,6 +850,131 @@ function assignParallelSecondaryLine(
         base.hasRomanizationWordByWord = source.hasWordByWord;
         base.romanizationDuration = source.duration;
     }
+}
+
+function collapseParallelContentGroup(group: IParsedLrcItem[]): ICollapseParallelResult {
+    if (group.length === 1) {
+        return {
+            items: [group[0]],
+            hasTranslation: false,
+            hasRomanization: false,
+        };
+    }
+
+    const mainIndex = chooseParallelMainIndex(group);
+    const main = group[mainIndex];
+    const collapsed = cloneParsedLrcItem(main);
+    let hasTranslation = false;
+    let hasRomanization = false;
+
+    group.forEach((item, groupIndex) => {
+        if (groupIndex === mainIndex) {
+            return;
+        }
+        assignParallelSecondaryLine(collapsed, item);
+    });
+
+    hasTranslation = !!collapsed.translation?.trim();
+    hasRomanization = !!collapsed.romanization?.trim();
+
+    return {
+        items: [collapsed],
+        hasTranslation,
+        hasRomanization,
+    };
+}
+
+function collapseParallelGroup(group: IParsedLrcItem[]): ICollapseParallelResult {
+    const lyricItems: IParsedLrcItem[] = [];
+    const sequence: Array<{
+        type: "item" | "lyric";
+        item: IParsedLrcItem;
+    }> = [];
+
+    for (let index = 0; index < group.length; index++) {
+        const item = group[index];
+        const next = group[index + 1];
+
+        if (
+            next
+            && isCreditRomanizationLine(item.lrc)
+            && isLyricCreditLine(next.lrc)
+        ) {
+            sequence.push({
+                type: "item",
+                item: cloneCreditItemWithRomanization(next, item),
+            });
+            index++;
+            continue;
+        }
+
+        if (
+            next
+            && isLyricCreditLine(item.lrc)
+            && isCreditRomanizationLine(next.lrc)
+        ) {
+            sequence.push({
+                type: "item",
+                item: cloneCreditItemWithRomanization(item, next),
+            });
+            index++;
+            continue;
+        }
+
+        if (isCreditSideLine(item.lrc)) {
+            sequence.push({
+                type: "item",
+                item,
+            });
+            continue;
+        }
+
+        lyricItems.push(item);
+        sequence.push({
+            type: "lyric",
+            item,
+        });
+    }
+
+    if (lyricItems.length === group.length) {
+        return collapseParallelContentGroup(group);
+    }
+
+    if (lyricItems.length <= 1) {
+        return {
+            items: sequence.map(entry => entry.item),
+            hasTranslation: false,
+            hasRomanization: sequence.some(entry => !!entry.item.romanization?.trim()),
+        };
+    }
+
+    const mainLyricItem = lyricItems[chooseParallelMainIndex(lyricItems)];
+    const collapsed = collapseParallelContentGroup(lyricItems);
+    const mergedItems: IParsedLrcItem[] = [];
+    let insertedMergedLyric = false;
+
+    sequence.forEach(entry => {
+        if (entry.type === "item") {
+            mergedItems.push(entry.item);
+            return;
+        }
+
+        if (entry.item === mainLyricItem && !insertedMergedLyric) {
+            mergedItems.push(collapsed.items[0]);
+            insertedMergedLyric = true;
+        }
+    });
+
+    if (!insertedMergedLyric) {
+        mergedItems.push(collapsed.items[0]);
+    }
+
+    return {
+        items: mergedItems,
+        hasTranslation: collapsed.hasTranslation,
+        hasRomanization: collapsed.hasRomanization
+            || sequence.some(entry => !!entry.item.romanization?.trim()),
+    };
 }
 
 function collapseParallelLyricItems(items: IParsedLrcItem[]): ICollapseParallelResult {
@@ -649,29 +993,10 @@ function collapseParallelLyricItems(items: IParsedLrcItem[]): ICollapseParallelR
             nextIndex++;
         }
 
-        if (group.length === 1) {
-            collapsedItems.push(group[0]);
-            index = nextIndex;
-            continue;
-        }
-
-        const mainIndex = chooseParallelMainIndex(group);
-        const main = group[mainIndex];
-        const collapsed: IParsedLrcItem = {
-            ...main,
-            words: main.words ? [...main.words] : undefined,
-        };
-
-        group.forEach((item, groupIndex) => {
-            if (groupIndex === mainIndex) {
-                return;
-            }
-            assignParallelSecondaryLine(collapsed, item);
-        });
-
-        hasTranslation = hasTranslation || !!collapsed.translation?.trim();
-        hasRomanization = hasRomanization || !!collapsed.romanization?.trim();
-        collapsedItems.push(collapsed);
+        const collapsed = collapseParallelGroup(group);
+        hasTranslation = hasTranslation || collapsed.hasTranslation;
+        hasRomanization = hasRomanization || collapsed.hasRomanization;
+        collapsedItems.push(...collapsed.items);
         index = nextIndex;
     }
 
@@ -732,7 +1057,8 @@ export default class LyricParser {
         this.hasRomanization = hasRomanization;
 
         if (translation) {
-            const transLrcItems = this.parseLyricImpl(translation).lrcItems;
+            const transLrcItems = this.parseLyricImpl(translation).lrcItems
+                .filter(isMergeableSecondaryLine);
 
             // 如果翻译歌词为空，跳过处理
             if (transLrcItems.length !== 0) {
@@ -744,6 +1070,11 @@ export default class LyricParser {
 
                 while (p1 < this.lrcItems.length) {
                     const lrcItem = this.lrcItems[p1];
+                    if (!canReceiveLyricField(lrcItem)) {
+                        ++p1;
+                        continue;
+                    }
+
                     // Move p2 forward while translation time is too far behind
                     while (
                         transLrcItems[p2].time < lrcItem.time - TIME_MATCH_TOLERANCE &&
@@ -754,6 +1085,7 @@ export default class LyricParser {
                     // Check if times match within tolerance
                     const timeDiff = Math.abs(transLrcItems[p2].time - lrcItem.time);
                     if (timeDiff <= TIME_MATCH_TOLERANCE) {
+                        stripDuplicatedTranslationSuffix(lrcItem, transLrcItems[p2].lrc);
                         lrcItem.translation = transLrcItems[p2].lrc;
                         matchedTransIndices.add(p2);
                     } else {
@@ -823,7 +1155,8 @@ export default class LyricParser {
         }
 
         if (romanization) {
-            const romaLrcItems = this.parseLyricImpl(romanization).lrcItems;
+            const romaLrcItems = this.parseLyricImpl(romanization).lrcItems
+                .filter(isMergeableSecondaryLine);
 
             // 如果罗马音歌词为空，跳过处理
             if (romaLrcItems.length !== 0) {
@@ -835,6 +1168,11 @@ export default class LyricParser {
 
                 while (p1 < this.lrcItems.length) {
                     const lrcItem = this.lrcItems[p1];
+                    if (!canReceiveLyricField(lrcItem)) {
+                        ++p1;
+                        continue;
+                    }
+
                     // Move p2 forward while romanization time is too far behind
                     while (
                         romaLrcItems[p2].time < lrcItem.time - TIME_MATCH_TOLERANCE &&
@@ -1055,6 +1393,14 @@ export default class LyricParser {
             });
         }
 
+        const adjustedTimePositions = adjustRelativeWordTimes(
+            timePositions.map((entry, index) => createTimedWord("", entry.time, 0, index)),
+            lineStartTime * 1000,
+        );
+        adjustedTimePositions.forEach((word, index) => {
+            timePositions[index].time = word.startTime;
+        });
+
         // 然后提取每个时间标记后的文字
         for (let i = 0; i < timePositions.length; i++) {
             const startIdx = timePositions[i].index;
@@ -1113,6 +1459,40 @@ export default class LyricParser {
         };
     }
 
+    /** 解析行内逐字格式: [00:01.181]文(0,200)字(200,200) */
+    private parseInlineWordTimeLine(line: string): IParsedLrcItem | null {
+        const lineTimeMatch = line.match(/^\[([\d:.]+)\]/);
+        if (!lineTimeMatch) return null;
+
+        const lineStartTime = this.parseTime(`[${lineTimeMatch[1]}]`);
+        const lineStartMs = lineStartTime * 1000;
+        const content = line.substring(lineTimeMatch[0].length);
+        const words = adjustRelativeWordTimes(
+            parsePrefixedTimedWords(content),
+            lineStartMs,
+        );
+        const fullText = joinWordText(words).trim();
+
+        if (!fullText) {
+            return null;
+        }
+
+        const spacedWords = markWordSpaces(words, fullText);
+        const lastWord = spacedWords[spacedWords.length - 1];
+        const lineEndMs = lastWord
+            ? lastWord.startTime + lastWord.duration
+            : lineStartMs + 3000;
+
+        return {
+            time: lineStartTime,
+            lrc: fullText,
+            index: 0,
+            hasWordByWord: spacedWords.length > 0,
+            words: spacedWords.length > 0 ? spacedWords : undefined,
+            duration: Math.max(lineEndMs - lineStartMs, 0),
+        };
+    }
+
     /** 解析 mm:ss.xxx 或 mm:ss 格式的时间为秒 */
     private parseAngleBracketTime(timeStr: string): number {
         const parts = timeStr.split(':');
@@ -1133,7 +1513,7 @@ export default class LyricParser {
             };
         }
 
-        raw = raw.trim();
+        raw = normalizeRawLyricText(raw).trim();
         const lines = raw.split('\n');
         const rawLrcItems: Array<IParsedLrcItem> = [];
         let meta: any = {};
@@ -1157,64 +1537,19 @@ export default class LyricParser {
                 const durationMs = parseInt(lineTimeMatch[2], 10);
                 const content = lineTimeMatch[3];
 
-                // 使用 QRC_WORD_PATTERN 解析逐字内容: 文字(时间,时长)
-                QRC_WORD_PATTERN.lastIndex = 0;
-                const words: ILyric.IWordData[] = [];
-                const rawTextParts: string[] = [];
-                let match: RegExpExecArray | null;
-
-                while ((match = QRC_WORD_PATTERN.exec(content)) !== null) {
-                    const rawWordText = match[1] || '';
-                    const wordStartTime = parseInt(match[2], 10);
-                    // Don't trim - preserve space characters with their own timestamps
-                    const wordText = rawWordText;
-
-                    if (wordText) {
-                        // 计算持续时间：如果有下一个词，用下一个词的开始时间减去当前开始时间
-                        // 这里先添加，后面再计算 duration
-                        words.push({
-                            text: wordText,
-                            startTime: wordStartTime,
-                            duration: 0, // 暂时设为0，后面计算
-                        });
-                        rawTextParts.push(rawWordText);
-                    }
-                }
-
-                // 计算每个词的持续时间
-                for (let i = 0; i < words.length; i++) {
-                    if (i < words.length - 1) {
-                        words[i].duration = words[i + 1].startTime - words[i].startTime;
-                    } else {
-                        // 最后一个词，使用行持续时间减去相对时间
-                        words[i].duration = (startTimeMs + durationMs) - words[i].startTime;
-                    }
-                    // 确保持续时间不小于50ms
-                    words[i].duration = Math.max(words[i].duration, 50);
-                }
-
-                // 构建完整文本并检测空格
-                const fullText = rawTextParts.join('').trim();
-                let currentPos = 0;
-                for (let i = 0; i < words.length; i++) {
-                    const word = words[i];
-                    const wordIndex = fullText.indexOf(word.text, currentPos);
-                    if (wordIndex !== -1) {
-                        const wordEndPos = wordIndex + word.text.length;
-                        words[i] = {
-                            ...word,
-                            space: wordEndPos < fullText.length && fullText[wordEndPos] === ' '
-                        };
-                        currentPos = wordEndPos;
-                    }
-                }
+                const parsedWords = content.trim().startsWith("(")
+                    ? parsePostfixedTimedWords(content)
+                    : parsePrefixedTimedWords(content);
+                const words = adjustRelativeWordTimes(parsedWords, startTimeMs);
+                const fullText = joinWordText(words).trim();
+                const spacedWords = markWordSpaces(words, fullText);
 
                 rawLrcItems.push({
                     time: startTimeMs / 1000, // 转为秒
                     lrc: fullText,
                     index: rawLrcItems.length,
-                    hasWordByWord: words.length > 0,
-                    words: words.length > 0 ? words : undefined,
+                    hasWordByWord: spacedWords.length > 0,
+                    words: spacedWords.length > 0 ? spacedWords : undefined,
                     duration: durationMs,
                 });
                 continue;
@@ -1223,6 +1558,16 @@ export default class LyricParser {
             // 检查是否是尖括号逐字格式: [00:01.181]<00:01.181>文字<00:01.339>文字...
             if (HAS_ANGLE_BRACKET_PATTERN.test(trimmedLine)) {
                 const parsedItem = this.parseAngleBracketLine(trimmedLine);
+                if (parsedItem) {
+                    parsedItem.index = rawLrcItems.length;
+                    rawLrcItems.push(parsedItem);
+                    continue;
+                }
+            }
+
+            // 检查是否是行内逐字格式: [00:01.181]文(0,200)字(200,200)
+            if (INLINE_WORD_TIME_PATTERN.test(trimmedLine)) {
+                const parsedItem = this.parseInlineWordTimeLine(trimmedLine);
                 if (parsedItem) {
                     parsedItem.index = rawLrcItems.length;
                     rawLrcItems.push(parsedItem);
