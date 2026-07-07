@@ -1,6 +1,9 @@
 {
-  "version": "0.6.99",
+  "version": "0.7.00",
   "changeLog": [
+    "【修复】修复 QQ 等歌词中翻译行时间戳略早于原文/罗马音时，部分翻译丢失的问题",
+    "【修复】修复沉浸式封面下切换封面页/歌词页时迷你歌词容器上下黑框闪烁的问题",
+    "--------以上为v0.7.00新特性--------",
     "【修复】修复歌词原文、翻译与罗马音在部分并排行和 credit 行场景下错配的问题",
     "【优化】增强本地歌词解析兼容性，支持更多 QRC、行内逐字与相对逐字时间格式",
     "【优化】本地歌词读取统一处理转义换行，避免歌词被解析成单行",
@@ -114,7 +117,7 @@
     "【优化】优化了软件启动速度 (需要在【侧边栏-基本设置-插件】中打开【启用插件懒加载】开关)"
   ],
   "download": [
-    "https://github.com/Toskysun/MusicFree/releases/download/v0.6.99/MusicFree-v0.6.99-arm64-v8a-release.apk",
-    "https://github.com/Toskysun/MusicFree/releases/download/v0.6.99/MusicFree-v0.6.99-universal-release.apk"
+    "https://github.com/Toskysun/MusicFree/releases/download/v0.7.00/MusicFree-v0.7.00-arm64-v8a-release.apk",
+    "https://github.com/Toskysun/MusicFree/releases/download/v0.7.00/MusicFree-v0.7.00-universal-release.apk"
   ]
 }
