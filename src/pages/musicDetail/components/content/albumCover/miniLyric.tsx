@@ -199,7 +199,10 @@ export default function MiniLyric(props: IMiniLyricProps) {
         return 0.25;
     };
 
-    const shouldUseMask = Platform.OS !== "android" || !disableMaskedView;
+    // Android MaskedView can briefly draw its black mask surface while the
+    // immersive album page is mounted/unmounted during cover/lyric tab switches.
+    // Bypass it in immersive mode to avoid flashing black bars around mini lyrics.
+    const shouldUseMask = Platform.OS !== "android" || (!disableMaskedView && !immersive);
 
     const lyricsContent = (
         <View style={styles.contentContainer}>
