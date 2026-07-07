@@ -130,6 +130,9 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
 
     private runtimeInfoByTaskId = new Map<string, IDownloadRuntimeInfo>();
     private jsDownloadJobs = new Map<string, number>();
+    private postProcessingTaskIds = new Set<string>();
+    private nativeReconcileTimer: ReturnType<typeof setInterval> | null = null;
+    private nativeReconcileInFlight = false;
 
     injectDependencies(configService: IAppConfig, pluginManager: IPluginManager): void {
         this.configService = configService;
@@ -143,6 +146,7 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
         }
         this.syncNativeConcurrency();
         void this.hydrateNativeTasks();
+        this.startNativeReconcile();
     }
 
     private bindNativeEvents() {
@@ -169,6 +173,56 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
         return !!NativeDownloadEmitter;
     }
 
+    private startNativeReconcile() {
+        if (!this.hasNativeDownloadQueue() || this.nativeReconcileTimer) {
+            return;
+        }
+
+        this.nativeReconcileTimer = setInterval(() => {
+            void this.reconcileNativeTasks();
+        }, 15_000);
+    }
+
+    private shouldReconcileNativeTasks() {
+        if (this.queueBusy || this.prepareQueue.length > 0 || this.activePrepareCount > 0 || this.postProcessingTaskIds.size > 0) {
+            return true;
+        }
+
+        return Array.from(downloadTasks.values()).some(task =>
+            task.status === DownloadStatus.Pending ||
+            task.status === DownloadStatus.Preparing ||
+            task.status === DownloadStatus.Downloading,
+        );
+    }
+
+    private async reconcileNativeTasks() {
+        if (!this.hasNativeDownloadQueue() || this.nativeReconcileInFlight || !this.shouldReconcileNativeTasks()) {
+            return;
+        }
+
+        this.nativeReconcileInFlight = true;
+        try {
+            const nativeTasks = await Mp3Util.getAllDownloadTasks();
+            if (!Array.isArray(nativeTasks)) {
+                return;
+            }
+
+            for (const nativeTask of nativeTasks) {
+                if (!nativeTask?.taskId || nativeTask.status === "CANCELED") {
+                    continue;
+                }
+                if (nativeTask.status === "COMPLETED" && this.postProcessingTaskIds.has(nativeTask.taskId)) {
+                    continue;
+                }
+                await this.handleNativeTaskStatusChanged(nativeTask, true);
+            }
+        } catch (error) {
+            devLog("warn", "⚠️[下载器] Native 任务对账失败", String(error));
+        } finally {
+            this.nativeReconcileInFlight = false;
+        }
+    }
+
     private async hydrateNativeTasks() {
         if (!this.hasNativeDownloadQueue()) {
             return;
@@ -180,8 +234,8 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
                 return;
             }
 
-            // 上一会话解析出的音源 URL 大概率已过期，恢复的任务一律移除原生记录，
-            // 重新走 resolveTaskForNative 获取新 URL 后再入队。
+            // 终态任务保留在 Native DB 中直到 JS 确认处理完成，启动时必须补处理；
+            // 非终态恢复任务重新走 resolveTaskForNative，避免继续使用上一会话的半成品状态。
             const restoredTasks: IPrepareTask[] = [];
             for (const nativeTask of nativeTasks) {
                 const extra = this.parseExtraPayload(nativeTask.extraJson);
@@ -196,12 +250,17 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
                     continue;
                 }
 
-                if (nativeTask.status === "COMPLETED" || nativeTask.status === "CANCELED") {
+                if (nativeTask.status === "CANCELED") {
                     await Mp3Util.removeDownloadTask(nativeTask.taskId).catch(() => {});
                     continue;
                 }
 
-                // 本会话已重新发起同一任务时，直接丢弃旧的原生记录
+                if (nativeTask.status === "COMPLETED" || nativeTask.status === "ERROR") {
+                    await this.handleNativeTaskStatusChanged(nativeTask, true);
+                    continue;
+                }
+
+                // 本会话已重新发起同一任务时，直接丢弃旧的非终态原生记录
                 if (downloadTasks.has(key)) {
                     await Mp3Util.removeDownloadTask(nativeTask.taskId).catch(() => {});
                     continue;
@@ -515,6 +574,52 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
         } catch {
             return null;
         }
+    }
+
+    private ensureTaskFromNative(rawTask: INativeDownloadTaskStatus): IDownloadTaskInfo | undefined {
+        const extra = this.parseExtraPayload(rawTask.extraJson);
+        if (!extra?.musicItem) {
+            return undefined;
+        }
+
+        const taskId = rawTask.taskId;
+        const key = getMediaUniqueKey(extra.musicItem);
+        if (key !== taskId) {
+            return undefined;
+        }
+
+        const existing = downloadTasks.get(taskId);
+        const taskInfo: IDownloadTaskInfo = {
+            ...(existing ?? {}),
+            status: this.mapNativeStatus(rawTask.status),
+            filename: existing?.filename ?? extra.filename ?? this.generateFilename(extra.musicItem, extra.quality),
+            quality: existing?.quality ?? extra.quality,
+            fileSize: rawTask.total > 0 ? rawTask.total : existing?.fileSize,
+            downloadedSize: rawTask.downloaded > 0 ? rawTask.downloaded : existing?.downloadedSize,
+            progressText: rawTask.progressText ?? existing?.progressText,
+            musicItem: extra.musicItem,
+            errorReason: rawTask.status === "ERROR"
+                ? this.mapNativeErrorToReason(rawTask.error)
+                : existing?.errorReason,
+        };
+
+        downloadTasks.set(taskId, taskInfo);
+        this.runtimeInfoByTaskId.set(taskId, extra.runtimeInfo ?? {
+            taskId,
+            targetDownloadPath: rawTask.destinationPath ?? "",
+            tempEncryptedPath: rawTask.destinationPath ?? "",
+            willDownloadEncrypted: false,
+            extension: this.getExtensionName(rawTask.url ?? ""),
+            encryptedExtension: "mflac",
+        });
+
+        const queue = getDefaultStore().get(downloadQueueAtom);
+        if (!queue.some(item => isSameMediaItem(item, extra.musicItem))) {
+            getDefaultStore().set(downloadQueueAtom, [...queue, extra.musicItem]);
+        }
+
+        this.emit(DownloaderEvent.DownloadTaskUpdate, taskInfo);
+        return taskInfo;
     }
 
     private maybeEmitQueueCompleted() {
@@ -1056,7 +1161,7 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
         }
     }
 
-    private async handleNativeTaskStatusChanged(rawTask: INativeDownloadTaskStatus) {
+    private async handleNativeTaskStatusChanged(rawTask: INativeDownloadTaskStatus, allowRestoreTerminal = false) {
         if (!rawTask?.taskId) {
             return;
         }
@@ -1065,37 +1170,14 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
 
         if (!taskInfo) {
             // 终态事件对应的任务已被本地删除时，只做原生侧清理，不再复活任务
-            if (rawTask.status === "ERROR" || rawTask.status === "CANCELED") {
+            if (rawTask.status === "CANCELED" || (rawTask.status === "ERROR" && !allowRestoreTerminal)) {
                 void Mp3Util.removeDownloadTask(taskId).catch(() => {});
                 return;
             }
-            const extra = this.parseExtraPayload(rawTask.extraJson);
-            if (extra?.musicItem) {
-                taskInfo = {
-                    status: this.mapNativeStatus(rawTask.status),
-                    filename: extra.filename ?? this.generateFilename(extra.musicItem, extra.quality),
-                    quality: extra.quality,
-                    fileSize: rawTask.total > 0 ? rawTask.total : undefined,
-                    downloadedSize: rawTask.downloaded > 0 ? rawTask.downloaded : undefined,
-                    progressText: rawTask.progressText ?? undefined,
-                    musicItem: extra.musicItem,
-                    // 上方守卫已排除 ERROR/CANCELED，此处不会是错误状态
-                    errorReason: undefined,
-                };
-                downloadTasks.set(taskId, taskInfo);
-                this.runtimeInfoByTaskId.set(taskId, extra.runtimeInfo ?? {
-                    taskId,
-                    targetDownloadPath: rawTask.destinationPath ?? "",
-                    tempEncryptedPath: rawTask.destinationPath ?? "",
-                    willDownloadEncrypted: false,
-                    extension: this.getExtensionName(rawTask.url ?? ""),
-                    encryptedExtension: "mflac",
-                });
-
-                const queue = getDefaultStore().get(downloadQueueAtom);
-                if (!queue.some(item => isSameMediaItem(item, extra.musicItem))) {
-                    getDefaultStore().set(downloadQueueAtom, [...queue, extra.musicItem]);
-                }
+            taskInfo = this.ensureTaskFromNative(rawTask);
+            if (!taskInfo) {
+                void Mp3Util.removeDownloadTask(taskId).catch(() => {});
+                return;
             }
         }
 
@@ -1160,6 +1242,10 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
     }
 
     private async completeTaskAfterDownload(taskId: string, removeNativeTask: boolean) {
+        if (this.postProcessingTaskIds.has(taskId)) {
+            return;
+        }
+
         const task = downloadTasks.get(taskId);
         if (!task) {
             return;
@@ -1174,6 +1260,7 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
             return;
         }
 
+        this.postProcessingTaskIds.add(taskId);
         try {
             if (runtimeInfo.willDownloadEncrypted) {
                 // 解密输出前清掉旧目标文件（重新下载场景），避免解密实现对已存在文件行为不确定
@@ -1256,6 +1343,7 @@ class Downloader extends EventEmitter<IEvents> implements IInjectable {
             this.emit(DownloaderEvent.DownloadTaskError, DownloadFailReason.Unknown, task.musicItem, error as Error);
             return;
         } finally {
+            this.postProcessingTaskIds.delete(taskId);
             if (removeNativeTask) {
                 await Mp3Util.removeDownloadTask(taskId).catch(() => {});
             }

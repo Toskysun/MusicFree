@@ -22,6 +22,8 @@ class DownloadManager(
     private data class RunningTask(
         val control: DownloadExecutor.ExecutionControl,
         var future: Future<*>? = null,
+        var lastProgressAt: Long = System.currentTimeMillis(),
+        var lastDownloadedBytes: Long = 0L,
     )
 
     private val appContext = context.applicationContext
@@ -62,6 +64,14 @@ class DownloadManager(
             500,
             TimeUnit.MILLISECONDS,
         )
+        progressFlushExecutor.scheduleAtFixedRate(
+            {
+                checkStaleRunningTasks()
+            },
+            NO_PROGRESS_TIMEOUT_MS,
+            NO_PROGRESS_CHECK_INTERVAL_MS,
+            TimeUnit.MILLISECONDS,
+        )
     }
 
     fun setMaxConcurrency(value: Int) {
@@ -72,7 +82,12 @@ class DownloadManager(
     fun addTask(task: DownloadTask): Boolean {
         synchronized(lock) {
             val existing = tasks[task.taskId]
-            if (existing != null && existing.status != DownloadTaskStatus.ERROR && existing.status != DownloadTaskStatus.CANCELED) {
+            if (
+                existing != null &&
+                existing.status != DownloadTaskStatus.ERROR &&
+                existing.status != DownloadTaskStatus.CANCELED &&
+                existing.status != DownloadTaskStatus.COMPLETED
+            ) {
                 return false
             }
 
@@ -312,6 +327,11 @@ class DownloadManager(
                 currentTask.downloadedBytes = downloaded
                 currentTask.totalBytes = total
                 currentTask.updatedAt = System.currentTimeMillis()
+                val runningTask = runningTasks[taskId]
+                if (runningTask != null && downloaded > runningTask.lastDownloadedBytes) {
+                    runningTask.lastDownloadedBytes = downloaded
+                    runningTask.lastProgressAt = currentTask.updatedAt
+                }
             }
             progressCache[taskId] = ProgressSnapshot(
                 taskId = taskId,
@@ -332,8 +352,6 @@ class DownloadManager(
             when (result.finalStatus) {
                 DownloadTaskStatus.COMPLETED -> {
                     updateTaskStatus(currentTask, DownloadTaskStatus.COMPLETED, null)
-                    tasks.remove(taskId)
-                    database.deleteTask(taskId)
                 }
                 DownloadTaskStatus.CANCELED -> {
                     updateTaskStatus(currentTask, DownloadTaskStatus.CANCELED, null)
@@ -358,6 +376,22 @@ class DownloadManager(
         }
 
         dispatchAsync()
+    }
+
+    private fun checkStaleRunningTasks() {
+        val now = System.currentTimeMillis()
+        val staleTaskIds = synchronized(lock) {
+            runningTasks
+                .filter { (_, runningTask) ->
+                    now - runningTask.lastProgressAt >= NO_PROGRESS_TIMEOUT_MS
+                }
+                .keys
+                .toList()
+        }
+
+        for (taskId in staleTaskIds) {
+            runningTasks[taskId]?.control?.fail("no progress timeout")
+        }
     }
 
     private fun flushProgressBatch() {
@@ -442,5 +476,10 @@ class DownloadManager(
             bytes < 1024L * 1024L * 1024L -> String.format("%.1fMB", bytes / (1024.0 * 1024.0))
             else -> String.format("%.1fGB", bytes / (1024.0 * 1024.0 * 1024.0))
         }
+    }
+
+    companion object {
+        private const val NO_PROGRESS_TIMEOUT_MS = 90_000L
+        private const val NO_PROGRESS_CHECK_INTERVAL_MS = 15_000L
     }
 }

@@ -17,6 +17,7 @@ class DownloadExecutor(private val client: OkHttpClient) {
         val paused = AtomicBoolean(false)
         val canceled = AtomicBoolean(false)
         val callRef = AtomicReference<okhttp3.Call?>(null)
+        val forcedErrorMessage = AtomicReference<String?>(null)
 
         fun cancel() {
             canceled.set(true)
@@ -25,6 +26,12 @@ class DownloadExecutor(private val client: OkHttpClient) {
 
         fun pause() {
             paused.set(true)
+            callRef.get()?.cancel()
+        }
+
+        fun fail(message: String) {
+            forcedErrorMessage.set(message)
+            canceled.set(true)
             callRef.get()?.cancel()
         }
     }
@@ -144,9 +151,11 @@ class DownloadExecutor(private val client: OkHttpClient) {
                 totalBytes = totalBytes,
             )
         } catch (error: Exception) {
+            val forcedError = control.forcedErrorMessage.get()
             val canceled = control.canceled.get()
             val paused = control.paused.get()
             val status = when {
+                forcedError != null -> DownloadTaskStatus.ERROR
                 canceled -> DownloadTaskStatus.CANCELED
                 paused -> DownloadTaskStatus.PAUSED
                 else -> DownloadTaskStatus.ERROR
@@ -155,7 +164,7 @@ class DownloadExecutor(private val client: OkHttpClient) {
                 finalStatus = status,
                 downloadedBytes = if (destinationFile.exists()) destinationFile.length() else task.downloadedBytes,
                 totalBytes = task.totalBytes,
-                errorMessage = error.message ?: "unknown error",
+                errorMessage = forcedError ?: error.message ?: "unknown error",
             )
         } finally {
             control.callRef.set(null)
