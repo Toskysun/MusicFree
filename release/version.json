@@ -1,7 +1,15 @@
 {
-  "version": "0.6.88",
+  "version": "0.6.90",
   "changeLog": [
     "【交流】欢迎加入 Q 群：1064805856",
+    "【修复】修复批量下载时部分任务进度卡死、后续歌曲不再继续下载的问题",
+    "【修复】修复原生下载完成/失败事件丢失后任务状态无法恢复的问题",
+    "【修复】系统性修复下载重启恢复、错误任务重试、文件残片清理等稳定性问题",
+    "【修复】下载改为临时文件落盘后再移动，避免失败或续传污染已有文件",
+    "【优化】下载队列新增原生任务对账机制，自动补处理完成或失败的任务",
+    "【优化】下载任务新增无进度超时保护，避免异常连接长期占用下载并发",
+    "【优化】下载音源解析支持插件 User-Agent，并优先使用真实文件扩展名",
+    "--------以上为v0.6.90新特性--------",
     "【修复】修复部分用户沉浸式封面下圆形/方形封面状态栏变成黑条的问题",
     "【修复】修复本地音乐扫描出的歌曲列表不显示封面，但播放时能显示封面的问题",
     "【修复】修复本地音乐歌词解析中罗马音、翻译、原文并排行区分异常的问题",
@@ -102,7 +110,7 @@
     "【优化】优化了软件启动速度 (需要在【侧边栏-基本设置-插件】中打开【启用插件懒加载】开关)"
   ],
   "download": [
-    "https://github.com/Toskysun/MusicFree/releases/download/v0.6.88/MusicFree-v0.6.88-arm64-v8a-release.apk",
-    "https://github.com/Toskysun/MusicFree/releases/download/v0.6.88/MusicFree-v0.6.88-universal-release.apk"
+    "https://github.com/Toskysun/MusicFree/releases/download/v0.6.90/MusicFree-v0.6.90-arm64-v8a-release.apk",
+    "https://github.com/Toskysun/MusicFree/releases/download/v0.6.90/MusicFree-v0.6.90-universal-release.apk"
   ]
 }
