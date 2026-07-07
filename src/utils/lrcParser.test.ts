@@ -153,4 +153,38 @@ describe("LyricParser", () => {
         expect(item.words?.[0].startTime).toBe(10000);
         expect(item.words?.[1].startTime).toBe(10500);
     });
+
+    it("merges QQ-style nearby translation markers into the original line", () => {
+        const parser = new LyricParser(
+            [
+                "[01:18.100]",
+                "[01:18.100]经历再多风霜",
+                "[01:18.154]<01:18.153>do <01:18.284>n <01:18.416>na <01:19.648>ke <01:19.877>i <01:20.106>ke <01:20.429>n <01:20.752>shi <01:21.103>te <01:21.367>mo <01:21.825>",
+                "[01:18.154]<01:18.154>ど<01:18.285>ん<01:18.416>な<01:19.648>経<01:20.106>験<01:20.753>し<01:21.104>て<01:21.368>も<01:21.826>",
+            ].join("\n"),
+        );
+
+        const items = parser.getLyricItems();
+
+        expect(items).toHaveLength(1);
+        expect(items[0].lrc).toBe("どんな経験しても");
+        expect(items[0].romanization).toBe("do n na ke i ke n shi te mo");
+        expect(items[0].translation).toBe("经历再多风霜");
+    });
+
+    it("matches nearby separate translation lyrics from QQ", () => {
+        const parser = new LyricParser(
+            "[01:18.154]<01:18.154>ど<01:18.285>ん<01:18.416>な<01:19.648>経<01:20.106>験<01:20.753>し<01:21.104>て<01:21.368>も<01:21.826>",
+            {
+                romanization: "[01:18.154]<01:18.153>do <01:18.284>n <01:18.416>na <01:19.648>ke <01:19.877>i <01:20.106>ke <01:20.429>n <01:20.752>shi <01:21.103>te <01:21.367>mo <01:21.825>",
+                translation: "[01:18.100]经历再多风霜",
+            },
+        );
+
+        const [item] = parser.getLyricItems();
+
+        expect(item.lrc).toBe("どんな経験しても");
+        expect(item.romanization).toBe("do n na ke i ke n shi te mo");
+        expect(item.translation).toBe("经历再多风霜");
+    });
 });

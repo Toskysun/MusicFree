@@ -10,11 +10,12 @@ const HAS_ANGLE_BRACKET_PATTERN = /\[[\d:.]+\]\s*<[\d:.]+>/;
 const INLINE_WORD_TIME_PATTERN = /^\[[\d:.]+\][^\r\n]*\(\d+,\d+(?:,\d+)?\)/;
 
 // Time tolerance for matching translation/romanization lines (in seconds)
-// Allows matching when timestamps differ by up to 50ms (0.05 seconds)
+// Allows matching when timestamps differ by up to 120ms (0.12 seconds)
 // This enables precise matching for word-by-word lyrics with slight timing variations
-// Example: [00:21.783] and [00:21.784] will be matched together
-const TIME_MATCH_TOLERANCE = 0.05;
+// Example: QQ sometimes emits translation-only lines 50-70ms before the original line
+const TIME_MATCH_TOLERANCE = 0.12;
 const PARALLEL_LINE_EPSILON = 0.03;
+const NEARBY_PARALLEL_LINE_EPSILON = 0.12;
 const HAN_REG = /[\u3400-\u9fff\uf900-\ufaff]/;
 const KANA_REG = /[\u3040-\u30ff\u31f0-\u31ff]/;
 const HANGUL_REG = /[\uac00-\ud7af]/;
@@ -738,6 +739,48 @@ function looksLikeRomanizationText(text: string) {
 }
 
 function chooseParallelMainIndex(group: IParsedLrcItem[]) {
+    const firstNonEmptyIndex = group.findIndex(item => !!item.lrc?.trim());
+
+    if (firstNonEmptyIndex === -1) {
+        return 0;
+    }
+
+    const firstNonEmpty = group[firstNonEmptyIndex];
+    const firstNonEmptyStats = getTextScriptStats(firstNonEmpty.lrc);
+    const hasBlankTimingMarker = group.some(item => !item.lrc?.trim());
+
+    // For Japanese/Korean songs, prefer the kana/hangul line as the primary lyric.
+    // This also handles QQ-style groups where a blank + Chinese translation line is
+    // timestamped a few milliseconds before the romanization/original pair.
+    const kanaOrHangulIndex = group.findIndex(item =>
+        hasKanaOrHangul(getTextScriptStats(item.lrc)),
+    );
+
+    if (
+        kanaOrHangulIndex !== -1 &&
+        (
+            kanaOrHangulIndex === firstNonEmptyIndex ||
+            hasBlankTimingMarker ||
+            looksLikeRomanizationText(firstNonEmpty.lrc) ||
+            (
+                hasEastAsianScript(firstNonEmptyStats) &&
+                !hasKanaOrHangul(firstNonEmptyStats)
+            )
+        )
+    ) {
+        return kanaOrHangulIndex;
+    }
+
+    if (group.length >= 3 && looksLikeRomanizationText(firstNonEmpty.lrc)) {
+        const eastAsianIndex = group.findIndex((item, index) =>
+            index > firstNonEmptyIndex && hasEastAsianScript(getTextScriptStats(item.lrc)),
+        );
+
+        if (eastAsianIndex > firstNonEmptyIndex) {
+            return eastAsianIndex;
+        }
+    }
+
     if (group.length >= 3 && looksLikeRomanizationText(group[0].lrc)) {
         const kanaOrHangulIndex = group.findIndex((item, index) =>
             index > 0 && hasKanaOrHangul(getTextScriptStats(item.lrc)),
@@ -756,7 +799,7 @@ function chooseParallelMainIndex(group: IParsedLrcItem[]) {
         return 1;
     }
 
-    return 0;
+    return firstNonEmptyIndex;
 }
 
 function cloneParsedLrcItem(item: IParsedLrcItem): IParsedLrcItem {
@@ -987,7 +1030,7 @@ function collapseParallelLyricItems(items: IParsedLrcItem[]): ICollapseParallelR
         let nextIndex = index + 1;
         while (
             nextIndex < items.length &&
-            Math.abs(items[nextIndex].time - group[0].time) <= PARALLEL_LINE_EPSILON
+            shouldMergeParallelGroupLine(group, items[nextIndex])
         ) {
             group.push(items[nextIndex]);
             nextIndex++;
@@ -1009,6 +1052,32 @@ function collapseParallelLyricItems(items: IParsedLrcItem[]): ICollapseParallelR
         hasTranslation,
         hasRomanization,
     };
+}
+
+function shouldMergeParallelGroupLine(
+    group: IParsedLrcItem[],
+    nextItem: IParsedLrcItem,
+) {
+    const diff = Math.abs(nextItem.time - group[0].time);
+    if (diff <= PARALLEL_LINE_EPSILON) {
+        return true;
+    }
+
+    if (diff > NEARBY_PARALLEL_LINE_EPSILON) {
+        return false;
+    }
+
+    const hasBlankTimingMarker = group.some(item => !item.lrc?.trim()) || !nextItem.lrc?.trim();
+    if (hasBlankTimingMarker) {
+        return true;
+    }
+
+    const hasKanaOrHangulLine = group.some(item => hasKanaOrHangul(getTextScriptStats(item.lrc)))
+        || hasKanaOrHangul(getTextScriptStats(nextItem.lrc));
+    const hasRomanizationLine = group.some(item => looksLikeRomanizationText(item.lrc))
+        || looksLikeRomanizationText(nextItem.lrc);
+
+    return hasKanaOrHangulLine && hasRomanizationLine;
 }
 
 export default class LyricParser {
