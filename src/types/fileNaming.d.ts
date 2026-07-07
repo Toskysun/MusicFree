@@ -60,6 +60,8 @@ declare namespace IFileNaming {
         maxLength?: number;
         /** 是否保留扩展名（当截断时） */
         keepExtension?: boolean;
+        /** 模板不含 {quality} 时是否在末尾追加音质 */
+        showQuality?: boolean;
     }
 
     /**

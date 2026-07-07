@@ -12,6 +12,11 @@ interface ICencNativeModule {
 const nativeModule = NativeModules.Cenc as ICencNativeModule | undefined;
 
 const Cenc = {
+    /** CENC 解密能力是否可用（iOS 等平台没有对应原生模块） */
+    isAvailable(): boolean {
+        return !!nativeModule?.decryptFile;
+    },
+
     async registerStream(
         src: string,
         cek: string,

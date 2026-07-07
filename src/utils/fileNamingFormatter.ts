@@ -94,6 +94,41 @@ function replaceTemplateVariables(
 }
 
 /**
+ * 计算字符串的 UTF-8 字节长度
+ */
+function utf8ByteLength(str: string): number {
+    let bytes = 0;
+    for (const ch of str) {
+        const code = ch.codePointAt(0)!;
+        bytes += code <= 0x7f ? 1 : code <= 0x7ff ? 2 : code <= 0xffff ? 3 : 4;
+    }
+    return bytes;
+}
+
+/**
+ * 按 UTF-8 字节长度截断字符串（不会截断在代理对中间）
+ */
+function truncateToByteLength(str: string, maxBytes: number): string {
+    let bytes = 0;
+    let result = "";
+    for (const ch of str) {
+        const code = ch.codePointAt(0)!;
+        bytes += code <= 0x7f ? 1 : code <= 0x7ff ? 2 : code <= 0xffff ? 3 : 4;
+        if (bytes > maxBytes) {
+            break;
+        }
+        result += ch;
+    }
+    return result;
+}
+
+/**
+ * 文件名主体的最大 UTF-8 字节数。
+ * 常见文件系统单个文件名上限为 255 字节，预留扩展名、去重后缀等空间。
+ */
+const MAX_FILENAME_BYTES = 200;
+
+/**
  * 截断文件名以符合长度限制
  */
 function truncateFilename(
@@ -101,10 +136,10 @@ function truncateFilename(
     maxLength: number,
     keepExtension: boolean
 ): { filename: string; truncated: boolean } {
-    if (filename.length <= maxLength) {
+    if (filename.length <= maxLength && utf8ByteLength(filename) <= MAX_FILENAME_BYTES) {
         return { filename, truncated: false };
     }
-    
+
     if (keepExtension) {
         // 保留扩展名，只截断主文件名部分
         const lastDotIndex = filename.lastIndexOf(".");
@@ -112,18 +147,19 @@ function truncateFilename(
             const name = filename.slice(0, lastDotIndex);
             const ext = filename.slice(lastDotIndex);
             const availableLength = maxLength - ext.length;
-            if (availableLength > 0) {
+            const availableBytes = MAX_FILENAME_BYTES - utf8ByteLength(ext);
+            if (availableLength > 0 && availableBytes > 0) {
                 return {
-                    filename: name.slice(0, availableLength) + ext,
+                    filename: truncateToByteLength(name.slice(0, availableLength), availableBytes) + ext,
                     truncated: true,
                 };
             }
         }
     }
-    
-    // 直接截断
+
+    // 直接截断（同时满足字符数与字节数限制）
     return {
-        filename: filename.slice(0, maxLength),
+        filename: truncateToByteLength(filename.slice(0, maxLength), MAX_FILENAME_BYTES),
         truncated: true,
     };
 }
@@ -164,22 +200,27 @@ export function validateTemplate(template: string): { valid: boolean; error?: st
  * 格式化文件名
  */
 export function formatFilename(options: IFileNaming.IFormatOptions): IFileNaming.IFormatResult {
-    const { template, variables, maxLength = 200, keepExtension = true } = options;
+    const { template, variables, maxLength = 200, keepExtension = true, showQuality = false } = options;
     const originalLength = template.length;
-    
+
     // 替换模板变量
     let filename = replaceTemplateVariables(template, variables);
-    
+
+    // 开启「文件名显示音质」且模板本身不含音质变量时，在末尾追加音质
+    if (showQuality && variables.quality && !template.includes("{quality}")) {
+        filename = filename ? `${filename}-${variables.quality}` : String(variables.quality);
+    }
+
     // 转义非法字符
     filename = escapeCharacter(filename);
-    
+
     // 处理长度截断
     const { filename: finalFilename, truncated } = truncateFilename(
         filename,
         maxLength,
         keepExtension
     );
-    
+
     return {
         filename: finalFilename,
         truncated,
@@ -215,6 +256,7 @@ export function generateFileNameFromConfig(
         variables,
         maxLength: config.maxLength,
         keepExtension: config.keepExtension,
+        showQuality: config.showQuality,
     });
 }
 

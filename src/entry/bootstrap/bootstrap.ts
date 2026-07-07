@@ -462,8 +462,12 @@ function bindEvents() {
         }
     });
 
-    downloader.on(DownloaderEvent.DownloadQueueCompleted, () => {
-        Toast.success("下载任务已完成");
+    downloader.on(DownloaderEvent.DownloadQueueCompleted, (errorCount) => {
+        if (errorCount > 0) {
+            Toast.warn(`下载队列结束，${errorCount} 个任务失败`);
+        } else {
+            Toast.success("下载任务已完成");
+        }
     });
 }
 

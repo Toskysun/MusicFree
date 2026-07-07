@@ -36,10 +36,12 @@ class DownloadDatabase(context: Context) :
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        if (oldVersion != newVersion) {
-            db.execSQL("DROP TABLE IF EXISTS $TABLE_TASKS")
-            onCreate(db)
-        }
+        // 未来版本在这里用 ALTER TABLE 做增量迁移，不要 DROP（会丢失进行中的任务）
+    }
+
+    override fun onDowngrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        db.execSQL("DROP TABLE IF EXISTS $TABLE_TASKS")
+        onCreate(db)
     }
 
     fun upsertTask(task: DownloadTask) {

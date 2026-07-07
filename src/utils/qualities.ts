@@ -204,6 +204,13 @@ export function getQualityOrder(
 ) {
     const keys = getQualityKeys();
     const idx = keys.indexOf(qualityKey);
+    if (idx === -1) {
+        // 目标音质不在当前列表中（如自定义列表移除了该键）：先尝试目标音质，
+        // 再按排序方向尝试完整列表
+        return sort === "asc"
+            ? [qualityKey, ...keys]
+            : [qualityKey, ...[...keys].reverse()];
+    }
     const left = keys.slice(0, idx);
     const right = keys.slice(idx + 1);
     if (sort === "asc") {

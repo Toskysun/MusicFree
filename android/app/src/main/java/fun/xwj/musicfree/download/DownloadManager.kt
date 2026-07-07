@@ -21,7 +21,7 @@ class DownloadManager(
 
     private data class RunningTask(
         val control: DownloadExecutor.ExecutionControl,
-        val future: Future<*>,
+        var future: Future<*>? = null,
     )
 
     private val appContext = context.applicationContext
@@ -153,6 +153,7 @@ class DownloadManager(
                     )
                     tasks.remove(taskId)
                     database.deleteTask(taskId)
+                    deletePartialFile(task)
                     return true
                 }
                 DownloadTaskStatus.COMPLETED,
@@ -171,6 +172,7 @@ class DownloadManager(
             val task = tasks[taskId] ?: return false
             removeFromQueue(taskId)
             runningTasks[taskId]?.control?.cancel()
+            val wasCompleted = task.status == DownloadTaskStatus.COMPLETED
             updateTaskStatus(
                 task = task,
                 status = DownloadTaskStatus.CANCELED,
@@ -178,7 +180,21 @@ class DownloadManager(
             )
             tasks.remove(taskId)
             database.deleteTask(taskId)
+            // 未完成任务的目标文件是半成品，一并清理；已完成任务的文件保留
+            if (!wasCompleted) {
+                deletePartialFile(task)
+            }
             return true
+        }
+    }
+
+    private fun deletePartialFile(task: DownloadTask) {
+        try {
+            val file = java.io.File(task.destinationPath)
+            if (file.exists()) {
+                file.delete()
+            }
+        } catch (_: Exception) {
         }
     }
 
@@ -214,12 +230,14 @@ class DownloadManager(
         val storedTasks = database.getAllTasks()
         synchronized(lock) {
             for (task in storedTasks) {
+                // 上一会话的下载 URL 大概率已过期，恢复的任务不自动开始下载，
+                // 统一置为 PAUSED，由 JS 侧重新解析音源后重新入队
                 val restored = when (task.status) {
                     DownloadTaskStatus.DOWNLOADING,
                     DownloadTaskStatus.PREPARING,
                     DownloadTaskStatus.PENDING,
                     -> task.copy(
-                        status = DownloadTaskStatus.PENDING,
+                        status = DownloadTaskStatus.PAUSED,
                         errorMessage = null,
                         updatedAt = System.currentTimeMillis(),
                     )
@@ -227,12 +245,8 @@ class DownloadManager(
                 }
 
                 tasks[restored.taskId] = restored
-                if (restored.status == DownloadTaskStatus.PENDING) {
-                    pendingQueue.offer(restored.taskId)
-                }
             }
         }
-        dispatchAsync()
     }
 
     private fun dispatchAsync() {
@@ -276,11 +290,14 @@ class DownloadManager(
             updateTaskStatus(task, DownloadTaskStatus.DOWNLOADING, null)
         }
 
+        // 先登记再提交，避免任务瞬间结束时 runTask 中的 remove 先于 put 执行，
+        // 导致 runningTasks 残留死条目、并发槽位被永久占用
         val control = DownloadExecutor.ExecutionControl()
-        val future = workerExecutor.submit {
+        val runningTask = RunningTask(control = control)
+        runningTasks[task.taskId] = runningTask
+        runningTask.future = workerExecutor.submit {
             runTask(task.taskId, control)
         }
-        runningTasks[task.taskId] = RunningTask(control = control, future = future)
     }
 
     private fun runTask(taskId: String, control: DownloadExecutor.ExecutionControl) {
@@ -290,10 +307,12 @@ class DownloadManager(
             task = task,
             control = control,
         ) { downloaded, total ->
-            val currentTask = synchronized(lock) { tasks[taskId] } ?: return@execute
-            currentTask.downloadedBytes = downloaded
-            currentTask.totalBytes = total
-            currentTask.updatedAt = System.currentTimeMillis()
+            synchronized(lock) {
+                val currentTask = tasks[taskId] ?: return@synchronized
+                currentTask.downloadedBytes = downloaded
+                currentTask.totalBytes = total
+                currentTask.updatedAt = System.currentTimeMillis()
+            }
             progressCache[taskId] = ProgressSnapshot(
                 taskId = taskId,
                 downloaded = downloaded,
@@ -320,6 +339,7 @@ class DownloadManager(
                     updateTaskStatus(currentTask, DownloadTaskStatus.CANCELED, null)
                     tasks.remove(taskId)
                     database.deleteTask(taskId)
+                    deletePartialFile(currentTask)
                 }
                 DownloadTaskStatus.PAUSED -> {
                     updateTaskStatus(currentTask, DownloadTaskStatus.PAUSED, null)
