@@ -71,6 +71,17 @@ class DownloadExecutor(private val client: OkHttpClient) {
             val call = client.newCall(request)
             control.callRef.set(call)
             val response = call.execute()
+            if (response.code == 416) {
+                // Range 越界：本地残留文件与远端不匹配（可能已完整或已损坏），
+                // 删除后报错，重试时将重新完整下载
+                control.callRef.set(null)
+                response.close()
+                try {
+                    destinationFile.delete()
+                } catch (_: Exception) {
+                }
+                throw IOException("HTTP 416 (stale partial file removed, please retry)")
+            }
             if (!response.isSuccessful) {
                 control.callRef.set(null)
                 response.close()
@@ -86,8 +97,9 @@ class DownloadExecutor(private val client: OkHttpClient) {
                 contentRange = response.header("Content-Range"),
             )
 
-            var downloaded = existingSize
+            // 服务器返回 200（忽略 Range）时文件会被截断重写，进度必须从 0 起算
             val shouldAppend = existingSize > 0 && response.code == 206
+            var downloaded = if (shouldAppend) existingSize else 0L
             val outFileStream = FileOutputStream(destinationFile, shouldAppend)
             body.byteStream().use { input ->
                 BufferedInputStream(input).use { bis ->

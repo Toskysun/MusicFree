@@ -6,24 +6,16 @@ import VerticalSafeAreaView from "@/components/base/verticalSafeAreaView";
 import globalStyle from "@/constants/globalStyle";
 import AppBar from "@/components/base/appBar";
 import { useI18N } from "@/core/i18n";
-import downloader, { useDownloadQueue } from "@/core/downloader";
+import downloader from "@/core/downloader";
 import Toast from "@/utils/toast";
 
 export default function Downloading() {
     const { t } = useI18N();
-    const downloadQueue = useDownloadQueue();
 
-    // 清除所有错误任务
+    // 清除所有错误任务（只清除失败的，不影响等待中/下载中的任务）
     const clearErrorTasks = () => {
-        let clearedCount = 0;
-        downloadQueue.forEach(musicItem => {
-            // 尝试删除错误任务
-            const success = downloader.remove(musicItem);
-            if (success) {
-                clearedCount++;
-            }
-        });
-        
+        const clearedCount = downloader.removeErrorTasks();
+
         if (clearedCount > 0) {
             Toast.success(t("downloading.clearErrorSuccess", { count: clearedCount }));
         } else {

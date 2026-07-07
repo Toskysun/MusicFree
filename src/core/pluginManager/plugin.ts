@@ -255,27 +255,31 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
         quality: IMusic.IQualityKey = "320k",
         retryCount = 1,
         notUpdateCache = false,
+        bypassLocalAndCache = false,
     ): Promise<IPlugin.IMediaSourceResult | null> {
         await this.ensurePluginIsMounted();
         // 1. 本地搜索 其实直接读mediameta就好了
+        // 下载场景（bypassLocalAndCache）必须拿最新远程源，跳过本地文件短路
         const localPathInMediaExtra = getMediaExtraProperty(musicItem, "localPath");
         const localPath = getLocalPath(musicItem);
-        if (localPath && (await exists(localPath))) {
-            trace("本地播放", localPath);
-            if (localPathInMediaExtra !== localPath) {
-                // 修正一下本地数据
-                patchMediaExtra(musicItem, {
-                    localPath,
-                });
+        if (!bypassLocalAndCache) {
+            if (localPath && (await exists(localPath))) {
+                trace("本地播放", localPath);
+                if (localPathInMediaExtra !== localPath) {
+                    // 修正一下本地数据
+                    patchMediaExtra(musicItem, {
+                        localPath,
+                    });
 
+                }
+                return {
+                    url: addFileScheme(localPath),
+                };
+            } else if (localPathInMediaExtra) {
+                patchMediaExtra(musicItem, {
+                    localPath: undefined,
+                });
             }
-            return {
-                url: addFileScheme(localPath),
-            };
-        } else if (localPathInMediaExtra) {
-            patchMediaExtra(musicItem, {
-                localPath: undefined,
-            });
         }
 
         if (musicItem.platform === localPluginPlatform) {
@@ -288,6 +292,7 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
         const pluginCacheControl =
             this.plugin.instance.cacheControl ?? "no-cache";
         if (
+            !bypassLocalAndCache &&
             mediaCache &&
             mediaCache?.source?.[quality]?.url &&
             (pluginCacheControl === CacheControl.Cache ||
@@ -376,7 +381,7 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
         } catch (e: any) {
             if (retryCount > 0 && e?.message !== "NOT RETRY") {
                 await delay(150);
-                return this.getMediaSource(musicItem, quality, --retryCount);
+                return this.getMediaSource(musicItem, quality, --retryCount, notUpdateCache, bypassLocalAndCache);
             }
             errorLog("获取真实源失败", e?.message);
             devLog("error", "获取真实源失败", e, e?.message);

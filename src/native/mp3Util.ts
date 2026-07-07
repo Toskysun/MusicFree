@@ -150,6 +150,13 @@ class Mp3UtilManager implements IMp3Util {
   }
 
   /**
+   * mflac 解密能力是否可用（iOS 等平台没有对应原生模块）
+   */
+  isMflacDecryptAvailable(): boolean {
+    return !!this.nativeModule?.decryptMflacToFlac;
+  }
+
+  /**
    * Decrypt an encrypted .mflac file to .flac using native decoder.
    */
   async decryptMflacToFlac(inputPath: string, outputPath: string, ekey: string): Promise<boolean> {
