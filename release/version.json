@@ -1,7 +1,9 @@
 {
-  "version": "0.7.11",
+  "version": "0.7.12",
   "changeLog": [
     "【交流】欢迎加入 Q 群：1064805856",
+    "【修复】修复 New Architecture 下缺失 appmodules，导致 Android 启动崩溃（PlatformConstants）",
+    "--------以上为v0.7.12新特性--------",
     "【修复】适配 Expo 57 AppDelegate（ExpoAppDelegate），修复 iOS 编译失败",
     "--------以上为v0.7.11新特性--------",
     "【架构】升级 React Native 至 0.86、React 至 19.2、Expo SDK 至 57",

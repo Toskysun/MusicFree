@@ -1,11 +1,17 @@
+# React Native New Architecture requires the appmodules shared library
+# (OnLoad.cpp + autolinking). Keep no *.cpp in this directory so
+# ReactNative-application.cmake uses the default OnLoad.cpp.
 cmake_minimum_required(VERSION 3.22.1)
 
-project(musicfree_cenc LANGUAGES CXX)
+project(appmodules)
 
+include(${REACT_ANDROID_DIR}/cmake-utils/ReactNative-application.cmake)
+
+# Custom CENC decoder (separate .so, loaded via System.loadLibrary)
 add_library(
     musicfree-cenc
     SHARED
-    cenc_jni.cpp
+    cenc/cenc_jni.cpp
     cenc/aes.cpp
     cenc/cenc_decoder.cpp
     cenc/mp4.cpp

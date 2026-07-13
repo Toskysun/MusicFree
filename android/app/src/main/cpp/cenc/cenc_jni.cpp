@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-#include "cenc/cenc_decoder.h"
+#include "cenc_decoder.h"
 
 namespace {
 
