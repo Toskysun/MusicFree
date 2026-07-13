@@ -94,7 +94,7 @@ function HomeDrawer(props: any) {
                         <View
                             style={[
                                 style.brandRule,
-                                { backgroundColor: colors.accentWarm },
+                                { backgroundColor: colors.primary },
                             ]}
                         />
                         <ThemeText fontSize="section" fontWeight="bold">

@@ -20,6 +20,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { timingConfig } from "@/constants/commonConst";
 import useColors from "@/hooks/useColors";
+import useHasCustomBackground from "@/hooks/useHasCustomBackground";
 import ThemeText from "@/components/base/themeText";
 import Divider from "@/components/base/divider";
 import { fontSizeConst } from "@/constants/uiConst";
@@ -38,6 +39,7 @@ function Dialog(props: IDialogProps) {
     const sharedShowValue = useSharedValue(0);
     const keyboardHeight = useSharedValue(0);
     const colors = useColors();
+    const hasCustomBackground = useHasCustomBackground();
     const backHandlerRef = useRef<NativeEventSubscription | null>(null);
     const orientation = useOrientation();
     const keyboardAvoidMode =
@@ -47,11 +49,11 @@ function Dialog(props: IDialogProps) {
     const dialogContainerStyle: ViewStyle =
         orientation === "vertical"
             ? {
-                  width: vw(100) - rpx(72),
-              }
+                width: vw(100) - rpx(72),
+            }
             : {
-                  width: "80%",
-              };
+                width: "80%",
+            };
 
     useEffect(() => {
         sharedShowValue.value = 1;
@@ -95,9 +97,9 @@ function Dialog(props: IDialogProps) {
                     keyboardAvoidMode === "manual"
                         ? e.endCoordinates.height
                         : Math.min(
-                              e.endCoordinates.height,
-                              effectiveKeyboardHeight,
-                          );
+                            e.endCoordinates.height,
+                            effectiveKeyboardHeight,
+                        );
                 keyboardHeight.value = withTiming(targetHeight / 2, {
                     duration: Platform.OS === "ios" ? 250 : 150,
                 });
@@ -164,8 +166,18 @@ function Dialog(props: IDialogProps) {
                     scaleAnimationStyle,
                     {
                         backgroundColor: colors.surfaceElevated,
-                        borderColor: colors.border,
-                        shadowColor: colors.shadow,
+                        // Custom wallpaper: no dark outer ring (border + elevation).
+                        borderWidth: hasCustomBackground
+                            ? 0
+                            : StyleSheet.hairlineWidth,
+                        borderColor: hasCustomBackground
+                            ? "transparent"
+                            : colors.border,
+                        shadowColor: hasCustomBackground
+                            ? "transparent"
+                            : colors.shadow,
+                        shadowOpacity: hasCustomBackground ? 0 : 0.5,
+                        elevation: hasCustomBackground ? 0 : 5,
                     },
                 ]}>
                 {children}
@@ -294,6 +306,8 @@ function BottomButton(props: {
     const { type = "normal", text, style, onPress } = props;
     const colors = useColors();
 
+    const hasCustomBackground = useHasCustomBackground();
+
     return (
         <TouchableOpacity
             activeOpacity={0.6}
@@ -304,7 +318,15 @@ function BottomButton(props: {
                     backgroundColor:
                         type === "normal" ? colors.surface : colors.primary,
                     borderColor:
-                        type === "normal" ? colors.border : colors.primary,
+                        type === "primary"
+                            ? colors.primary
+                            : hasCustomBackground
+                                ? "transparent"
+                                : colors.border,
+                    borderWidth:
+                        type === "primary" || !hasCustomBackground
+                            ? StyleSheet.hairlineWidth
+                            : 0,
                 },
                 style,
             ]}>
@@ -351,16 +373,12 @@ const styles = StyleSheet.create({
         width: "80%",
         zIndex: 16310,
         borderRadius: rpx(28),
-        borderWidth: StyleSheet.hairlineWidth,
         backgroundColor: "red",
         shadowOffset: {
             width: 0,
             height: 2,
         },
-        shadowOpacity: 0.5,
         shadowRadius: 4,
-
-        elevation: 5,
     },
 
     defaultFontStyle: {

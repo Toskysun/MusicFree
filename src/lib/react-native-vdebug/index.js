@@ -46,20 +46,16 @@ export const initTrace = () => {
 };
 
 /**
- * Final architecture (read before changing):
+ * Architecture:
  *
- * 1) Android FAB = native PopupWindow
- *    - Outside RN Yoga → never reflows music bar
- *    - Always on top of app content, draggable via PopupWindow.update
- *    - No Dialog remove/add → no EGL_BAD_ACCESS
+ * 1) Android FAB = single decorView child (NOT PopupWindow / Dialog window)
+ *    - Same HWUI surface as the activity → no secondary surface EGL crashes
+ *    - Attach once; drag via layout params; bringToFront only
  *
- * 2) Log panel = absolute overlay with FIXED pixel size (not flex sibling)
- *    - Host is position:absolute; width/height = screen px (not %)
- *    - Mounted INSIDE the app's flex:1 wrapper as an overlay child
- *    - pointerEvents box-none when closed (host empty)
+ * 2) Log panel = absolute fixed-pixel overlay inside app flex:1 root
+ *    - Does not reflow the music bar
  *
- * 3) Never use RN Modal for the panel while also needing a free FAB above it
- *    (Modal is another window and covers PopupWindow / decor FAB).
+ * 3) Do not spam show/hide on panel toggle (causes OEM RenderThread aborts).
  */
 class VDebug extends PureComponent {
     static propTypes = {
@@ -105,10 +101,11 @@ class VDebug extends PureComponent {
                     this.setState({fabLeft: pos.x, fabTop: pos.y});
                 }
             });
+            // Attach once. Do not spam show()/hide() — that tears surfaces on
+            // some OEMs (EGL_BAD_ACCESS on RenderThread).
             DebugFloat.show();
-            this._showRetryTimers = [200, 800, 2000].map(ms =>
-                setTimeout(() => DebugFloat.show(), ms),
-            );
+            // Single delayed retry if Activity was not ready at mount.
+            this._showRetryTimer = setTimeout(() => DebugFloat.show(), 600);
         }
 
         this._backSub = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -129,9 +126,9 @@ class VDebug extends PureComponent {
             this._backSub.remove();
             this._backSub = null;
         }
-        if (this._showRetryTimers) {
-            this._showRetryTimers.forEach(clearTimeout);
-            this._showRetryTimers = null;
+        if (this._showRetryTimer) {
+            clearTimeout(this._showRetryTimer);
+            this._showRetryTimer = null;
         }
         if (useNativeFab) {
             DebugFloat.hide();
@@ -141,8 +138,10 @@ class VDebug extends PureComponent {
     componentDidUpdate(_prevProps, prevState) {
         if (!useNativeFab) return;
         if (prevState.panelOpen === this.state.panelOpen) return;
-        // Keep popup above the absolute sheet after open/close.
-        requestAnimationFrame(() => DebugFloat.show());
+        // Only raise z-order (no surface recreate). Never hide while panel open.
+        if (this.state.panelOpen) {
+            DebugFloat.bringToFront();
+        }
     }
 
     handleFabPositionChange = (left, top) => {

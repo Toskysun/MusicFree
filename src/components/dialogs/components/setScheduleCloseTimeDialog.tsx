@@ -6,6 +6,7 @@ import { hideDialog } from "../useDialog";
 import Dialog from "./base";
 import Input from "@/components/base/input";
 import useColors from "@/hooks/useColors";
+import useHasCustomBackground from "@/hooks/useHasCustomBackground";
 import { useI18N } from "@/core/i18n";
 import PersistStatus from "@/utils/persistStatus";
 
@@ -20,6 +21,7 @@ export default function SetScheduleCloseTimeDialog(
     const [timeInput, setTimeInput] = useState("");
     
     const colors = useColors();
+    const hasCustomBackground = useHasCustomBackground();
     const { t } = useI18N();
 
     // Get last custom time as placeholder
@@ -49,8 +51,13 @@ export default function SetScheduleCloseTimeDialog(
 
     const inputStyles = {
         backgroundColor: colors.card,
-        borderColor: colors.divider,
+        borderColor: hasCustomBackground ? "transparent" : colors.divider,
         color: colors.text,
+    };
+    const inputShellStyle = {
+        borderColor: hasCustomBackground ? "transparent" : colors.divider,
+        borderWidth: hasCustomBackground ? 0 : undefined,
+        backgroundColor: colors.card,
     };
 
     const containerStyles = {
@@ -63,7 +70,7 @@ export default function SetScheduleCloseTimeDialog(
             <Dialog.Content style={[style.dialogContent, containerStyles]}>
                 <View style={style.inputSection}>
                     <View style={style.inputRow}>
-                        <View style={[style.inputContainer, { borderColor: colors.divider, backgroundColor: colors.card }]}>
+                        <View style={[style.inputContainer, inputShellStyle]}>
                             <Input
                                 hasHorizontalPadding={false}
                                 style={[style.textInput, inputStyles]}

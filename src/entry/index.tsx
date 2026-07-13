@@ -60,7 +60,7 @@ export default function Pages() {
               of the same box (not a flex sibling). That way a tall log sheet
               cannot reflow / lift the music bar.
 
-              Android free FAB is a native PopupWindow (outside Yoga entirely).
+              Android free FAB is a native decorView child (same HWUI surface).
             */}
             <View style={styles.root}>
                 <SafeAreaProvider style={globalStyle.flex1}>

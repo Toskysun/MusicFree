@@ -54,7 +54,8 @@ const styles = StyleSheet.create({
         height: rpx(56),
         paddingHorizontal: rpx(18),
         borderRadius: rpx(28),
-        borderWidth: StyleSheet.hairlineWidth,
+        // Border/elevation come from useCardStyle so custom wallpaper
+        // does not get a double dark ring.
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",

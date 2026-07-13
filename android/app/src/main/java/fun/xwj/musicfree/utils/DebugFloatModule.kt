@@ -3,16 +3,14 @@ package `fun`.xwj.musicfree.utils
 import android.app.Activity
 import android.content.Context
 import android.graphics.Color
-import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.util.TypedValue
-// Build is used for elevation API checks
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
-import android.view.WindowManager
-import android.widget.PopupWindow
+import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.TextView
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
@@ -24,21 +22,21 @@ import com.facebook.react.modules.core.DeviceEventManagerModule
 import kotlin.math.abs
 
 /**
- * Global floating debug FAB via [PopupWindow].
+ * Debug FAB as a single child of the Activity [decorView].
  *
- * Why PopupWindow (not RN absolute, not Dialog WindowManager remove/add):
- * - Separate from Yoga/flex → never shoves the music bar
- * - WRAP_CONTENT + not focusable → only the button steals touches
- * - [PopupWindow.update] moves it without tearing down surfaces
- *   (avoids EGL_BAD_ACCESS from Dialog removeView/addView)
- * - Drawn above the activity content (native-stack, absolute sheets)
+ * Critical for Xiaomi / Android 16 stability:
+ * - Do NOT use PopupWindow / Dialog / WindowManager secondary windows.
+ *   Those create extra HWUI surfaces; dismiss/update races abort RenderThread
+ *   with EGL_BAD_ACCESS ("Failed to set damage region on surface").
+ * - Attach once; move with layout params only; never remove+re-add for z-order.
+ * - WRAP_CONTENT so only the button receives touches.
  */
 class DebugFloatModule(private val reactContext: ReactApplicationContext) :
     ReactContextBaseJavaModule(reactContext) {
 
-    private var popup: PopupWindow? = null
-    private var label: TextView? = null
-    private var anchor: View? = null
+    private var floatView: TextView? = null
+    private var host: ViewGroup? = null
+    private var attachedActivityHash: Int = 0
 
     private var posX = -1
     private var posY = -1
@@ -58,25 +56,17 @@ class DebugFloatModule(private val reactContext: ReactApplicationContext) :
                 val activity = reactContext.currentActivity ?: return@runOnUiThread
                 if (activity.isFinishing) return@runOnUiThread
                 ensure(activity)
-                val p = popup ?: return@runOnUiThread
-                val a = anchor ?: return@runOnUiThread
-                if (!p.isShowing) {
-                    // Post so decor is laid out (token ready).
-                    a.post {
-                        try {
-                            if (!p.isShowing && !activity.isFinishing) {
-                                p.showAtLocation(
-                                    a,
-                                    Gravity.TOP or Gravity.START,
-                                    posX.coerceAtLeast(0),
-                                    posY.coerceAtLeast(0),
-                                )
-                            }
-                        } catch (_: Exception) {
-                        }
-                    }
-                } else {
-                    p.update(posX.coerceAtLeast(0), posY.coerceAtLeast(0), -1, -1)
+                val view = floatView ?: return@runOnUiThread
+                val parent = host ?: return@runOnUiThread
+                if (view.parent == null) {
+                    parent.addView(view)
+                }
+                applyPosition()
+                // Reorder only — no removeView (surface-safe).
+                view.bringToFront()
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    view.elevation = 100_000f
+                    view.translationZ = 100_000f
                 }
             } catch (_: Exception) {
             }
@@ -85,8 +75,21 @@ class DebugFloatModule(private val reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun bringToFront() {
-        // PopupWindow is already above content; re-show if dismissed.
-        show()
+        UiThreadUtil.runOnUiThread {
+            try {
+                val view = floatView ?: return@runOnUiThread
+                if (view.parent == null) {
+                    show()
+                    return@runOnUiThread
+                }
+                view.bringToFront()
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    view.elevation = 100_000f
+                    view.translationZ = 100_000f
+                }
+            } catch (_: Exception) {
+            }
+        }
     }
 
     @ReactMethod
@@ -94,7 +97,11 @@ class DebugFloatModule(private val reactContext: ReactApplicationContext) :
         UiThreadUtil.runOnUiThread {
             try {
                 persistPosition()
-                popup?.dismiss()
+                val view = floatView
+                val parent = view?.parent as? ViewGroup
+                if (view != null && parent != null) {
+                    parent.removeView(view)
+                }
             } catch (_: Exception) {
             }
         }
@@ -121,13 +128,12 @@ class DebugFloatModule(private val reactContext: ReactApplicationContext) :
     fun setPosition(x: Double, y: Double) {
         UiThreadUtil.runOnUiThread {
             val metrics = reactContext.resources.displayMetrics
-            posX = x.toInt().coerceIn(0, metrics.widthPixels)
-            posY = y.toInt().coerceIn(0, metrics.heightPixels)
+            val maxX = (metrics.widthPixels - btnW.coerceAtLeast(1)).coerceAtLeast(0)
+            val maxY = (metrics.heightPixels - btnH.coerceAtLeast(1)).coerceAtLeast(0)
+            posX = x.toInt().coerceIn(0, maxX)
+            posY = y.toInt().coerceIn(0, maxY)
             persistPosition()
-            try {
-                popup?.takeIf { it.isShowing }?.update(posX, posY, -1, -1)
-            } catch (_: Exception) {
-            }
+            applyPosition()
         }
     }
 
@@ -140,15 +146,22 @@ class DebugFloatModule(private val reactContext: ReactApplicationContext) :
     }
 
     private fun ensure(activity: Activity) {
-        if (popup != null && label?.context === activity) {
+        val decor = activity.window?.decorView as? ViewGroup ?: return
+        val activityHash = System.identityHashCode(activity)
+
+        if (floatView != null && attachedActivityHash == activityHash && floatView?.context === activity) {
+            host = decor
             return
         }
+
+        // Activity recreated — drop old view reference (do not touch old window).
         try {
-            popup?.dismiss()
+            (floatView?.parent as? ViewGroup)?.removeView(floatView)
         } catch (_: Exception) {
         }
-        popup = null
-        label = null
+        floatView = null
+        host = decor
+        attachedActivityHash = activityHash
 
         val density = activity.resources.displayMetrics.density
         fun dp(v: Int) = (v * density).toInt()
@@ -173,18 +186,31 @@ class DebugFloatModule(private val reactContext: ReactApplicationContext) :
                 setColor(Color.parseColor("#04BE02"))
                 cornerRadius = dp(4).toFloat()
             }
+            isClickable = true
+            isFocusable = false
+            // Software layer avoids HWUI secondary-surface damage paths on some OEMs.
+            setLayerType(View.LAYER_TYPE_SOFTWARE, null)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                elevation = 24f
+                elevation = 100_000f
+                translationZ = 100_000f
             }
         }
 
-        // Measure once for clamp bounds
         tv.measure(
             View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
             View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
         )
         btnW = tv.measuredWidth.coerceAtLeast(dp(56))
         btnH = tv.measuredHeight.coerceAtLeast(dp(36))
+
+        tv.layoutParams = FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            Gravity.TOP or Gravity.START,
+        ).apply {
+            leftMargin = posX.coerceAtLeast(0)
+            topMargin = posY.coerceAtLeast(0)
+        }
 
         var downRawX = 0f
         var downRawY = 0f
@@ -193,7 +219,7 @@ class DebugFloatModule(private val reactContext: ReactApplicationContext) :
         var moved = false
         val touchSlop = dp(4)
 
-        tv.setOnTouchListener { _, event ->
+        tv.setOnTouchListener { v, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     downRawX = event.rawX
@@ -201,6 +227,7 @@ class DebugFloatModule(private val reactContext: ReactApplicationContext) :
                     originX = posX
                     originY = posY
                     moved = false
+                    (v.parent as? ViewGroup)?.requestDisallowInterceptTouchEvent(true)
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
@@ -213,19 +240,14 @@ class DebugFloatModule(private val reactContext: ReactApplicationContext) :
                     val maxY = (metrics.heightPixels - btnH).coerceAtLeast(0)
                     posX = (originX + dx).coerceIn(0, maxX)
                     posY = (originY + dy).coerceIn(0, maxY)
-                    try {
-                        popup?.update(posX, posY, -1, -1)
-                    } catch (_: Exception) {
-                    }
+                    moveView(v, posX, posY)
                     true
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    (v.parent as? ViewGroup)?.requestDisallowInterceptTouchEvent(false)
                     if (moved) {
                         persistPosition()
-                        try {
-                            popup?.update(posX, posY, -1, -1)
-                        } catch (_: Exception) {
-                        }
+                        moveView(v, posX, posY)
                     } else if (event.actionMasked == MotionEvent.ACTION_UP) {
                         emitPress()
                     }
@@ -235,27 +257,32 @@ class DebugFloatModule(private val reactContext: ReactApplicationContext) :
             }
         }
 
-        val pw = PopupWindow(
-            tv,
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            false, // not focusable → won't steal keys / soft input
-        ).apply {
-            isOutsideTouchable = false
-            isTouchable = true
-            isClippingEnabled = false
-            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                elevation = 100_000f
-            }
-            // Soft input shouldn't resize the app when this is up
-            softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING
-            animationStyle = 0
-        }
+        floatView = tv
+    }
 
-        label = tv
-        popup = pw
-        anchor = activity.window?.decorView
+    private fun moveView(view: View, x: Int, y: Int) {
+        val lp = view.layoutParams as? FrameLayout.LayoutParams ?: return
+        lp.gravity = Gravity.TOP or Gravity.START
+        lp.leftMargin = x
+        lp.topMargin = y
+        val parent = view.parent as? ViewGroup
+        if (parent != null) {
+            try {
+                parent.updateViewLayout(view, lp)
+            } catch (_: Exception) {
+                view.layoutParams = lp
+                view.requestLayout()
+            }
+        } else {
+            view.layoutParams = lp
+        }
+    }
+
+    private fun applyPosition() {
+        loadPositionIfNeeded()
+        val view = floatView ?: return
+        if (posX < 0 || posY < 0) return
+        moveView(view, posX, posY)
     }
 
     private fun loadPositionIfNeeded() {
@@ -279,12 +306,17 @@ class DebugFloatModule(private val reactContext: ReactApplicationContext) :
     override fun invalidate() {
         UiThreadUtil.runOnUiThread {
             try {
-                popup?.dismiss()
+                persistPosition()
+                val view = floatView
+                val parent = view?.parent as? ViewGroup
+                if (view != null && parent != null) {
+                    parent.removeView(view)
+                }
             } catch (_: Exception) {
             }
-            popup = null
-            label = null
-            anchor = null
+            floatView = null
+            host = null
+            attachedActivityHash = 0
         }
         super.invalidate()
     }

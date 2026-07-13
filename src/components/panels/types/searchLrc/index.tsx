@@ -17,6 +17,7 @@ import { useI18N } from "@/core/i18n";
 import ThemeText from "@/components/base/themeText";
 import Color from "color";
 import useCardStyle from "@/hooks/useCardStyle";
+import useHasCustomBackground from "@/hooks/useHasCustomBackground";
 
 interface INewMusicSheetProps {
     musicItem?: IMusic.IMusicItem | null;
@@ -28,6 +29,7 @@ export default function SearchLrc(props: INewMusicSheetProps) {
         musicItem?.alias ?? musicItem?.title ?? "",
     );
     const colors = useColors();
+    const hasCustomBackground = useHasCustomBackground();
     const cardStyle = useCardStyle({
         borderWidth: 0,
         elevation: 3,
@@ -101,7 +103,12 @@ export default function SearchLrc(props: INewMusicSheetProps) {
                                 {
                                     color: colors.text,
                                     backgroundColor: colors.surfaceElevated,
-                                    borderColor: colors.border,
+                                    borderColor: hasCustomBackground
+                                        ? "transparent"
+                                        : colors.border,
+                                    borderWidth: hasCustomBackground
+                                        ? 0
+                                        : StyleSheet.hairlineWidth,
                                 },
                             ]}
                             placeholderTextColor={colors.textSecondary}
@@ -146,7 +153,6 @@ const style = StyleSheet.create({
     },
     input: {
         borderRadius: rpx(18),
-        borderWidth: StyleSheet.hairlineWidth,
         fontSize: fontSizeConst.content,
         lineHeight: fontSizeConst.content * 1.5,
         paddingHorizontal: rpx(18),

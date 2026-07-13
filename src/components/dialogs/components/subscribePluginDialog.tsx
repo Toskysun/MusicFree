@@ -6,6 +6,7 @@ import { hideDialog } from "../useDialog";
 import Dialog from "./base";
 import Input from "@/components/base/input";
 import useColors from "@/hooks/useColors";
+import useHasCustomBackground from "@/hooks/useHasCustomBackground";
 import { useI18N } from "@/core/i18n";
 
 interface ISubscribeItem {
@@ -31,13 +32,18 @@ export default function SubscribePluginDialog(
     const [url, setUrl] = useState(subscribeItem?.url ?? "");
 
     const colors = useColors();
+    const hasCustomBackground = useHasCustomBackground();
     const { t } = useI18N();
-
 
     const inputStyles = {
         backgroundColor: colors.card,
-        borderColor: colors.divider,
+        borderColor: hasCustomBackground ? "transparent" : colors.divider,
         color: colors.text,
+    };
+    const inputShellStyle = {
+        borderColor: hasCustomBackground ? "transparent" : colors.divider,
+        borderWidth: hasCustomBackground ? 0 : undefined,
+        backgroundColor: colors.card,
     };
 
     const containerStyles = {
@@ -52,7 +58,7 @@ export default function SubscribePluginDialog(
                     <View style={style.labelContainer}>
                         <ThemeText style={style.label}>{t("common.name")}</ThemeText>
                     </View>
-                    <View style={[style.inputContainer, { borderColor: colors.divider, backgroundColor: colors.card }]}>
+                    <View style={[style.inputContainer, inputShellStyle]}>
                         <Input
                             hasHorizontalPadding={false}
                             style={[style.textInput, inputStyles]}
@@ -70,7 +76,7 @@ export default function SubscribePluginDialog(
                     <View style={style.labelContainer}>
                         <ThemeText style={style.label}>URL</ThemeText>
                     </View>
-                    <View style={[style.inputContainer, { borderColor: colors.divider, backgroundColor: colors.card }]}>
+                    <View style={[style.inputContainer, inputShellStyle]}>
                         <Input
                             hasHorizontalPadding={false}
                             style={[style.textInput, inputStyles]}

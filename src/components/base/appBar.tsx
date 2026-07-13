@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import rpx from "@/utils/rpx";
 import useColors from "@/hooks/useColors";
+import useHasCustomBackground from "@/hooks/useHasCustomBackground";
 import StatusBar from "./statusBar";
 import color from "color";
 import IconButton from "./iconButton";
@@ -72,6 +73,7 @@ export default function AppBar(props: IAppBarProps) {
     } = props;
 
     const colors = useColors();
+    const hasCustomBackground = useHasCustomBackground();
     const navigation = useNavigation();
 
     const bgColor = color(colors.appBar ?? colors.primary).toString();
@@ -129,8 +131,8 @@ export default function AppBar(props: IAppBarProps) {
                             color={
                                 titleTextOpacity !== 1
                                     ? color(contentColor)
-                                          .alpha(titleTextOpacity)
-                                          .toString()
+                                        .alpha(titleTextOpacity)
+                                        .toString()
                                     : contentColor
                             }>
                             {children}
@@ -200,7 +202,12 @@ export default function AppBar(props: IAppBarProps) {
                         style={[
                             {
                                 backgroundColor: colors.surfaceElevated,
-                                borderColor: colors.border,
+                                borderColor: hasCustomBackground
+                                    ? "transparent"
+                                    : colors.border,
+                                borderWidth: hasCustomBackground
+                                    ? 0
+                                    : StyleSheet.hairlineWidth,
                                 right: rpx(24),
                                 top:
                                     (menuIconLayout?.y ?? 0) +
@@ -209,7 +216,11 @@ export default function AppBar(props: IAppBarProps) {
                                     (menuWithStatusBar
                                         ? OriginalStatusBar.currentHeight ?? 0
                                         : 0),
-                                shadowColor: colors.shadow,
+                                shadowColor: hasCustomBackground
+                                    ? "transparent"
+                                    : colors.shadow,
+                                shadowOpacity: hasCustomBackground ? 0 : 0.23,
+                                elevation: hasCustomBackground ? 0 : 4,
                             },
                             transformStyle,
                             styles.menu,
@@ -278,7 +289,6 @@ const styles = StyleSheet.create({
         width: rpx(340),
         maxHeight: rpx(600),
         borderRadius: rpx(18),
-        borderWidth: StyleSheet.hairlineWidth,
         zIndex: 10011,
         position: "absolute",
         opacity: 0,
@@ -286,8 +296,6 @@ const styles = StyleSheet.create({
             width: 0,
             height: 2,
         },
-        shadowOpacity: 0.23,
         shadowRadius: 2.62,
-        elevation: 4,
     },
 });
