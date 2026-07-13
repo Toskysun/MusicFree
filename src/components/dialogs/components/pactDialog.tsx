@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { View, ScrollView, StyleSheet, Linking, BackHandler, TouchableOpacity } from "react-native";
 import rpx, { vh } from "@/utils/rpx";
 import useColors from "@/hooks/useColors";
+import useHasCustomBackground from "@/hooks/useHasCustomBackground";
 import ThemeText from "@/components/base/themeText";
 import Config from "@/core/appConfig";
 import { forceExitApp } from "@/utils/forceExitApp";
@@ -12,6 +13,7 @@ const COUNTDOWN_SECONDS = 30;
 
 function PactDialog() {
     const colors = useColors();
+    const hasCustomBackground = useHasCustomBackground();
     const [countdown, setCountdown] = useState(COUNTDOWN_SECONDS);
     const isAgreePact = Config.getConfig("common.isAgreePact");
 
@@ -89,7 +91,22 @@ function PactDialog() {
 
     return (
         <View style={styles.overlay}>
-            <View style={[styles.container, { backgroundColor: colors.backdrop }]}>
+            <View
+                style={[
+                    styles.container,
+                    {
+                        // backdrop under wallpaper is rgba(0,0,0,0.62) → solid black slab.
+                        // Prefer elevated surface so content stays translucent with wallpaper.
+                        backgroundColor: hasCustomBackground
+                            ? colors.surfaceElevated
+                            : colors.backdrop,
+                        elevation: hasCustomBackground ? 0 : 5,
+                        shadowOpacity: hasCustomBackground ? 0 : 0.5,
+                        shadowColor: hasCustomBackground
+                            ? "transparent"
+                            : "#000",
+                    },
+                ]}>
                 <ThemeText fontSize="title" fontWeight="bold" style={styles.title}>
                     许可协议
                 </ThemeText>
@@ -266,9 +283,7 @@ const styles = StyleSheet.create({
         paddingTop: rpx(24),
         paddingBottom: rpx(24),
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.5,
         shadowRadius: 4,
-        elevation: 5,
     },
     title: {
         textAlign: "center",

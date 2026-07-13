@@ -74,13 +74,27 @@ class PluginManager implements IPluginManager, IInjectable {
 
     private updatePluginCache(plugin: Plugin) {
         if (plugin.path && plugin.state === PluginState.Mounted) {
+            // Never cache live functions — JSON drops them and left a stub
+            // that looked "mounted" without getMusicDetailPageUrl etc.
+            const serializableInstance: Record<string, unknown> = {
+                platform: plugin.instance.platform,
+                version: plugin.instance.version,
+                author: plugin.instance.author,
+                srcUrl: plugin.instance.srcUrl,
+                primaryKey: plugin.instance.primaryKey,
+                supportedSearchType: plugin.instance.supportedSearchType,
+                supportedQualities: plugin.instance.supportedQualities,
+                cacheControl: plugin.instance.cacheControl,
+                description: plugin.instance.description,
+                hints: plugin.instance.hints,
+            };
             pluginCacheStore.set(
                 plugin.path,
                 JSON.stringify({
                     name: plugin.name,
                     hash: plugin.hash,
                     path: plugin.path,
-                    instance: plugin.instance,
+                    instance: serializableInstance,
                     supportedMethods: [...plugin.supportedMethods],
                 }),
             );

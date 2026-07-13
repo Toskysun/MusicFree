@@ -49,31 +49,35 @@ export default function SetScheduleCloseTimeDialog(
         hideDialog();
     };
 
-    const inputStyles = {
-        backgroundColor: colors.card,
-        borderColor: hasCustomBackground ? "transparent" : colors.divider,
-        color: colors.text,
-    };
+    // Avoid colors.backdrop on Content — under custom wallpaper it is a
+    // heavy black panel (rgba(0,0,0,0.62)) nested inside the dialog shell.
     const inputShellStyle = {
         borderColor: hasCustomBackground ? "transparent" : colors.divider,
-        borderWidth: hasCustomBackground ? 0 : undefined,
-        backgroundColor: colors.card,
-    };
-
-    const containerStyles = {
-        backgroundColor: colors.backdrop,
+        borderWidth: hasCustomBackground ? 0 : rpx(2),
+        backgroundColor: hasCustomBackground
+            ? colors.surface
+            : colors.card,
+        elevation: hasCustomBackground ? 0 : 2,
+        shadowOpacity: hasCustomBackground ? 0 : 0.1,
+        shadowColor: hasCustomBackground ? "transparent" : "#000",
     };
 
     return (
         <Dialog onDismiss={hideDialog}>
             <Dialog.Title>{t("dialog.setScheduleCloseTime.title")}</Dialog.Title>
-            <Dialog.Content style={[style.dialogContent, containerStyles]}>
+            <Dialog.Content style={style.dialogContent}>
                 <View style={style.inputSection}>
                     <View style={style.inputRow}>
                         <View style={[style.inputContainer, inputShellStyle]}>
                             <Input
                                 hasHorizontalPadding={false}
-                                style={[style.textInput, inputStyles]}
+                                style={[
+                                    style.textInput,
+                                    {
+                                        backgroundColor: "transparent",
+                                        color: colors.text,
+                                    },
+                                ]}
                                 value={timeInput}
                                 onChangeText={text => {
                                     // Only allow numbers
@@ -138,7 +142,6 @@ const style = StyleSheet.create({
     },
     inputContainer: {
         flex: 1,
-        borderWidth: rpx(2),
         borderRadius: rpx(8),
         paddingHorizontal: rpx(16),
         paddingVertical: rpx(4),
@@ -148,9 +151,7 @@ const style = StyleSheet.create({
             width: 0,
             height: rpx(2),
         },
-        shadowOpacity: 0.1,
         shadowRadius: rpx(4),
-        elevation: 2,
     },
     textInput: {
         fontSize: fontRpx(28),

@@ -9,7 +9,12 @@ import Base64 from "@/utils/base64";
 import delay from "@/utils/delay";
 import { addFileScheme, getFileName, removeFileScheme } from "@/utils/fileUtils";
 import { getMediaExtraProperty, patchMediaExtra } from "@/utils/mediaExtra";
-import { getLocalPath, isSameMediaItem, resetMediaItem } from "@/utils/mediaUtils";
+import {
+    buildFallbackMusicDetailUrl,
+    getLocalPath,
+    isSameMediaItem,
+    resetMediaItem,
+} from "@/utils/mediaUtils";
 import notImplementedFunction from "@/utils/notImplementedFunction.ts";
 import type { IPluginManager } from "@/types/core/pluginManager";
 import axios from "axios";
@@ -272,6 +277,25 @@ export enum PluginState {
     Error
 }
 
+/** Normalize plugin share / detail URLs (trim, protocol-relative, etc.). */
+export function normalizePluginShareUrl(raw: unknown): string {
+    if (raw == null) {
+        return "";
+    }
+    const text = String(raw).trim();
+    if (!text) {
+        return "";
+    }
+    if (/^https?:\/\//i.test(text)) {
+        return text;
+    }
+    // Protocol-relative
+    if (text.startsWith("//")) {
+        return `https:${text}`;
+    }
+    return "";
+}
+
 export enum PluginErrorReason {
     // 版本不匹配
     VersionNotMatch,
@@ -510,27 +534,41 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
         }
     }
 
-    /** 获取音乐详情页 URL */
+    /** 获取音乐详情页 URL（插件优先，宿主按平台字段兜底） */
     async getMusicDetailPageUrl(
         musicItem: IMusic.IMusicItemBase,
     ): Promise<string> {
         await this.ensurePluginIsMounted();
-        if (!this.plugin.instance.getMusicDetailPageUrl) {
-            return "";
+
+        // Pass a plain clone so plugins always see full fields (not immer-frozen).
+        const safeItem = resetMediaItem(musicItem, undefined, true);
+
+        if (typeof this.plugin.instance.getMusicDetailPageUrl === "function") {
+            try {
+                const raw = await this.plugin.instance.getMusicDetailPageUrl(
+                    safeItem,
+                );
+                const fromPlugin = normalizePluginShareUrl(raw);
+                if (fromPlugin) {
+                    return fromPlugin;
+                }
+            } catch (e: any) {
+                devLog("error", "获取音乐详情页URL失败", e, e?.message);
+            }
         }
 
-        try {
-            const detailUrl = await this.plugin.instance.getMusicDetailPageUrl(
-                resetMediaItem(musicItem, undefined, true),
-            );
-
-            return typeof detailUrl === "string" && /^https?:\/\//.test(detailUrl)
-                ? detailUrl
-                : "";
-        } catch (e: any) {
-            devLog("error", "获取音乐详情页URL失败", e, e?.message);
-            return "";
+        // Plugin missing method / empty result / throw → host fallback.
+        const fallback = normalizePluginShareUrl(
+            buildFallbackMusicDetailUrl(safeItem),
+        );
+        if (!fallback) {
+            devLog("warn", "分享链接为空", {
+                platform: musicItem?.platform,
+                id: musicItem?.id,
+                keys: musicItem ? Object.keys(musicItem as object) : [],
+            });
         }
+        return fallback;
     }
 
     /**
@@ -1168,6 +1206,8 @@ export class Plugin {
     public supportedMethods: Set<keyof IPlugin.IPluginInstanceMethods> = new Set();
 
     private lazyProps: ILazyProps | null = null;
+    /** Dedup concurrent ensureMounted() so callers wait for the same load. */
+    private mountPromise: Promise<void> | null = null;
 
     static pluginManager: IPluginManager;
 
@@ -1192,9 +1232,17 @@ export class Plugin {
             this.name = lazyProps.name;
             this.hash = lazyProps.hash;
             this.path = lazyProps.path;
-            this.instance = lazyProps.instance ?? {
+            // Cache only stores plain JSON (no functions). Keep a stub until mount.
+            this.instance = {
+                ...(lazyProps.instance && typeof lazyProps.instance === "object"
+                    ? Object.fromEntries(
+                        Object.entries(lazyProps.instance).filter(
+                            ([, v]) => typeof v !== "function",
+                        ),
+                    )
+                    : {}),
                 platform: lazyProps.name,
-            };
+            } as IPlugin.IPluginDefine;
             this.supportedMethods = new Set((lazyProps.supportedMethods ?? []) as any);
             // 初始化方法，但实际调用时会先挂载插件
             this.methods = new PluginMethodsWrapper(this, this.ensureMounted.bind(this));
@@ -1202,18 +1250,34 @@ export class Plugin {
     }
 
     async ensureMounted() {
-        if ((this.state === PluginState.Initializing) && this.lazyProps) {
+        // Already usable
+        if (this.state === PluginState.Mounted || this.state === PluginState.Error) {
+            return;
+        }
+        // Coalesce concurrent mounts (was a race: 2nd caller skipped await)
+        if (this.mountPromise) {
+            return this.mountPromise;
+        }
+        if (!this.lazyProps) {
+            return;
+        }
+
+        this.mountPromise = (async () => {
             this.state = PluginState.Loading;
-            // 懒加载
-            const loadFuncCode = this.lazyProps.loadFuncCode ?? (() => "");
+            const loadFuncCode = this.lazyProps!.loadFuncCode ?? (async () => "");
             try {
                 const funcCode = await loadFuncCode();
-                this.mountPlugin(funcCode, this.lazyProps.path);
+                this.mountPlugin(funcCode, this.lazyProps!.path);
             } catch {
                 this.state = PluginState.Error;
-                this.errorReason = this.errorReason ?? PluginErrorReason.CannotParse;
+                this.errorReason =
+                    this.errorReason ?? PluginErrorReason.CannotParse;
+            } finally {
+                this.mountPromise = null;
             }
-        }
+        })();
+
+        return this.mountPromise;
     }
 
     private mountPlugin(

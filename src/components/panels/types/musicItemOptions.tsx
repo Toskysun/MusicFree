@@ -1,12 +1,16 @@
 import React from "react";
-import { Share, StyleSheet, View } from "react-native";
+import { Platform, Share, StyleSheet, View } from "react-native";
 import rpx from "@/utils/rpx";
 import ListItem from "@/components/base/listItem";
 import ThemeText from "@/components/base/themeText";
 import { ImgAsset } from "@/constants/assetsConst";
 import Clipboard from "@react-native-clipboard/clipboard";
 
-import { getPlatformMediaId, isSameMediaItem } from "@/utils/mediaUtils";
+import {
+    buildFallbackMusicDetailUrl,
+    getPlatformMediaId,
+    isSameMediaItem,
+} from "@/utils/mediaUtils";
 import FastImage from "@/components/base/fastImage";
 import Toast from "@/utils/toast";
 import { devLog } from "@/utils/log";
@@ -68,17 +72,45 @@ const getAlbumIds = (musicItem: IMusic.IMusicItem) => {
     return { albumId, albumMid };
 };
 
-const formatMusicShareMessage = async (musicItem: IMusic.IMusicItem) => {
+const formatMusicSharePayload = async (musicItem: IMusic.IMusicItem) => {
     const title = musicItem.title?.toString().trim();
     const artist = musicItem.artist?.toString().trim();
-    const musicTitle = (title && artist
-        ? `${title} - ${artist}`
-        : title || artist || getPlatformMediaId(musicItem) || musicItem.id
-    ).replace(/\s/g, "");
-    const detailUrl = await pluginManager.getByMedia(musicItem)
-        ?.methods.getMusicDetailPageUrl(musicItem);
+    // Keep spaces in title for readability; do not strip newlines from URL line.
+    const musicTitle =
+        title && artist
+            ? `${title} - ${artist}`
+            : title ||
+              artist ||
+              getPlatformMediaId(musicItem) ||
+              String(musicItem.id ?? "");
 
-    return detailUrl ? `${musicTitle}\n${detailUrl}` : musicTitle;
+    let detailUrl = "";
+    try {
+        const plugin = pluginManager.getByMedia(musicItem);
+        // PluginMethodsWrapper always exposes this method; it mounts lazy plugins.
+        if (plugin?.methods?.getMusicDetailPageUrl) {
+            detailUrl =
+                (await plugin.methods.getMusicDetailPageUrl(musicItem)) || "";
+        }
+    } catch (e) {
+        devLog("warn", "获取分享链接失败", e);
+    }
+
+    // No plugin / plugin returned empty → host platform fallback.
+    if (!detailUrl) {
+        detailUrl = buildFallbackMusicDetailUrl(musicItem);
+    }
+
+    detailUrl = (detailUrl || "").trim();
+    // Always put URL in message (Android ignores ShareContent.url).
+    const message = detailUrl ? `${musicTitle}\n${detailUrl}` : musicTitle;
+    return { message, url: detailUrl || undefined, musicTitle };
+};
+
+/** True when Share rejected because the user dismissed the sheet. */
+const isShareDismissError = (e: unknown) => {
+    const msg = String((e as any)?.message ?? e ?? "");
+    return /cancel|dismiss|User did not share|Share is dismissed/i.test(msg);
 };
 
 export default function MusicItemOptions(props: IMusicItemOptionsProps) {
@@ -182,21 +214,55 @@ export default function MusicItemOptions(props: IMusicItemOptionsProps) {
             icon: "share",
             title: t("panel.musicItemOptions.share"),
             onPress: async () => {
+                // Close options panel first so the system share sheet is not
+                // blocked by the high-zIndex panel overlay on some devices.
+                hidePanel();
                 try {
-                    await Share.share(
-                        {
-                            title: t("panel.musicItemOptions.shareTitle"),
-                            message: await formatMusicShareMessage(musicItem),
-                        },
-                        {
-                            dialogTitle: t("panel.musicItemOptions.shareDialogTitle", {
-                                title: musicItem.title || t("panel.musicItemOptions.shareTitle"),
-                            }),
-                            subject: t("panel.musicItemOptions.shareTitle"),
-                        },
-                    );
-                    hidePanel();
-                } catch {
+                    const { message, url } =
+                        await formatMusicSharePayload(musicItem);
+                    if (!message) {
+                        Toast.warn(t("toast.failToShareMusic"));
+                        return;
+                    }
+                    const content: { title: string; message: string; url?: string } = {
+                        title: t("panel.musicItemOptions.shareTitle"),
+                        message,
+                    };
+                    // url is iOS-only; Android already has the link in message.
+                    if (url && Platform.OS === "ios") {
+                        content.url = url;
+                    }
+                    const result = await Share.share(content, {
+                        dialogTitle: t(
+                            "panel.musicItemOptions.shareDialogTitle",
+                            {
+                                title:
+                                    musicItem.title ||
+                                    t("panel.musicItemOptions.shareTitle"),
+                            },
+                        ),
+                        subject: t("panel.musicItemOptions.shareTitle"),
+                    });
+                    if (result?.action === Share.dismissedAction) {
+                        return;
+                    }
+                } catch (e) {
+                    if (isShareDismissError(e)) {
+                        return;
+                    }
+                    // Last resort: copy share text so the user still gets the link.
+                    try {
+                        const { message } =
+                            await formatMusicSharePayload(musicItem);
+                        if (message) {
+                            Clipboard.setString(message);
+                            Toast.success(t("toast.copiedToClipboard"));
+                            return;
+                        }
+                    } catch {
+                        // ignore
+                    }
+                    devLog("warn", "分享歌曲失败", e);
                     Toast.warn(t("toast.failToShareMusic"));
                 }
             },

@@ -1,6 +1,7 @@
 import { timingConfig } from "@/constants/commonConst";
 import { fontSizeConst } from "@/constants/uiConst";
 import useColors from "@/hooks/useColors";
+import useHasCustomBackground from "@/hooks/useHasCustomBackground";
 import rpx from "@/utils/rpx";
 import { GlobalState } from "@/utils/stateMapper";
 import { nanoid } from "@/utils/nanoid";
@@ -58,6 +59,7 @@ const typeConfig = {
 export function ToastBaseComponent() {
     const activeToast = activeToastStore.useValue();
     const colors = useColors();
+    const hasCustomBackground = useHasCustomBackground();
 
     const toastAnim = useSharedValue(0);
 
@@ -121,7 +123,11 @@ export function ToastBaseComponent() {
                         styles.contentContainer,
                         {
                             backgroundColor: colors.notification,
-                            shadowColor: colors.shadow,
+                            shadowColor: hasCustomBackground
+                                ? "transparent"
+                                : colors.shadow,
+                            shadowOpacity: hasCustomBackground ? 0 : 0.2,
+                            elevation: hasCustomBackground ? 0 : 2,
                         },
                         toastAnimStyle,
                     ]}>
@@ -174,10 +180,7 @@ const styles = StyleSheet.create({
             width: 0,
             height: 2,
         },
-        shadowOpacity: 0.2,
         shadowRadius: 1.41,
-
-        elevation: 2,
     },
     text: {
         fontSize: fontSizeConst.content,

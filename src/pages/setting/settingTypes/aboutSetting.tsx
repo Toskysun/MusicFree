@@ -18,13 +18,23 @@ import Theme from "@/core/theme";
 import DeviceInfo from "react-native-device-info";
 import buildInfo from "@/constants/buildInfo";
 import { showDialog } from "@/components/dialogs/useDialog";
+import useHasCustomBackground from "@/hooks/useHasCustomBackground";
 
 export default function AboutSetting() {
     const checkAndShowResult = useCheckUpdate();
     const orientation = useOrientation();
     const { colors } = Theme.useTheme();
+    const hasCustomBackground = useHasCustomBackground();
     const version = DeviceInfo.getVersion(); // 从 package.json 获取版本号
     const buildTime = buildInfo.buildTime; // 从构建信息文件获取构建时间
+    const cardChrome = hasCustomBackground
+        ? {
+            elevation: 0,
+            shadowColor: "transparent",
+            shadowOpacity: 0,
+            borderWidth: 0,
+        }
+        : null;
 
     // 动画值
     const fadeAnim1 = useRef(new Animated.Value(0)).current;
@@ -172,6 +182,7 @@ export default function AboutSetting() {
                         style={[
                             style.infoCard,
                             { backgroundColor: colors.card },
+                            cardChrome,
                             {
                                 opacity: fadeAnim1,
                                 transform: [{ scale: scaleAnim1 }],
@@ -205,6 +216,7 @@ export default function AboutSetting() {
                         style={[
                             style.infoCard,
                             { backgroundColor: colors.card },
+                            cardChrome,
                             {
                                 opacity: fadeAnim2,
                                 transform: [{ scale: scaleAnim2 }],
@@ -237,6 +249,7 @@ export default function AboutSetting() {
                         style={[
                             style.infoCard,
                             { backgroundColor: colors.card },
+                            cardChrome,
                             {
                                 opacity: fadeAnim3,
                                 transform: [{ scale: scaleAnim3 }],
@@ -271,6 +284,7 @@ export default function AboutSetting() {
                         style={[
                             style.infoCard,
                             { backgroundColor: colors.card },
+                            cardChrome,
                             {
                                 opacity: fadeAnim4,
                                 transform: [{ scale: scaleAnim4 }],
@@ -303,6 +317,7 @@ export default function AboutSetting() {
                         style={[
                             style.infoCard,
                             { backgroundColor: colors.card },
+                            cardChrome,
                             {
                                 opacity: fadeAnim5,
                                 transform: [{ scale: scaleAnim5 }],
@@ -365,6 +380,7 @@ const style = StyleSheet.create({
         padding: rpx(24),
         borderRadius: rpx(16),
         marginBottom: rpx(16),
+        // elevation/shadow applied only when NOT custom wallpaper (see cardChrome)
         elevation: 2,
         shadowColor: "#000",
         shadowOffset: {
