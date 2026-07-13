@@ -124,7 +124,7 @@
     "【优化】优化了软件启动速度 (需要在【侧边栏-基本设置-插件】中打开【启用插件懒加载】开关)"
   ],
   "download": [
-    "https://github.com/Toskysun/MusicFree/releases/download/v0.7.10/MusicFree-v0.7.10-arm64-v8a-release.apk",
-    "https://github.com/Toskysun/MusicFree/releases/download/v0.7.10/MusicFree-v0.7.10-universal-release.apk"
+    "https://github.com/Toskysun/MusicFree/releases/download/v0.7.12/MusicFree-v0.7.12-arm64-v8a-release.apk",
+    "https://github.com/Toskysun/MusicFree/releases/download/v0.7.12/MusicFree-v0.7.12-universal-release.apk"
   ]
 }
