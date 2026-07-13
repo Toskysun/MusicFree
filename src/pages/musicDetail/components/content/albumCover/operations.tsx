@@ -18,7 +18,7 @@ import PluginManager from "@/core/pluginManager";
 import downloader from "@/core/downloader";
 import i18n from "@/core/i18n";
 
-import { getQualityAbbr } from "@/utils/qualities";
+import { getQualityAbbr, musicItemHasQualitySizes } from "@/utils/qualities";
 
 export default function Operations() {
     const musicItem = useCurrentMusic();
@@ -42,12 +42,39 @@ export default function Operations() {
             ]}>
             <Pressable
                 style={styles.qualityButton}
-                onPress={() => {
+                onPress={async () => {
                     if (!musicItem) {
                         return;
                     }
+                    let panelMusicItem = musicItem;
+                    try {
+                        const plugin = PluginManager.getByName(
+                            musicItem.platform,
+                        );
+                        if (
+                            plugin?.methods?.getMusicInfo &&
+                            (!musicItem.qualities ||
+                                !musicItemHasQualitySizes(musicItem))
+                        ) {
+                            const additionalInfo =
+                                await plugin.methods.getMusicInfo(musicItem);
+                            if (additionalInfo) {
+                                panelMusicItem = {
+                                    ...musicItem,
+                                    ...additionalInfo,
+                                    qualities:
+                                        additionalInfo.qualities ??
+                                        musicItem.qualities,
+                                    id: musicItem.id,
+                                    platform: musicItem.platform,
+                                };
+                            }
+                        }
+                    } catch {
+                        // fall back to list item
+                    }
                     showPanel("MusicQuality", {
-                        musicItem,
+                        musicItem: panelMusicItem,
                         async onQualityPress(quality) {
                             const changeResult =
                                 await TrackPlayer.changeQuality(quality);
@@ -77,13 +104,20 @@ export default function Operations() {
                             const plugin = PluginManager.getByName(musicItem.platform);
                             let enhancedMusicItem = musicItem;
                             
-                            // 如果插件支持getMusicInfo且当前音乐没有qualities信息，则获取完整信息
-                            if (plugin?.methods?.getMusicInfo && !musicItem.qualities) {
+                            // Fetch full quality/size when missing or sizes are empty.
+                            if (
+                                plugin?.methods?.getMusicInfo &&
+                                (!musicItem.qualities ||
+                                    !musicItemHasQualitySizes(musicItem))
+                            ) {
                                 const additionalInfo = await plugin.methods.getMusicInfo(musicItem);
                                 if (additionalInfo) {
                                     enhancedMusicItem = {
                                         ...musicItem,
                                         ...additionalInfo,
+                                        qualities:
+                                            additionalInfo.qualities ??
+                                            musicItem.qualities,
                                         // 保持原有的基本信息不被覆盖
                                         id: musicItem.id,
                                         platform: musicItem.platform,
@@ -102,7 +136,7 @@ export default function Operations() {
                                     downloader.download(enhancedMusicItem, quality);
                                 },
                             });
-                        } catch (error) {
+                        } catch {
                             // 隐藏加载对话框
                             hideDialog();
                             

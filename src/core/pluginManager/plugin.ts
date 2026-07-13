@@ -133,49 +133,83 @@ const _require = (packageName: string) => {
 const nativeTextDecoder = globalThis.TextDecoder;
 const nativeTextEncoder = globalThis.TextEncoder;
 
-function bufferFromTextDecoderInput(input?: ArrayBuffer | ArrayBufferView | null) {
+/** Chinese encodings Hermes/native TextDecoder does not support. */
+const GB_ENCODINGS = new Set(["gb18030", "gbk", "gb2312", "cp936"]);
+
+function normalizeEncodingLabel(label?: string) {
+    return String(label ?? "utf-8")
+        .toLowerCase()
+        .replace(/[-_\s]/g, "");
+}
+
+function bufferFromTextDecoderInput(
+    input?: ArrayBuffer | ArrayBufferView | null,
+) {
     if (!input) {
         return Buffer.alloc(0);
     }
     if (input instanceof ArrayBuffer) {
         return Buffer.from(new Uint8Array(input));
     }
+    // TypedArray / DataView — only the relevant slice.
     return Buffer.from(input.buffer, input.byteOffset, input.byteLength);
 }
 
+/**
+ * Plugin-facing TextDecoder.
+ * Native RN/Hermes TextDecoder exists but lacks gb18030/gbk; plugins (e.g. KW
+ * lyrics) call `new TextDecoder("gb18030")` and get mojibake unless we wrap.
+ */
 class PluginTextDecoder {
     private decoder?: any;
     private encoding: string;
     private fatal: boolean;
 
     constructor(label: string = "utf-8", options?: any) {
-        this.encoding = label.toLowerCase().replace(/[-_\s]/g, "");
+        this.encoding = normalizeEncodingLabel(label);
         this.fatal = !!options?.fatal;
 
-        if (!["gb18030", "gbk", "gb2312", "cp936"].includes(this.encoding)) {
-            this.decoder = nativeTextDecoder
-                ? new nativeTextDecoder(label, options)
-                : undefined;
+        // Always route Chinese encodings through iconv-lite.
+        if (GB_ENCODINGS.has(this.encoding)) {
+            this.decoder = undefined;
+            return;
+        }
+
+        if (nativeTextDecoder) {
+            try {
+                this.decoder = new nativeTextDecoder(label, options);
+            } catch {
+                this.decoder = undefined;
+            }
         }
     }
 
-    decode(input?: ArrayBuffer | ArrayBufferView | null) {
+    decode(
+        input?: ArrayBuffer | ArrayBufferView | null,
+        _options?: { stream?: boolean },
+    ) {
         if (this.decoder) {
             return this.decoder.decode(input as any);
         }
 
         const buffer = bufferFromTextDecoderInput(input);
-        if (["gb18030", "gbk", "gb2312", "cp936"].includes(this.encoding)) {
+        if (GB_ENCODINGS.has(this.encoding)) {
             try {
+                // gbk / gb2312 / cp936 map to gb18030 in iconv-lite.
                 return iconvLite.decode(buffer, "gb18030");
             } catch (error) {
                 if (this.fatal) {
                     throw error;
                 }
+                // Non-fatal: best-effort utf8 rather than throw.
             }
         }
 
-        return buffer.toString("utf8");
+        try {
+            return buffer.toString("utf8");
+        } catch {
+            return "";
+        }
     }
 }
 
@@ -451,13 +485,22 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
             return null;
         }
         try {
-            const result = this.plugin.instance.getMusicInfo(
-                resetMediaItem(musicItem, undefined, true),
-            ) ?? null;
-            
-            if (result) {
+            // Must await: without it we normalize a Promise and drop qualities/size.
+            const result =
+                (await this.plugin.instance.getMusicInfo(
+                    resetMediaItem(musicItem, undefined, true),
+                )) ?? null;
+
+            if (result && typeof result === "object") {
                 const normalized = normalizePluginMusicItem(result);
-                return { ...result, ...normalized };
+                return {
+                    ...result,
+                    ...normalized,
+                    // Prefer normalized qualities when present; never wipe with undefined.
+                    qualities:
+                        normalized.qualities ??
+                        (result as IMusic.IMusicItem).qualities,
+                };
             }
 
             return result;
@@ -1220,7 +1263,10 @@ export class Plugin {
                     "  try { if (typeof g.env === 'undefined') g.env = __mfEnv; } catch (_e1) {}\n" +
                     "  try { if (typeof g.process === 'undefined') g.process = __mfProcess; } catch (_e2) {}\n" +
                     "  try { if (typeof g.URL === 'undefined') g.URL = __mfURL; } catch (_e3) {}\n" +
-                    "  try { if (typeof g.TextDecoder === 'undefined') g.TextDecoder = __mfTextDecoder; } catch (_e4) {}\n" +
+                    // ALWAYS inject TextDecoder: Hermes ships a native one that
+                    // does not support gb18030/gbk, so "if undefined" leaves KW
+                    // lyrics broken (mojibake). Our wrapper uses iconv-lite.
+                    "  try { g.TextDecoder = __mfTextDecoder; } catch (_e4) {}\n" +
                     "  try { if (typeof g.TextEncoder === 'undefined') g.TextEncoder = __mfTextEncoder; } catch (_e5) {}\n" +
                     "  try { if (typeof g.console === 'undefined') g.console = __mfConsole; } catch (_e6) {}\n" +
                     "}\n" +

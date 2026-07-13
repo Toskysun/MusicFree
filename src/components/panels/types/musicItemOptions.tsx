@@ -6,7 +6,7 @@ import ThemeText from "@/components/base/themeText";
 import { ImgAsset } from "@/constants/assetsConst";
 import Clipboard from "@react-native-clipboard/clipboard";
 
-import { getMediaUniqueKey, getPlatformMediaId, isSameMediaItem } from "@/utils/mediaUtils";
+import { getPlatformMediaId, isSameMediaItem } from "@/utils/mediaUtils";
 import FastImage from "@/components/base/fastImage";
 import Toast from "@/utils/toast";
 import { devLog } from "@/utils/log";
@@ -32,6 +32,7 @@ import { getMediaExtraProperty } from "@/utils/mediaExtra";
 import lyricManager from "@/core/lyricManager";
 import { useI18N } from "@/core/i18n";
 import pluginManager from "@/core/pluginManager";
+import { musicItemHasQualitySizes } from "@/utils/qualities";
 
 interface IMusicItemOptionsProps {
     /** 歌曲信息 */
@@ -60,7 +61,7 @@ const getAlbumIds = (musicItem: IMusic.IMusicItem) => {
         devLog("warn", "[专辑ID] 未找到专辑ID字段", {
             platform: musicItem.platform,
             album: musicItem.album,
-            keys: Object.keys(item).filter(k => k.toLowerCase().includes('album'))
+            keys: Object.keys(item).filter(k => k.toLowerCase().includes("album")),
         });
     }
 
@@ -230,13 +231,18 @@ export default function MusicItemOptions(props: IMusicItemOptionsProps) {
                     const plugin = pluginManager.getByName(musicItem.platform);
                     let enhancedMusicItem = musicItem;
                     
-                    // 如果插件支持getMusicInfo且当前音乐没有qualities信息，则获取完整信息
-                    if (plugin?.methods?.getMusicInfo && !musicItem.qualities) {
+                    // Fetch full quality/size when missing or sizes are empty.
+                    if (
+                        plugin?.methods?.getMusicInfo &&
+                        (!musicItem.qualities || !musicItemHasQualitySizes(musicItem))
+                    ) {
                         const additionalInfo = await plugin.methods.getMusicInfo(musicItem);
                         if (additionalInfo) {
                             enhancedMusicItem = {
                                 ...musicItem,
                                 ...additionalInfo,
+                                qualities:
+                                    additionalInfo.qualities ?? musicItem.qualities,
                                 // 保持原有的基本信息不被覆盖
                                 id: musicItem.id,
                                 platform: musicItem.platform,
@@ -255,7 +261,7 @@ export default function MusicItemOptions(props: IMusicItemOptionsProps) {
                             downloader.download(enhancedMusicItem, quality);
                         },
                     });
-                } catch (error) {
+                } catch {
                     // 隐藏加载对话框
                     hideDialog();
                     

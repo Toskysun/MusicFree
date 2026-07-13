@@ -66,7 +66,7 @@ export function convertLegacyQuality(legacyQuality: string): IMusic.IQualityKey 
  * 标准化插件返回的音质信息，将原版音质键值转换为新版
  */
 export function normalizePluginQualities(qualities?: any): IMusic.IQuality | undefined {
-    if (!qualities || typeof qualities !== "object") {
+    if (!qualities || typeof qualities !== "object" || Array.isArray(qualities)) {
         return undefined;
     }
 
@@ -74,12 +74,27 @@ export function normalizePluginQualities(qualities?: any): IMusic.IQuality | und
 
     for (const [key, value] of Object.entries(qualities)) {
         const newKey = convertLegacyQuality(key);
-        if (value && typeof value === "object") {
+        if (value == null) {
+            continue;
+        }
+        // Common plugin shapes:
+        //   { "320k": { size: 123 } }
+        //   { "320k": { size: "3.2MB" } }
+        //   { "320k": true } / {}  → quality exists, size unknown
+        //   { "320k": 1234567 }    → size in bytes
+        //   { "320k": "3.2MB" }    → size as display string
+        if (typeof value === "object" && !Array.isArray(value)) {
             normalized[newKey] = value as any;
+        } else if (typeof value === "number" || typeof value === "string") {
+            normalized[newKey] = { size: value };
+        } else if (value === true) {
+            normalized[newKey] = {};
         }
     }
 
-    return Object.keys(normalized).length > 0 ? normalized as IMusic.IQuality : undefined;
+    return Object.keys(normalized).length > 0
+        ? (normalized as IMusic.IQuality)
+        : undefined;
 }
 
 // 音质尝试顺序（保留作为静态后备）
@@ -405,20 +420,55 @@ export function getAvailableQualities(
 /**
  * 获取音质文件大小 - 支持多源获取
  */
+/** Whether any quality entry already carries a usable size. */
+export function musicItemHasQualitySizes(musicItem?: IMusic.IMusicItem | null): boolean {
+    if (!musicItem?.qualities || typeof musicItem.qualities !== "object") {
+        return false;
+    }
+    return Object.values(musicItem.qualities).some(entry => {
+        if (!entry || typeof entry !== "object") {
+            return false;
+        }
+        const size = (entry as { size?: unknown }).size;
+        if (typeof size === "number" && Number.isFinite(size) && size > 0) {
+            return true;
+        }
+        if (typeof size === "string" && size.trim() && size.toUpperCase() !== "N/A") {
+            return true;
+        }
+        return false;
+    });
+}
+
 export function getQualitySize(
-    musicItem: IMusic.IMusicItem, 
-    quality: IMusic.IQualityKey
+    musicItem: IMusic.IMusicItem,
+    quality: IMusic.IQualityKey,
 ): string | number | undefined {
-    // 优先从qualities获取
-    if (musicItem.qualities?.[quality]?.size) {
-        return musicItem.qualities[quality]!.size;
+    const pick = (size: unknown): string | number | undefined => {
+        if (typeof size === "number" && Number.isFinite(size) && size > 0) {
+            return size;
+        }
+        if (typeof size === "string") {
+            const trimmed = size.trim();
+            if (trimmed && trimmed.toUpperCase() !== "N/A") {
+                return trimmed;
+            }
+        }
+        return undefined;
+    };
+
+    // 优先从 qualities 获取
+    const fromQualities = pick(musicItem.qualities?.[quality]?.size);
+    if (fromQualities !== undefined) {
+        return fromQualities;
     }
-    
-    // 其次从source获取
-    if (musicItem.source?.[quality]?.size) {
-        return musicItem.source[quality]!.size;
+
+    // 其次从 source 获取
+    const fromSource = pick(musicItem.source?.[quality]?.size);
+    if (fromSource !== undefined) {
+        return fromSource;
     }
-    
+
     return undefined;
 }
 
@@ -487,10 +537,17 @@ export function normalizePluginMusicItem<T extends Partial<IMusic.IMusicItem>>(
     rawMusicItem: T,
     pluginQualityMapping?: Record<string, IMusic.IQualityKey>
 ): T & { qualities?: IMusic.IQuality } {
-    const normalizedQualities = normalizePluginQualityInfo(rawMusicItem, pluginQualityMapping);
-    
-    return {
-        ...rawMusicItem,
-        qualities: normalizedQualities,
-    };
+    const normalizedQualities = normalizePluginQualityInfo(
+        rawMusicItem,
+        pluginQualityMapping,
+    );
+
+    // Do not assign qualities: undefined — that wipes plugin-provided sizes.
+    if (normalizedQualities) {
+        return {
+            ...rawMusicItem,
+            qualities: normalizedQualities,
+        };
+    }
+    return { ...rawMusicItem };
 }
