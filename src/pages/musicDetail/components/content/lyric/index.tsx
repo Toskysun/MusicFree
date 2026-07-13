@@ -140,6 +140,12 @@ class LayoutCache {
 
 interface IProps {
     onTurnPageClick?: () => void;
+    /**
+     * Whether the lyric page is the active (visible) tab.
+     * When false, list may still mount off-screen; when it becomes true we
+     * re-center so the user never lands at the top until the next line.
+     */
+    isActive?: boolean;
 }
 
 const fontSizeMap = {
@@ -150,7 +156,7 @@ const fontSizeMap = {
 } as Record<number, number>;
 
 export default function Lyric(props: IProps) {
-    const { onTurnPageClick } = props;
+    const { onTurnPageClick, isActive = true } = props;
     const orientation = useOrientation();
     const isHorizontal = orientation === "horizontal";
 
@@ -196,6 +202,8 @@ export default function Lyric(props: IProps) {
     // --- Scroll state machine ---
     const scrollPhaseRef = useRef<ScrollPhase>(ScrollPhase.WaitingForContent);
     const lastScrollIndexRef = useRef(-1);
+    const wasActiveRef = useRef(isActive);
+    const recenterTimersRef = useRef<Array<ReturnType<typeof setTimeout>>>([]);
 
     // Layout cache (prefix-sum based)
     const layoutCacheRef = useRef(new LayoutCache(lyrics.length));
@@ -203,17 +211,96 @@ export default function Lyric(props: IProps) {
     // Track if list is ready to show (positioned correctly)
     const [isListReady, setIsListReady] = useState(false);
 
-    /** Scroll list to a given lyric index */
+    const clearRecenterTimers = useCallback(() => {
+        recenterTimersRef.current.forEach(clearTimeout);
+        recenterTimersRef.current = [];
+    }, []);
+
+    /** Scroll list to a given lyric index (center in viewport). */
     const scrollToIndex = useCallback((index: number, animated: boolean) => {
-        if (!listRef.current) return;
+        if (!listRef.current || lyrics.length === 0) {
+            return false;
+        }
         const safeIndex = Math.max(0, Math.min(index, lyrics.length - 1));
-        listRef.current.scrollToIndex({
-            index: safeIndex,
-            viewPosition: 0.5,
-            animated,
-        });
-        lastScrollIndexRef.current = safeIndex;
+        try {
+            listRef.current.scrollToIndex({
+                index: safeIndex,
+                viewPosition: 0.5,
+                animated,
+            });
+            lastScrollIndexRef.current = safeIndex;
+            return true;
+        } catch {
+            // FlatList not ready / index not measured yet
+            return false;
+        }
     }, [lyrics.length]);
+
+    /** Jump to the currently playing lyric line (uses manager, not just React state). */
+    const jumpToCurrentLine = useCallback((animated: boolean) => {
+        if (!listRef.current || lyrics.length === 0) {
+            return false;
+        }
+        const idx =
+            lyricManager.currentLyricItem?.index ??
+            currentLrcItem?.index ??
+            0;
+        const safeIndex = Math.max(0, Math.min(idx, lyrics.length - 1));
+        return scrollToIndex(safeIndex, animated);
+    }, [currentLrcItem?.index, lyrics.length, scrollToIndex]);
+
+    /**
+     * Multi-pass re-center: FlatList often reports content ready before real
+     * item heights (multi-line / translation) are measured. One immediate jump
+     * + short delayed corrections lands on the right line without waiting for
+     * the next lyric tick.
+     */
+    const scheduleRecenter = useCallback((options?: {
+        animated?: boolean;
+        markReady?: boolean;
+        reason?: string;
+    }) => {
+        const animated = options?.animated ?? false;
+        const markReady = options?.markReady ?? true;
+
+        clearRecenterTimers();
+
+        const run = (pass: number) => {
+            if (scrollPhaseRef.current === ScrollPhase.UserDragging) {
+                return;
+            }
+            if (!listRef.current || lyrics.length === 0) {
+                return;
+            }
+            scrollPhaseRef.current = ScrollPhase.InitialPositioning;
+            // Force scroll even if last index matches (position may be wrong).
+            lastScrollIndexRef.current = -1;
+            const ok = jumpToCurrentLine(pass === 0 ? animated : false);
+            if (ok || pass > 0) {
+                scrollPhaseRef.current = ScrollPhase.Tracking;
+                if (markReady) {
+                    setIsListReady(true);
+                }
+            }
+            if (__DEV__ && options?.reason) {
+                devLog("log", "[Lyric] recenter", {
+                    reason: options.reason,
+                    pass,
+                    ok,
+                    index: lyricManager.currentLyricItem?.index,
+                });
+            }
+        };
+
+        // Immediate + rAF + delayed passes for height stabilization.
+        run(0);
+        requestAnimationFrame(() => run(1));
+        recenterTimersRef.current.push(
+            setTimeout(() => run(2), 48),
+            setTimeout(() => run(3), 160),
+            setTimeout(() => run(4), 320),
+        );
+    }, [clearRecenterTimers, jumpToCurrentLine, lyrics.length]);
 
     const layoutAffectingKey = useMemo(() => [
         fontSizeKey,
@@ -237,18 +324,58 @@ export default function Lyric(props: IProps) {
         scrollPhaseRef.current = ScrollPhase.WaitingForContent;
         lastScrollIndexRef.current = -1;
         setIsListReady(false);
-    }, [lyrics]);
+        clearRecenterTimers();
+    }, [clearRecenterTimers, lyrics]);
 
     // Reset when song changes
     useEffect(() => {
         scrollPhaseRef.current = ScrollPhase.WaitingForContent;
         lastScrollIndexRef.current = -1;
-    }, [currentMusicItem?.id]);
+        setIsListReady(false);
+        clearRecenterTimers();
+    }, [clearRecenterTimers, currentMusicItem?.id]);
 
-    // Approximate initial offset to prevent visible scroll-from-top flash
+    useEffect(() => () => clearRecenterTimers(), [clearRecenterTimers]);
+
+    // When user opens the lyric tab, re-center immediately (list often sat at top
+    // after mounting off-screen, and Tracking waits for the *next* line change).
+    useEffect(() => {
+        const becameActive = isActive && !wasActiveRef.current;
+        wasActiveRef.current = isActive;
+        if (!isActive || lyrics.length === 0 || loading) {
+            return;
+        }
+        if (becameActive || !isListReady) {
+            scheduleRecenter({
+                animated: false,
+                markReady: true,
+                reason: becameActive ? "tab-active" : "first-ready",
+            });
+        }
+    }, [isActive, isListReady, loading, lyrics.length, scheduleRecenter]);
+
+    // Layout-affecting toggles (font / translation / order) — re-center quietly.
+    useEffect(() => {
+        if (!isActive || !isListReady || lyrics.length === 0) {
+            return;
+        }
+        scheduleRecenter({
+            animated: false,
+            markReady: true,
+            reason: "layout-key",
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- only when layout key changes
+    }, [layoutAffectingKey]);
+
+    // Approximate initial offset (header ~70% of viewport is unknown; use
+    // conservative item estimate so first paint is closer than y=0).
     const initialContentOffset = useMemo(() => {
         const targetIndex = lyricManager.currentLyricItem?.index ?? 0;
-        if (targetIndex <= 0 || !lyrics.length) return undefined;
+        if (targetIndex <= 0 || !lyrics.length) {
+            return undefined;
+        }
+        // Header is large (paddingTop 70%); without real height, keep a modest
+        // offset — scheduleRecenter will correct after layout.
         return { x: 0, y: Math.max(0, targetIndex * ITEM_HEIGHT) };
     }, [lyrics]);
 
@@ -280,54 +407,60 @@ export default function Lyric(props: IProps) {
 
     /** Called by LyricOperations to re-center on current line */
     const scrollToCurrentLrcItem = useCallback(() => {
-        if (!listRef.current || !layout?.height) return;
-        const idx = lyricManager.currentLyricItem?.index ?? 0;
-        const safeIndex = Math.max(0, Math.min(idx, lyrics.length - 1));
-        lastScrollIndexRef.current = -1;
-        scrollToIndex(safeIndex, true);
+        if (!listRef.current) return;
+        scheduleRecenter({
+            animated: true,
+            markReady: true,
+            reason: "user-ops",
+        });
         scrollPhaseRef.current = ScrollPhase.Tracking;
-    }, [layout?.height, lyrics.length, scrollToIndex]);
+    }, [scheduleRecenter]);
 
     // Handle content ready — initial positioning without animation
     const onContentSizeChange = useCallback(() => {
-        if (scrollPhaseRef.current !== ScrollPhase.WaitingForContent || !listRef.current) {
+        if (
+            scrollPhaseRef.current !== ScrollPhase.WaitingForContent ||
+            !listRef.current
+        ) {
             return;
         }
-        scrollPhaseRef.current = ScrollPhase.InitialPositioning;
-
-        const targetIndex = lyricManager.currentLyricItem?.index ?? -1;
-        if (targetIndex > 0 && targetIndex < lyrics.length) {
-            scrollToIndex(targetIndex, false);
-        }
-
-        // Defer ready flag so we don't setState inside FlatList layout pass.
-        requestAnimationFrame(() => {
-            setIsListReady(true);
-            scrollPhaseRef.current = ScrollPhase.Tracking;
+        scheduleRecenter({
+            animated: false,
+            markReady: true,
+            reason: "content-size",
         });
-    }, [lyrics.length, scrollToIndex]);
+    }, [scheduleRecenter]);
 
     // Main scroll effect — triggers when current lyric line changes
     useEffect(() => {
-        // Only scroll in Tracking phase
+        // Only auto-follow in Tracking phase (not while user drags / first jump).
         if (scrollPhaseRef.current !== ScrollPhase.Tracking) return;
-
-        // Skip if no lyrics, or paused, or all-zero timestamps
+        // While lyric tab is hidden, still keep scroll index updated so the next
+        // reveal is close; skip animated follow to save work.
         if (
             lyrics.length === 0 ||
             draggingIndex !== undefined ||
-            musicIsPaused(musicState) ||
             lyrics[lyrics.length - 1].time < 1
         ) {
             return;
         }
 
+        // When paused: still allow one-shot center if we have never scrolled
+        // to this line (opening lyric page while paused).
         const targetIndex = currentLrcItem?.index ?? -1;
-        if (targetIndex === lastScrollIndexRef.current) return;
-        scrollToIndex(targetIndex === -1 ? 0 : targetIndex, true);
+        const safeTarget = targetIndex === -1 ? 0 : targetIndex;
+        if (safeTarget === lastScrollIndexRef.current) return;
+
+        if (musicIsPaused(musicState) && lastScrollIndexRef.current !== -1) {
+            // Paused mid-song after already centered — don't keep chasing.
+            return;
+        }
+
+        scrollToIndex(safeTarget, isActive);
     }, [
         currentLrcItem?.index,
         draggingIndex,
+        isActive,
         lyrics.length,
         musicState,
         scrollToIndex,
@@ -428,10 +561,23 @@ export default function Lyric(props: IProps) {
                                 itemVisiblePercentThreshold: 100,
                             }}
                             onScrollToIndexFailed={({ index }) => {
-                                requestAnimationFrame(() => {
-                                    scrollToIndex(index, false);
-                                    setIsListReady(true);
-                                });
+                                // Measure/virtualization not ready — retry with backoff.
+                                const retry = (attempt: number) => {
+                                    requestAnimationFrame(() => {
+                                        const ok = scrollToIndex(index, false);
+                                        if (!ok && attempt < 4) {
+                                            setTimeout(
+                                                () => retry(attempt + 1),
+                                                40 * (attempt + 1),
+                                            );
+                                            return;
+                                        }
+                                        setIsListReady(true);
+                                        scrollPhaseRef.current =
+                                            ScrollPhase.Tracking;
+                                    });
+                                };
+                                retry(0);
                             }}
                             fadingEdgeLength={isHorizontal ? 80 : 120}
                             // Initial position without animation
@@ -443,9 +589,9 @@ export default function Lyric(props: IProps) {
                             updateCellsBatchingPeriod={50}
                             removeClippedSubviews={false}
                             getItemLayout={getItemLayout}
-                            maintainVisibleContentPosition={{
-                                minIndexForVisible: 0,
-                            }}
+                            // Do NOT use maintainVisibleContentPosition — it fights
+                            // intentional center-on-current-line jumps when headers
+                            // / multi-line heights settle, often yanking to the top.
                             ListHeaderComponent={
                                 <>
                                     {blankComponent}

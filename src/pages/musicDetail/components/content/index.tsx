@@ -51,12 +51,15 @@ export default function Content(props: IContentProps) {
                     />
                 </View>
             ) : null}
-            {/* Keep Lyric mounted to preserve scroll position, use display to hide */}
+            {/* Keep Lyric mounted to preserve state; re-center when tab becomes active. */}
             <View style={[
                 globalStyle.fwflex1,
                 !showLyric && styles.hidden,
             ]}>
-                <Lyric onTurnPageClick={onTurnPageClick} />
+                <Lyric
+                    onTurnPageClick={onTurnPageClick}
+                    isActive={showLyric}
+                />
             </View>
         </View>
     );
