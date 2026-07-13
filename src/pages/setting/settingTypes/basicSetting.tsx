@@ -1,4 +1,3 @@
-import ColorBlock from "@/components/base/colorBlock";
 import ListItem from "@/components/base/listItem";
 import Paragraph from "@/components/base/paragraph";
 import ThemeSwitch from "@/components/base/switch";
@@ -11,7 +10,7 @@ import Config, { useAppConfig } from "@/core/appConfig";
 import { useI18N } from "@/core/i18n";
 import { ROUTE_PATH, useNavigate } from "@/core/router";
 import useColors from "@/hooks/useColors";
-import LyricUtil, { NativeTextAlignment, LYRIC_COLOR_PRESETS } from "@/native/lyricUtil";
+import LyricUtil, { LYRIC_COLOR_PRESETS } from "@/native/lyricUtil";
 import { resolveLyricPresets } from "@/utils/lyricPreset";
 import { AppConfigPropertyKey } from "@/types/core/config";
 import { clearCache, getCacheSize, sizeFormatter } from "@/utils/fileUtils";
@@ -302,7 +301,7 @@ export default function BasicSetting() {
                 createSwitch(
                     t("basicSettings.lazyLoadPlugin"),
                     "basic.lazyLoadPlugin",
-                    lazyLoadPlugin ?? false,
+                    lazyLoadPlugin ?? true,
                 ),
             ],
         },
@@ -430,7 +429,7 @@ export default function BasicSetting() {
                                                         onAction: handlePathSelection,
                                                     });
                                                 }, 100);
-                                            }
+                                            },
                                         });
                                         return false;
                                     } else {
@@ -931,7 +930,7 @@ function LyricSetting() {
 
     const getPresetColor = (idx: number) => {
         const custom = customPresets?.[idx];
-        return custom ? custom.sungColor : LYRIC_COLOR_PRESETS[idx]?.sungColor ?? '#FFFFFF';
+        return custom ? custom.sungColor : LYRIC_COLOR_PRESETS[idx]?.sungColor ?? "#FFFFFF";
     };
 
     const openStatusBarLyric = createSwitch(
@@ -1098,7 +1097,7 @@ function LyricSetting() {
                         Config.setConfig("lyric.desktopSecondaryFontRatio", val);
                     }}
                     minimumTrackTintColor={colors.textHighlight}
-                    maximumTrackTintColor={colors.textSecondary + '40'}
+                    maximumTrackTintColor={colors.textSecondary + "40"}
                     thumbTintColor={colors.textHighlight}
                 />
             </View>
@@ -1121,7 +1120,7 @@ function LyricSetting() {
                         Config.setConfig("lyric.desktopSecondaryAlphaRatio", val);
                     }}
                     minimumTrackTintColor={colors.textHighlight}
-                    maximumTrackTintColor={colors.textSecondary + '40'}
+                    maximumTrackTintColor={colors.textSecondary + "40"}
                     thumbTintColor={colors.textHighlight}
                 />
             </View>
@@ -1150,7 +1149,7 @@ function LyricSetting() {
                         Config.setConfig("lyric.topPercent", val);
                     }}
                     minimumTrackTintColor={colors.textHighlight}
-                    maximumTrackTintColor={colors.textSecondary + '40'}
+                    maximumTrackTintColor={colors.textSecondary + "40"}
                     thumbTintColor={colors.textHighlight}
                 />
             </View>
@@ -1173,7 +1172,7 @@ function LyricSetting() {
                         Config.setConfig("lyric.widthPercent", val);
                     }}
                     minimumTrackTintColor={colors.textHighlight}
-                    maximumTrackTintColor={colors.textSecondary + '40'}
+                    maximumTrackTintColor={colors.textSecondary + "40"}
                     thumbTintColor={colors.textHighlight}
                 />
             </View>

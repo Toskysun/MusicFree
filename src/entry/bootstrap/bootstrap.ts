@@ -135,7 +135,14 @@ async function bootstrapImpl() {
     }
     logger.mark("协议检查完成");
 
-    // 加载插件
+    // Theme + i18n before heavy media work so first paint tokens are ready.
+    Theme.setup();
+    logger.mark("主题初始化完成");
+    i18n.setup();
+    await appendStartupBreadcrumb("i18n-ready");
+    logger.mark("语言模块初始化完成");
+
+    // 加载插件（默认懒加载：有缓存时不编译沙箱，启动显著更快）
     await PluginManager.setup();
     await appendStartupBreadcrumb("plugins-ready");
     logger.mark("插件初始化完成");
@@ -161,13 +168,56 @@ async function bootstrapImpl() {
         }
     }
 
-    await LocalMusicSheet.setup();
-    trace("本地音乐初始化完成");
-    logger.mark("本地音乐初始化完成");
+    // Non-critical work must NOT block splash hide:
+    // local scan, download notifications, plugin auto-update, announcements.
+    void schedulePostBootstrapWork(logger).catch((error: any) => {
+        void appendStartupBreadcrumb("post-bootstrap-error", {
+            message: error?.message,
+            name: error?.name,
+        });
+        errorLog("post-bootstrap work failed", error);
+    });
+    await appendStartupBreadcrumb("post-bootstrap-scheduled");
 
-    Theme.setup();
-    trace("主题初始化完成");
-    logger.mark("主题初始化完成");
+    await appendStartupBreadcrumb("bootstrap-impl-finished");
+}
+
+/**
+ * Work that used to block cold start (local file validation, network wait for
+ * announcements, download channel setup). Runs after critical path so splash
+ * can hide ASAP.
+ */
+async function schedulePostBootstrapWork(logger: IPerfLogger) {
+    // Yield once so bootstrap Done / SplashScreen.hide can run first.
+    await new Promise<void>(resolve => setTimeout(resolve, 0));
+
+    try {
+        await LocalMusicSheet.setup();
+        trace("本地音乐初始化完成");
+        logger.mark("本地音乐初始化完成");
+        await appendStartupBreadcrumb("local-music-ready");
+    } catch (error: any) {
+        await appendStartupBreadcrumb("local-music-error", {
+            message: error?.message,
+            name: error?.name,
+        });
+        errorLog("local music setup failed", error);
+    }
+
+    try {
+        await downloadNotificationManager.initialize();
+        await appendStartupBreadcrumb("download-notification-ready");
+        logger.mark("下载通知管理器初始化完成");
+    } catch (error: any) {
+        await appendStartupBreadcrumb("download-notification-error", {
+            message: error?.message,
+            name: error?.name,
+        });
+        errorLog(
+            "Failed to initialize download notification manager",
+            error,
+        );
+    }
 
     void extraMakeup().catch((error: any) => {
         void appendStartupBreadcrumb("extra-makeup-error", {
@@ -176,114 +226,97 @@ async function bootstrapImpl() {
         });
         errorLog("extra makeup failed", error);
     });
-    await appendStartupBreadcrumb("extra-makeup-triggered");
 
-    i18n.setup();
-    await appendStartupBreadcrumb("i18n-ready");
-    logger.mark("语言模块初始化完成");
-    
-    // 初始化下载通知管理器
-    devLog("info", "📲[Bootstrap] 开始初始化下载通知管理器");
-    try {
-        await downloadNotificationManager.initialize();
-        await appendStartupBreadcrumb("download-notification-ready");
-        devLog("info", "✅[Bootstrap] 下载通知管理器初始化成功");
-    } catch (error: any) {
-        await appendStartupBreadcrumb("download-notification-error", {
-            message: error?.message,
-            name: error?.name,
-        });
-        devLog("error", "❌[Bootstrap] 下载通知管理器初始化失败", error);
-        errorLog("Failed to initialize download notification manager during bootstrap", error);
-    }
-    logger.mark("下载通知管理器初始化完成");
-
-    // 检查公告（等待网络连通后再进行首次检查；Android / iOS 统一逻辑）
-    devLog("info", "📢[Bootstrap] 开始检查在线公告", { platform: Platform.OS });
-    try {
-        // 等待网络连通，最多等待 7 秒，避免首次安装/冷启动网络尚未就绪
-        await (async function waitForConnectivity(timeoutMs = 7000) {
-            try {
-                const first = await NetInfo.fetch();
-                if (first.isConnected && (first.isInternetReachable ?? true)) {
-                    return;
-                }
-            } catch {}
-            await new Promise<void>(resolve => {
-                let resolved = false;
-                const timer = setTimeout(() => {
-                    if (!resolved) {
-                        resolved = true;
-                        unsubscribe?.();
-                        devLog("info", "⌛[Bootstrap] 等待网络超时，继续尝试公告检查");
-                        resolve();
-                    }
-                }, timeoutMs);
-                const unsubscribe = NetInfo.addEventListener(state => {
-                    if (!resolved && state.isConnected && (state.isInternetReachable ?? true)) {
-                        resolved = true;
-                        clearTimeout(timer);
-                        unsubscribe?.();
-                        devLog("info", "🌐[Bootstrap] 网络已连通，开始公告检查");
-                        resolve();
-                    }
-                });
-            });
-        })();
-
-        // 封装一个“安全显示公告”的方法：若有权限对话框等正在显示，则等待其关闭
-        const showAnnouncementSafely = (announcement: IAnnouncement.IAnnouncementItem) => {
-            const tryShow = () => {
-                const current = getCurrentDialog();
-                if (!current?.name) {
-                    showDialog("AnnouncementDialog", { announcement });
-                    return true;
-                }
-                return false;
-            };
-
-            if (tryShow()) return;
-            let attempts = 0;
-            const maxAttempts = 40; // 最长等待 ~20s (500ms * 40)
-            const timer = setInterval(() => {
-                attempts += 1;
-                if (tryShow() || attempts >= maxAttempts) {
-                    clearInterval(timer);
-                }
-            }, 500);
-        };
-
-        const announcement = await announcementService.checkAnnouncements();
-        if (announcement) {
-            // 延迟显示公告，等待界面完全加载
-            setTimeout(() => {
-                showAnnouncementSafely(announcement);
-            }, 1500);
-        } else {
-            // 首次检查未命中时，延迟进行一次强制重试（网络未就绪等场景）
-            setTimeout(async () => {
-                try {
-                    const retryAnnouncement = await announcementService.checkAnnouncements(true);
-                    if (retryAnnouncement) {
-                        showAnnouncementSafely(retryAnnouncement);
-                        devLog("info", "✅[Bootstrap] 二次公告检查命中");
-                    } else {
-                        devLog("info", "ℹ️[Bootstrap] 二次公告检查无可显示内容");
-                    }
-                } catch (e) {
-                    devLog("warn", "⚠️[Bootstrap] 二次公告检查失败", e);
-                }
-            }, 8000);
-        }
-        devLog("info", "✅[Bootstrap] 公告检查完成");
-    } catch (error) {
+    // Announcements: do not wait up to 7s for network on the critical path.
+    void checkAnnouncementsInBackground().catch((error: any) => {
         devLog("warn", "⚠️[Bootstrap] 公告检查失败", error);
-    }
-    logger.mark("公告检查完成");
-    
-    await appendStartupBreadcrumb("bootstrap-impl-finished");
+    });
+}
 
-    registerEarlyGlobalErrorHandlers();
+function showAnnouncementSafely(
+    announcement: IAnnouncement.IAnnouncementItem,
+) {
+    const tryShow = () => {
+        const current = getCurrentDialog();
+        if (!current?.name) {
+            showDialog("AnnouncementDialog", { announcement });
+            return true;
+        }
+        return false;
+    };
+
+    if (tryShow()) {
+        return;
+    }
+    let attempts = 0;
+    const maxAttempts = 40; // ~20s
+    const timer = setInterval(() => {
+        attempts += 1;
+        if (tryShow() || attempts >= maxAttempts) {
+            clearInterval(timer);
+        }
+    }, 500);
+}
+
+async function waitForConnectivity(timeoutMs = 5000) {
+    try {
+        const first = await NetInfo.fetch();
+        if (first.isConnected && (first.isInternetReachable ?? true)) {
+            return;
+        }
+    } catch {
+        // ignore
+    }
+    await new Promise<void>(resolve => {
+        let resolved = false;
+        let unsubscribe: (() => void) | undefined;
+        const timer = setTimeout(() => {
+            if (!resolved) {
+                resolved = true;
+                unsubscribe?.();
+                resolve();
+            }
+        }, timeoutMs);
+        unsubscribe = NetInfo.addEventListener(state => {
+            if (
+                !resolved &&
+                state.isConnected &&
+                (state.isInternetReachable ?? true)
+            ) {
+                resolved = true;
+                clearTimeout(timer);
+                unsubscribe?.();
+                resolve();
+            }
+        });
+    });
+}
+
+async function checkAnnouncementsInBackground() {
+    devLog("info", "📢[Bootstrap] 后台检查在线公告", {
+        platform: Platform.OS,
+    });
+    await waitForConnectivity(5000);
+    const announcement = await announcementService.checkAnnouncements();
+    if (announcement) {
+        setTimeout(() => {
+            showAnnouncementSafely(announcement);
+        }, 1500);
+    } else {
+        setTimeout(async () => {
+            try {
+                const retryAnnouncement =
+                    await announcementService.checkAnnouncements(true);
+                if (retryAnnouncement) {
+                    showAnnouncementSafely(retryAnnouncement);
+                    devLog("info", "✅[Bootstrap] 二次公告检查命中");
+                }
+            } catch (e) {
+                devLog("warn", "⚠️[Bootstrap] 二次公告检查失败", e);
+            }
+        }, 8000);
+    }
+    devLog("info", "✅[Bootstrap] 公告检查完成");
 }
 
 /** 初始化 */

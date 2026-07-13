@@ -216,6 +216,15 @@ class AppConfig implements IAppConfig {
             configStore.set("$schema", "4");
         }
 
+        if (schemaVersion < 5) {
+            // Plugin lazy loading default ON for faster cold start.
+            // Only set when unset so users who explicitly disabled it keep false.
+            if (this.getConfig("basic.lazyLoadPlugin") === undefined) {
+                this.setConfig("basic.lazyLoadPlugin", true);
+            }
+            configStore.set("$schema", "5");
+        }
+
     }
 
     async setup(): Promise<void> {

@@ -19,7 +19,7 @@ import { nanoid } from "@/utils/nanoid";
 import { useEffect, useState } from "react";
 import { ToastAndroid } from "react-native";
 import { copyFile, readDir, readFile, unlink, writeFile } from "react-native-fs";
-import { devLog, errorLog, trace } from "../../utils/log";
+import { errorLog } from "../../utils/log";
 import pluginMeta from "./meta";
 import { localFilePlugin, Plugin, PluginState } from "./plugin";
 import i18n from "../i18n";
@@ -101,6 +101,11 @@ class PluginManager implements IPluginManager, IInjectable {
         }
     }
 
+    /** Lazy-load plugins by default (faster cold start). */
+    private isLazyLoadPluginEnabled(): boolean {
+        return this.appConfigService.getConfig("basic.lazyLoadPlugin") ?? true;
+    }
+
     /**
      * 初始化插件管理器，从文件系统加载所有插件
      * 读取插件目录中的所有.js文件并创建插件实例
@@ -109,85 +114,111 @@ class PluginManager implements IPluginManager, IInjectable {
     async setup() {
         try {
             await pluginMeta.migratePluginMeta();
-            // 加载插件
             const pluginsFileItems = await readDir(pathConst.pluginPath);
+            const jsFiles = pluginsFileItems.filter(
+                item =>
+                    item.isFile() &&
+                    (item.name?.endsWith?.(".js") ||
+                        item.path?.endsWith?.(".js")),
+            );
+
+            const lazyEnabled = this.isLazyLoadPluginEnabled();
             const allPlugins: Array<Plugin> = [];
+            let fullMountCount = 0;
 
+            // Phase 1: build stubs (lazy) or read code. I/O for uncached plugins
+            // can run in parallel; Hermes Function compile stays sequential below.
+            type LoadPlan =
+                | { kind: "lazy"; path: string; lazyProps: any }
+                | { kind: "full"; path: string; code: string }
+                | { kind: "skip" };
 
-            for (let i = 0; i < pluginsFileItems.length; ++i) {
-                const pluginFileItem = pluginsFileItems[i];
-                trace("初始化插件", pluginFileItem);
-                if (
-                    pluginFileItem.isFile() &&
-                    (pluginFileItem.name?.endsWith?.(".js") ||
-                        pluginFileItem.path?.endsWith?.(".js"))
-                ) {
-                    // 如果存在缓存信息
-                    let plugin: Plugin;
-                    let isLazyLoad = false;
+            const plans = await Promise.all(
+                jsFiles.map(async (pluginFileItem): Promise<LoadPlan> => {
                     try {
                         if (
-                            this.appConfigService.getConfig(
-                                "basic.lazyLoadPlugin",
-                            ) &&
+                            lazyEnabled &&
                             pluginCacheStore.contains(pluginFileItem.path)
                         ) {
-                            isLazyLoad = true;
-                            const lazyProps = safeParse(pluginCacheStore.getString(pluginFileItem.path));
-                            lazyProps.loadFuncCode = async () =>
-                                await readFile(pluginFileItem.path, "utf8");
-                            plugin = new Plugin(
-                                null,
-                                pluginFileItem.path,
-                                lazyProps,
+                            const lazyProps = safeParse(
+                                pluginCacheStore.getString(pluginFileItem.path),
                             );
-                        } else {
-                            const funcCode = await readFile(
-                                pluginFileItem.path,
-                                "utf8",
-                            );
-                            plugin = new Plugin(funcCode, pluginFileItem.path);
+                            if (lazyProps?.name && lazyProps?.hash) {
+                                lazyProps.loadFuncCode = async () =>
+                                    await readFile(pluginFileItem.path, "utf8");
+                                lazyProps.path = pluginFileItem.path;
+                                return {
+                                    kind: "lazy",
+                                    path: pluginFileItem.path,
+                                    lazyProps,
+                                };
+                            }
                         }
+                        const code = await readFile(
+                            pluginFileItem.path,
+                            "utf8",
+                        );
+                        return {
+                            kind: "full",
+                            path: pluginFileItem.path,
+                            code,
+                        };
                     } catch (pluginError: any) {
-                        // Never let one bad plugin abort the whole setup loop.
                         errorLog("单个插件加载失败", {
                             path: pluginFileItem.path,
                             message: pluginError?.message ?? pluginError,
                         });
-                        continue;
+                        return { kind: "skip" };
                     }
+                }),
+            );
 
-                    // Yield so Hermes can breathe between large Function compiles.
-                    if (i > 0 && i % 2 === 0) {
-                        await delay(0, true);
-                    }
+            // Phase 2: construct Plugin instances (lazy is cheap; full mounts compile).
+            for (let i = 0; i < plans.length; ++i) {
+                const plan = plans[i];
+                if (plan.kind === "skip") {
+                    continue;
+                }
 
-                    const _pluginIndex = allPlugins.findIndex(
-                        p => p.hash === plugin.hash,
-                    );
-                    if (_pluginIndex !== -1) {
-                        // 重复插件，直接忽略
-                        continue;
+                let plugin: Plugin;
+                let isLazyLoad = false;
+                try {
+                    if (plan.kind === "lazy") {
+                        isLazyLoad = true;
+                        plugin = new Plugin(null, plan.path, plan.lazyProps);
+                    } else {
+                        plugin = new Plugin(plan.code, plan.path);
+                        fullMountCount += 1;
+                        // Yield only when compiling real plugin sandboxes.
+                        if (fullMountCount > 0 && fullMountCount % 2 === 0) {
+                            await delay(0, true);
+                        }
                     }
-                    if (plugin.state === PluginState.Mounted || isLazyLoad) {
-                        allPlugins.push(plugin);
-                    }
+                } catch (pluginError: any) {
+                    errorLog("单个插件实例化失败", {
+                        path: plan.path,
+                        message: pluginError?.message ?? pluginError,
+                    });
+                    continue;
+                }
+
+                const _pluginIndex = allPlugins.findIndex(
+                    p => p.hash === plugin.hash,
+                );
+                if (_pluginIndex !== -1) {
+                    continue;
+                }
+                if (plugin.state === PluginState.Mounted || isLazyLoad) {
+                    allPlugins.push(plugin);
                 }
             }
 
             this.setPlugins(allPlugins);
-            // 异步初始化插件
 
-            delay(10_000, true).then(async () => {
-                for (let i = 0; i < allPlugins.length; ++i) {
-                    const plugin = allPlugins[i];
-
-                    if (plugin.state === PluginState.Initializing) {
-                        await plugin.ensureMounted();
-                        this.updatePluginCache(plugin);
-                    }
-                }
-            });
+            // Warm up lazy plugins in the background (enabled first).
+            // Shorter delay than 10s so first search/play is less cold, without
+            // blocking the splash screen.
+            void this.warmUpLazyPlugins(allPlugins);
         } catch (e: any) {
             ToastAndroid.show(
                 `插件初始化失败:${e?.message ?? e}`,
@@ -198,6 +229,46 @@ class PluginManager implements IPluginManager, IInjectable {
         }
 
         Plugin.injectDependencies(this);
+    }
+
+    /** Mount lazy plugins after UI is up; prefer enabled plugins. */
+    private async warmUpLazyPlugins(allPlugins: Plugin[]) {
+        try {
+            await delay(2_000, true);
+            const pending = allPlugins.filter(
+                p => p.state === PluginState.Initializing,
+            );
+            if (!pending.length) {
+                return;
+            }
+            // Enabled plugins first so search tabs / play restore hit hot path.
+            pending.sort((a, b) => {
+                const ae = pluginMeta.isPluginEnabled(a.name) ? 0 : 1;
+                const be = pluginMeta.isPluginEnabled(b.name) ? 0 : 1;
+                return ae - be;
+            });
+            for (let i = 0; i < pending.length; ++i) {
+                const plugin = pending[i];
+                if (plugin.state !== PluginState.Initializing) {
+                    continue;
+                }
+                try {
+                    await plugin.ensureMounted();
+                    this.updatePluginCache(plugin);
+                } catch (e: any) {
+                    errorLog("插件后台预热失败", {
+                        name: plugin.name,
+                        message: e?.message ?? e,
+                    });
+                }
+                // Keep UI responsive between large sandboxes.
+                if (i < pending.length - 1) {
+                    await delay(50, true);
+                }
+            }
+        } catch (e: any) {
+            errorLog("插件后台预热异常", e?.message ?? e);
+        }
     }
 
     /**
