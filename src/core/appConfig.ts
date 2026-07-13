@@ -194,7 +194,7 @@ class AppConfig implements IAppConfig {
                     if (typeof detailFontSize === "number") {
                         this.setConfig("lyric.detailFontSize", detailFontSize);
                     }
-                } catch (e) {
+                } catch {
                     // Ignore parse errors
                 }
             }
@@ -227,7 +227,7 @@ class AppConfig implements IAppConfig {
         value?: IAppConfigProperties[K] | undefined,
     ): void {
         if (value === undefined) {
-            configStore.delete(key);
+            configStore.remove(key);
         } else {
             configStore.set(key, safeStringify(value));
         }

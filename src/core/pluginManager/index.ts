@@ -63,7 +63,7 @@ class PluginManager implements IPluginManager, IInjectable {
         const cachedKeys = pluginCacheStore.getAllKeys();
         cachedKeys.forEach(key => {
             if (!plugins.find(it => it.path === key)) {
-                pluginCacheStore.delete(key);
+                pluginCacheStore.remove(key);
             }
         });
 
@@ -407,7 +407,7 @@ class PluginManager implements IPluginManager, IInjectable {
                     const pluginName = plugin.name;
                     await unlink(plugin.path);
                     removeAllMediaExtra(pluginName);
-                } catch (e) {}
+                } catch {}
             }),
         );
         this.setPlugins([]);

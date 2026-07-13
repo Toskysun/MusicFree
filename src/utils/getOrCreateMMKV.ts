@@ -1,5 +1,5 @@
 import pathConst from "@/constants/pathConst";
-import { MMKV } from "react-native-mmkv";
+import { createMMKV, type MMKV } from "react-native-mmkv";
 
 const _mmkvCache: Record<string, MMKV> = {};
 
@@ -12,7 +12,7 @@ const getOrCreateMMKV = (dbName: string, cachePath = false) => {
         return _mmkvCache[dbName];
     }
 
-    const newStore = new MMKV({
+    const newStore = createMMKV({
         id: dbName,
         path: cachePath ? pathConst.mmkvCachePath : pathConst.mmkvPath,
     });

@@ -58,7 +58,7 @@ class LyricUtilModule(private val reactContext: ReactApplicationContext): ReactC
             val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
                 data = Uri.parse("package:" + reactContext.packageName)
             }
-            currentActivity?.startActivity(intent)
+            reactContext.currentActivity?.startActivity(intent)
             promise.resolve(true)
         } catch (e: Exception) {
             promise.reject("Error", e.message)

@@ -50,7 +50,7 @@ function set<K extends keyof IPersistStatus>(
 ) {
     const store = getStore();
     if (value === undefined) {
-        store.delete(key);
+        store.remove(key);
     } else {
         store.set(key, JSON.stringify(value));
     }

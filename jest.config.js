@@ -6,6 +6,9 @@ module.exports = {
     modulePathIgnorePatterns: ["<rootDir>/.claude/"],
     testPathIgnorePatterns: ["<rootDir>/.claude/"],
     transformIgnorePatterns: [
-        "node_modules/(?!(?:@react-native|react-native|react-native-fs|@react-navigation)/)",
+        "node_modules/(?!(?:@react-native|react-native|react-native-fs|react-native-mmkv|react-native-nitro-modules|@react-navigation)/)",
     ],
+    moduleNameMapper: {
+        "^react-native-mmkv$": "<rootDir>/jest.mmkv.mock.js",
+    },
 };

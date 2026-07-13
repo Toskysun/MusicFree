@@ -1,12 +1,6 @@
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
+
 buildscript {
-    ext {
-        buildToolsVersion = "35.0.0"
-        minSdkVersion = 24
-        compileSdkVersion = 35
-        targetSdkVersion = 35
-        ndkVersion = "26.1.10909125"
-        kotlinVersion = "1.9.24"
-    }
     repositories {
         google()
         mavenCentral()
@@ -25,12 +19,12 @@ allprojects {
         mavenCentral()
         maven { url 'https://jitpack.io' }
     }
-    
+
     tasks.withType(JavaCompile).configureEach {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    
+
     tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
         kotlinOptions {
             jvmTarget = "17"
@@ -38,4 +32,5 @@ allprojects {
     }
 }
 
+apply plugin: "expo-root-project"
 apply plugin: "com.facebook.react.rootproject"

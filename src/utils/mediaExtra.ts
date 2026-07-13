@@ -122,7 +122,7 @@ function removeMediaExtra(mediaItem: ICommon.IMediaBase) {
         return false;
     }
     const store = getPluginStore(mediaItem.platform);
-    store.delete(`${mediaItem.id}`);
+    store.remove(`${mediaItem.id}`);
 
     // 发送事件更新
     const callbacks = observerCallbacks.get(getMediaUniqueKey(mediaItem));

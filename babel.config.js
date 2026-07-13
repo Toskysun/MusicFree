@@ -17,8 +17,8 @@ module.exports = api => {
         plugins.push("transform-remove-console");
     }
 
-    // Reanimated must stay last in every environment, including production.
-    plugins.push("react-native-reanimated/plugin");
+    // babel-preset-expo already injects worklets/reanimated plugins.
+    // Only keep custom plugins here to avoid duplicate-plugin errors in Jest.
 
     return {
         presets: [["babel-preset-expo", { unstable_transformImportMeta: true }]],
