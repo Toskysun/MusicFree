@@ -111,27 +111,41 @@ class PluginManager implements IPluginManager, IInjectable {
                     // 如果存在缓存信息
                     let plugin: Plugin;
                     let isLazyLoad = false;
-                    if (
-                        this.appConfigService.getConfig(
-                            "basic.lazyLoadPlugin",
-                        ) &&
-                        pluginCacheStore.contains(pluginFileItem.path)
-                    ) {
-                        isLazyLoad = true;
-                        const lazyProps = safeParse(pluginCacheStore.getString(pluginFileItem.path));
-                        lazyProps.loadFuncCode = async () =>
-                            await readFile(pluginFileItem.path, "utf8");
-                        plugin = new Plugin(
-                            null,
-                            pluginFileItem.path,
-                            lazyProps,
-                        );
-                    } else {
-                        const funcCode = await readFile(
-                            pluginFileItem.path,
-                            "utf8",
-                        );
-                        plugin = new Plugin(funcCode, pluginFileItem.path);
+                    try {
+                        if (
+                            this.appConfigService.getConfig(
+                                "basic.lazyLoadPlugin",
+                            ) &&
+                            pluginCacheStore.contains(pluginFileItem.path)
+                        ) {
+                            isLazyLoad = true;
+                            const lazyProps = safeParse(pluginCacheStore.getString(pluginFileItem.path));
+                            lazyProps.loadFuncCode = async () =>
+                                await readFile(pluginFileItem.path, "utf8");
+                            plugin = new Plugin(
+                                null,
+                                pluginFileItem.path,
+                                lazyProps,
+                            );
+                        } else {
+                            const funcCode = await readFile(
+                                pluginFileItem.path,
+                                "utf8",
+                            );
+                            plugin = new Plugin(funcCode, pluginFileItem.path);
+                        }
+                    } catch (pluginError: any) {
+                        // Never let one bad plugin abort the whole setup loop.
+                        errorLog("单个插件加载失败", {
+                            path: pluginFileItem.path,
+                            message: pluginError?.message ?? pluginError,
+                        });
+                        continue;
+                    }
+
+                    // Yield so Hermes can breathe between large Function compiles.
+                    if (i > 0 && i % 2 === 0) {
+                        await delay(0, true);
                     }
 
                     const _pluginIndex = allPlugins.findIndex(

@@ -40,12 +40,24 @@ import { normalizePluginMusicItem } from "@/utils/qualities";
 
 axios.defaults.timeout = 2000;
 axios.interceptors.response.use((response) => {
-    // 统一setcookie格式，nodejs环境是数组，移动端环境都放在第一个元素
-    const setCookie = response.headers["set-cookie"];
-    if(setCookie && setCookie.length === 1) {
-        const splitedCookie = setCookie[0].split(",");
-        response.headers["set-cookie"] = splitedCookie;
-        response.headers["x-set-cookie"] = setCookie;
+    // 统一 set-cookie 格式。AxiosHeaders 在部分环境下不可扩展，必须 try/catch。
+    try {
+        const headers: any = response.headers;
+        const setCookie =
+            headers?.["set-cookie"] ??
+            (typeof headers?.get === "function" ? headers.get("set-cookie") : undefined);
+        if (setCookie && Array.isArray(setCookie) && setCookie.length === 1) {
+            const splitedCookie = String(setCookie[0]).split(",");
+            if (typeof headers?.set === "function") {
+                headers.set("set-cookie", splitedCookie);
+                headers.set("x-set-cookie", setCookie);
+            } else {
+                headers["set-cookie"] = splitedCookie;
+                headers["x-set-cookie"] = setCookie;
+            }
+        }
+    } catch {
+        // ignore header normalization failures
     }
 
     return response;
@@ -85,12 +97,35 @@ const packages: Record<string, any> = {
 };
 
 const _require = (packageName: string) => {
-    let pkg = packages[packageName];
+    const pkg = packages[packageName];
     if (!pkg) {
         throw new Error(`Cannot find module '${packageName}'`);
     }
-    if (pkg && typeof pkg === "object" && pkg.default === undefined) {
-        pkg.default = pkg;
+    // Provide CJS `default` without mutating frozen Metro/Hermes module namespace objects.
+    if (pkg && (typeof pkg === "object" || typeof pkg === "function")) {
+        if ((pkg as any).default !== undefined) {
+            return pkg;
+        }
+        try {
+            if (Object.isExtensible(pkg)) {
+                (pkg as any).default = pkg;
+                return pkg;
+            }
+        } catch {
+            // fall through to wrapper
+        }
+        // Non-extensible package (common with import * as ns): return a thin view.
+        return new Proxy(pkg as object, {
+            get(target, prop, receiver) {
+                if (prop === "default") {
+                    return target;
+                }
+                return Reflect.get(target, prop, receiver);
+            },
+            has(target, prop) {
+                return prop === "default" || Reflect.has(target, prop);
+            },
+        });
     }
     return pkg;
 };
@@ -247,12 +282,14 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
         const result =
             (await this.plugin.instance.search(query, page, type)) ?? {};
         if (Array.isArray(result.data)) {
-            result.data.forEach(_ => {
-                // 标准化音质信息
-                const normalized = normalizePluginMusicItem(_);
-                Object.assign(_, normalized);
-                
-                resetMediaItem(_, this.plugin.name);
+            // Always clone: plugin/immer items may be non-extensible on Hermes.
+            result.data = result.data.map(item => {
+                const normalized = normalizePluginMusicItem(item);
+                return resetMediaItem(
+                    { ...item, ...normalized },
+                    this.plugin.name,
+                    true,
+                );
             });
             return {
                 isEnd: result.isEnd ?? true,
@@ -419,11 +456,10 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
             ) ?? null;
             
             if (result) {
-                // 标准化音质信息
                 const normalized = normalizePluginMusicItem(result);
-                Object.assign(result, normalized);
+                return { ...result, ...normalized };
             }
-            
+
             return result;
         } catch (e: any) {
             devLog("error", "获取音乐详情失败", e, e?.message);
@@ -775,13 +811,15 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
             if (!result) {
                 throw new Error();
             }
-            result?.musicList?.forEach(_ => {
-                // 标准化音质信息
-                const normalized = normalizePluginMusicItem(_);
-                Object.assign(_, normalized);
-                
-                resetMediaItem(_, this.plugin.name);
-                _.album = albumItem.title;
+            result.musicList = (result.musicList ?? []).map(item => {
+                const normalized = normalizePluginMusicItem(item);
+                const next = resetMediaItem(
+                    { ...item, ...normalized },
+                    this.plugin.name,
+                    true,
+                );
+                next.album = albumItem.title;
+                return next;
             });
 
             if (page <= 1) {
@@ -826,12 +864,13 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
             if (!result) {
                 throw new Error();
             }
-            result?.musicList?.forEach(_ => {
-                // 标准化音质信息
-                const normalized = normalizePluginMusicItem(_);
-                Object.assign(_, normalized);
-                
-                resetMediaItem(_, this.plugin.name);
+            result.musicList = (result.musicList ?? []).map(item => {
+                const normalized = normalizePluginMusicItem(item);
+                return resetMediaItem(
+                    { ...item, ...normalized },
+                    this.plugin.name,
+                    true,
+                );
             });
 
             if (page <= 1) {
@@ -880,12 +919,13 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
                     data: [],
                 };
             }
-            result.data?.forEach(_ => {
-                // 标准化音质信息
-                const normalized = normalizePluginMusicItem(_);
-                Object.assign(_, normalized);
-                
-                resetMediaItem(_, this.plugin.name);
+            result.data = (result.data ?? []).map(item => {
+                const normalized = normalizePluginMusicItem(item);
+                return resetMediaItem(
+                    { ...item, ...normalized },
+                    this.plugin.name,
+                    true,
+                );
             });
             return {
                 isEnd: result.isEnd ?? true,
@@ -905,14 +945,14 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
         try {
             const result =
                 (await this.plugin.instance?.importMusicSheet?.(urlLike)) ?? [];
-            result.forEach(_ => {
-                // 标准化音质信息
-                const normalized = normalizePluginMusicItem(_);
-                Object.assign(_, normalized);
-                
-                resetMediaItem(_, this.plugin.name);
+            return result.map(item => {
+                const normalized = normalizePluginMusicItem(item);
+                return resetMediaItem(
+                    { ...item, ...normalized },
+                    this.plugin.name,
+                    true,
+                );
             });
-            return result;
         } catch (e: any) {
             devLog("warn", "导入歌单异常", e);
             devLog("error", "导入歌单失败", e, e?.message);
@@ -932,12 +972,12 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
                 throw new Error();
             }
             
-            // 标准化音质信息
             const normalized = normalizePluginMusicItem(result);
-            Object.assign(result, normalized);
-            
-            resetMediaItem(result, this.plugin.name);
-            return result;
+            return resetMediaItem(
+                { ...result, ...normalized },
+                this.plugin.name,
+                true,
+            );
         } catch (e: any) {
             devLog("error", "导入单曲失败", e, e?.message);
 
@@ -974,12 +1014,13 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
             throw new Error();
         }
         if (result.musicList) {
-            result.musicList.forEach(_ => {
-                // 标准化音质信息
-                const normalized = normalizePluginMusicItem(_);
-                Object.assign(_, normalized);
-                
-                resetMediaItem(_, this.plugin.name);
+            result.musicList = result.musicList.map(item => {
+                const normalized = normalizePluginMusicItem(item);
+                return resetMediaItem(
+                    { ...item, ...normalized },
+                    this.plugin.name,
+                    true,
+                );
             });
         } else {
             result.musicList = [];
@@ -1163,53 +1204,46 @@ export class Plugin {
 
                 // Sandbox free names must NOT be function parameters/local bindings.
                 // Plugins often redeclare them under Hermes ("Identifier already declared").
-                // Expose via global object so free identifiers (env/process/Buffer/...) resolve.
-                // Keep only require/module/exports as params (standard CJS plugin shape).
+                // Expose via globalThis so free identifiers (env/process/Buffer/...) resolve.
+                // Use classic Function(params..., body) + string concat — nested
+                // Function(`return function(){ ${code} }`)() can hang Hermes on large plugins.
                 // eslint-disable-next-line no-new-func
-                _instance = Function(`
-                    'use strict';
-                    return function(require, __musicfree_require, module, exports, __mfConsole, __mfEnv, __mfURL, __mfProcess, __mfTextDecoder, __mfTextEncoder, __mfBuffer) {
-                        var g = (typeof globalThis !== 'undefined')
-                            ? globalThis
-                            : (typeof global !== 'undefined' ? global : this);
-                        function __mfDefine(name, value, force) {
-                            if (!g) return;
-                            try {
-                                if (force || typeof g[name] === 'undefined') {
-                                    g[name] = value;
-                                }
-                            } catch (_e) {}
-                            // Mirror onto global when distinct (Hermes free-var lookup).
-                            try {
-                                if (typeof global !== 'undefined' && global !== g) {
-                                    if (force || typeof global[name] === 'undefined') {
-                                        global[name] = value;
-                                    }
-                                }
-                            } catch (_e2) {}
-                        }
-                        // Always refresh MusicFree-owned bindings per plugin mount.
-                        __mfDefine('Buffer', __mfBuffer, typeof g.Buffer === 'undefined');
-                        __mfDefine('env', __mfEnv, true);
-                        __mfDefine('process', __mfProcess, true);
-                        __mfDefine('URL', __mfURL, typeof g.URL === 'undefined');
-                        __mfDefine('TextDecoder', __mfTextDecoder, typeof g.TextDecoder === 'undefined');
-                        __mfDefine('TextEncoder', __mfTextEncoder, typeof g.TextEncoder === 'undefined');
-                        if (g) {
-                            if (typeof g.console === 'undefined') {
-                                __mfDefine('console', __mfConsole, true);
-                            } else {
-                                try {
-                                    g.console.log = __mfConsole.log || g.console.log;
-                                    g.console.info = __mfConsole.info || g.console.info;
-                                    g.console.warn = __mfConsole.warn || g.console.warn;
-                                    g.console.error = __mfConsole.error || g.console.error;
-                                } catch (_e3) {}
-                            }
-                        }
-                        ${funcCode}
-                    }
-                `)()(
+                // Only fill missing free-vars. Never mutate existing process/env
+                // (Hermes process is often non-extensible → "cannot add a new property").
+                const sandboxBody =
+                    "'use strict';\n" +
+                    "var g = (typeof globalThis !== 'undefined')" +
+                    " ? globalThis" +
+                    " : ((typeof global !== 'undefined') ? global : this);\n" +
+                    "if (g) {\n" +
+                    "  try { if (typeof g.Buffer === 'undefined') g.Buffer = __mfBuffer; } catch (_e0) {}\n" +
+                    "  try { if (typeof g.env === 'undefined') g.env = __mfEnv; } catch (_e1) {}\n" +
+                    "  try { if (typeof g.process === 'undefined') g.process = __mfProcess; } catch (_e2) {}\n" +
+                    "  try { if (typeof g.URL === 'undefined') g.URL = __mfURL; } catch (_e3) {}\n" +
+                    "  try { if (typeof g.TextDecoder === 'undefined') g.TextDecoder = __mfTextDecoder; } catch (_e4) {}\n" +
+                    "  try { if (typeof g.TextEncoder === 'undefined') g.TextEncoder = __mfTextEncoder; } catch (_e5) {}\n" +
+                    "  try { if (typeof g.console === 'undefined') g.console = __mfConsole; } catch (_e6) {}\n" +
+                    "}\n" +
+                    funcCode;
+
+                // Plugin sandbox must compile classic script; Function is intentional.
+                // eslint-disable-next-line no-new-func -- plugin isolation runner
+                const pluginRunner = Function(
+                    "require",
+                    "__musicfree_require",
+                    "module",
+                    "exports",
+                    "__mfConsole",
+                    "__mfEnv",
+                    "__mfURL",
+                    "__mfProcess",
+                    "__mfTextDecoder",
+                    "__mfTextEncoder",
+                    "__mfBuffer",
+                    sandboxBody,
+                );
+
+                pluginRunner(
                     _require,
                     _require,
                     _module,
@@ -1220,7 +1254,7 @@ export class Plugin {
                     _process,
                     PluginTextDecoder,
                     nativeTextEncoder,
-                    Buffer
+                    Buffer,
                 );
                 if (_module.exports.default) {
                     _instance = _module.exports

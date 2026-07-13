@@ -20,10 +20,10 @@ export function getMediaUniqueKey(mediaItem: ICommon.IMediaBase) {
  */
 export function getPlatformMediaId(mediaItem: ICommon.IMediaBase): string {
     const musicItem = mediaItem as any;
-    const platform = mediaItem.platform?.toLowerCase() || '';
+    const platform = mediaItem.platform?.toLowerCase() || "";
 
     // QQ音乐：如果同时存在id和songmid，都显示
-    if (platform.includes('qq') || mediaItem.platform === 'QQ音乐') {
+    if (platform.includes("qq") || mediaItem.platform === "QQ音乐") {
         const id = mediaItem.id;
         const songmid = musicItem.songmid;
 
@@ -34,7 +34,7 @@ export function getPlatformMediaId(mediaItem: ICommon.IMediaBase): string {
     }
 
     // 酷狗音乐：显示所有存在的hash字段
-    if (platform.includes('kg') || platform.includes('酷狗')) {
+    if (platform.includes("kg") || platform.includes("酷狗")) {
         const ids: string[] = [];
 
         // 主hash（id字段）
@@ -43,8 +43,8 @@ export function getPlatformMediaId(mediaItem: ICommon.IMediaBase): string {
         }
 
         // 320k hash
-        if (musicItem['320hash']) {
-            ids.push(`320hash:${musicItem['320hash']}`);
+        if (musicItem["320hash"]) {
+            ids.push(`320hash:${musicItem["320hash"]}`);
         }
 
         // 无损hash
@@ -57,7 +57,7 @@ export function getPlatformMediaId(mediaItem: ICommon.IMediaBase): string {
             ids.push(`ResFileHash:${musicItem.ResFileHash}`);
         }
 
-        return ids.length > 0 ? ids.join(',') : mediaItem.id;
+        return ids.length > 0 ? ids.join(",") : mediaItem.id;
     }
 
     // 其他平台直接返回id
@@ -120,9 +120,21 @@ export function resetMediaItem<T extends ICommon.IMediaBase>(
         return newObj ? { ...mediaItem } : mediaItem;
     }
     if (!newObj) {
-        mediaItem.platform = platform ?? mediaItem.platform;
-        mediaItem[internalSerializeKey] = undefined;
-        return mediaItem;
+        // Prefer in-place when extensible; otherwise clone (immer-frozen / Hermes).
+        if (Object.isExtensible(mediaItem)) {
+            try {
+                mediaItem.platform = platform ?? mediaItem.platform;
+                mediaItem[internalSerializeKey] = undefined;
+                return mediaItem;
+            } catch {
+                // fall through to clone
+            }
+        }
+        return {
+            ...mediaItem,
+            platform: platform ?? mediaItem.platform,
+            [internalSerializeKey]: undefined,
+        };
     } else {
         return {
             ...mediaItem,

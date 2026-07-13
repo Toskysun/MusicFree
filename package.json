@@ -11,7 +11,7 @@
     "ios": "react-native run-ios",
     "lint": "eslint src --fix",
     "start": "react-native start",
-    "clean": "cd ./android && ./gradlew clean",
+    "clean": "node ./scripts/clean-android.js",
     "test": "jest",
     "commit-lint": "commitlint --edit",
     "connect-mumu": "adb kill-server & adb connect localhost:7555",

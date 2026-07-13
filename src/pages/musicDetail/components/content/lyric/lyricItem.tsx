@@ -166,9 +166,6 @@ interface ILyricItemComponentProps {
     align?: LyricAlign;
 }
 
-// Long duration threshold (1.5 seconds) for enhanced glow effect
-const LONG_DURATION_MS = 1500;
-
 // Animation timing configs
 const SCALE_TIMING_CONFIG = {
     duration: 350,
@@ -377,7 +374,7 @@ function normalizeWordSpaces(words: ILyric.IWordData[]): ILyric.IWordData[] {
     return words.map((word, i) => {
         if (!word.space) return word;
         const nextWord = words[i + 1];
-        if (word.text.endsWith(' ') || (nextWord && nextWord.text.startsWith(' '))) {
+        if (word.text.endsWith(" ") || (nextWord && nextWord.text.startsWith(" "))) {
             return { ...word, space: false };
         }
         return word;
@@ -420,7 +417,7 @@ function useLineActiveState(flatTimings: { startTime: number; endTime: number }[
     const activeCharProgress = useSharedValue(0);
 
     useDerivedValue(() => {
-        'worklet';
+        "worklet";
         const t = currentPositionMsShared.value;
         const len = flatTimings.length;
 
@@ -560,7 +557,7 @@ const KaraokeWordSplit = memo(({
 
     // Multi-character words keep a single base transform while AMll emphasis
     // can add staggered motion to their character layers.
-    const groupTrailingSpace = !noSpace && word.space ? ' ' : '';
+    const groupTrailingSpace = !noSpace && word.space ? " " : "";
     return (
         <Animated.View
             collapsable={false}
@@ -583,7 +580,7 @@ const KaraokeWordSplit = memo(({
                 />
             ))}
             {groupTrailingSpace ? (
-                <Text style={{ fontSize, color: 'transparent' }}>{' '}</Text>
+                <Text style={{ fontSize, color: "transparent" }}>{" "}</Text>
             ) : null}
         </Animated.View>
     );
@@ -746,13 +743,13 @@ const KaraokeWord = memo(({
     const [textWidth, setTextWidth] = useState(0);
 
     // Trailing space as text (matches non-playing line text wrapping)
-    const trailingSpace = !noSpace && space ? ' ' : '';
+    const trailingSpace = !noSpace && space ? " " : "";
 
     // True karaoke fill: completed characters are fully filled while the active
     // character is clipped continuously from left to right. This avoids changing
     // the brightness of an entire glyph at once and remains stable after wrapping.
     const fillProgress = useDerivedValue(() => {
-        'worklet';
+        "worklet";
         if (!isCurrentLine) return 0;
 
         const idx = activeCharIndex.value;
@@ -762,7 +759,7 @@ const KaraokeWord = memo(({
     }, [isCurrentLine, charFlatIndex]);
 
     const fillMaskStyle = useAnimatedStyle(() => {
-        'worklet';
+        "worklet";
         return { width: fillProgress.value * textWidth };
     }, [textWidth]);
 
@@ -785,7 +782,10 @@ const KaraokeWord = memo(({
     const handleTextLayout: React.ComponentProps<typeof Text>["onLayout"] = event => {
         const width = event.nativeEvent.layout.width;
         if (width > 0 && Math.abs(width - textWidth) > 0.5) {
-            setTextWidth(width);
+            // Defer to avoid setState during parent layout/commit on RN Fabric.
+            requestAnimationFrame(() => {
+                setTextWidth(width);
+            });
         }
     };
     const baseText = emphasisTiming ? (
@@ -914,28 +914,28 @@ function StaticWordByWordLine({
                     // Single char — same as KaraokeWord non-current path
                     if (subWords.length === 1) {
                         const sw = subWords[0];
-                        const trailing = !noSpace && sw.space ? ' ' : '';
+                        const trailing = !noSpace && sw.space ? " " : "";
                         return (
                             <View style={styles.wordWrapper} key={i}>
-                                <Text style={[styles.wordText, { fontSize: lineFontSize, color: 'white' }]}>
+                                <Text style={[styles.wordText, { fontSize: lineFontSize, color: "white" }]}>
                                     {sw.text}{trailing}
                                 </Text>
                             </View>
                         );
                     }
                     // Multi-char — same charGroupRow + per-char Views as KaraokeWordSplit
-                    const groupTrailingSpace = !noSpace && word.space ? ' ' : '';
+                    const groupTrailingSpace = !noSpace && word.space ? " " : "";
                     return (
                         <View style={lyricStyles.charGroupRow} key={i}>
                             {subWords.map((sw, ci) => (
                                 <View style={styles.wordWrapper} key={ci}>
-                                    <Text style={[styles.wordText, { fontSize: lineFontSize, color: 'white' }]}>
+                                    <Text style={[styles.wordText, { fontSize: lineFontSize, color: "white" }]}>
                                         {sw.text}
                                     </Text>
                                 </View>
                             ))}
                             {groupTrailingSpace ? (
-                                <Text style={{ fontSize: lineFontSize, color: 'transparent' }}>{' '}</Text>
+                                <Text style={{ fontSize: lineFontSize, color: "transparent" }}>{" "}</Text>
                             ) : null}
                         </View>
                     );
@@ -953,29 +953,29 @@ function StaticWordByWordLine({
 
     const renderLine = (type: string, isFirst: boolean) => {
         switch (type) {
-            case "original":
-                return renderWordRow(words, getLineFontSize(isFirst), isFirst, "original");
-            case "romanization":
-                return romanizationWords && romanizationWords.length > 0
-                    ? renderWordRow(romanizationWords, getLineFontSize(isFirst), isFirst, "romanization", isRomanizationPseudo)
-                    : null;
-            case "translation":
-                return translation ? (
-                    <View
-                        key="translation"
-                        style={[{ width: "100%" }, !isFirst && lyricStyles.secondaryLine]}
-                    >
-                        <TranslationTextLine
-                            text={translation}
-                            fontSize={getLineFontSize(isFirst)}
-                            highlightColor="white"
-                            inactiveOpacity={1}
-                            align={align}
-                        />
-                    </View>
-                ) : null;
-            default:
-                return null;
+        case "original":
+            return renderWordRow(words, getLineFontSize(isFirst), isFirst, "original");
+        case "romanization":
+            return romanizationWords && romanizationWords.length > 0
+                ? renderWordRow(romanizationWords, getLineFontSize(isFirst), isFirst, "romanization", isRomanizationPseudo)
+                : null;
+        case "translation":
+            return translation ? (
+                <View
+                    key="translation"
+                    style={[{ width: "100%" }, !isFirst && lyricStyles.secondaryLine]}
+                >
+                    <TranslationTextLine
+                        text={translation}
+                        fontSize={getLineFontSize(isFirst)}
+                        highlightColor="white"
+                        inactiveOpacity={1}
+                        align={align}
+                    />
+                </View>
+            ) : null;
+        default:
+            return null;
         }
     };
 
@@ -1133,7 +1133,7 @@ function WordByWordLyricLine({
 
     // Translation line component
     const translationLine = (isFirst: boolean) => translation && (
-        <View style={[{ width: '100%' }, !isFirst && lyricStyles.secondaryLine]} key="translation">
+        <View style={[{ width: "100%" }, !isFirst && lyricStyles.secondaryLine]} key="translation">
             <TranslationTextLine
                 text={translation}
                 fontSize={getLineFontSize(isFirst)}
@@ -1147,14 +1147,14 @@ function WordByWordLyricLine({
     // Render lines based on order
     const renderLine = (type: string, isFirst: boolean) => {
         switch (type) {
-            case "original":
-                return originalLine(isFirst);
-            case "romanization":
-                return romanizationLine(isFirst);
-            case "translation":
-                return translationLine(isFirst);
-            default:
-                return null;
+        case "original":
+            return originalLine(isFirst);
+        case "romanization":
+            return romanizationLine(isFirst);
+        case "translation":
+            return translationLine(isFirst);
+        default:
+            return null;
         }
     };
 
@@ -1179,7 +1179,7 @@ function WordByWordLyricLine({
             ]}
         >
             {/* Render lines in configured order, first existing line gets large font */}
-            {lyricOrder.map((type, idx) => {
+            {lyricOrder.map(type => {
                 const isFirstExisting = existingLines.indexOf(type) === 0;
                 return renderLine(type, isFirstExisting);
             })}
@@ -1226,7 +1226,7 @@ function RegularLyricLine({
     }));
 
     // Transform origin based on alignment
-    const transformOriginStyle = align === "left" ? { transformOrigin: 'left center' as const } : {};
+    const transformOriginStyle = align === "left" ? { transformOrigin: "left center" as const } : {};
 
     return (
         <Animated.Text
@@ -1297,7 +1297,7 @@ function MultiLineRegularLyric({
     }));
 
     // Transform origin based on alignment
-    const transformOriginStyle = align === "left" ? { transformOrigin: 'left center' as const } : {};
+    const transformOriginStyle = align === "left" ? { transformOrigin: "left center" as const } : {};
 
     // Font size based on order: first line uses full fontSize, others use smaller
     const getLineFontSize = (isFirst: boolean) => isFirst ? fontSize : fontSize * SECONDARY_FONT_RATIO;
@@ -1343,7 +1343,7 @@ function MultiLineRegularLyric({
                                 styles.wordText,
                                 {
                                     fontSize: getLineFontSize(isFirst),
-                                    color: highlight ? primaryColor : 'white',
+                                    color: highlight ? primaryColor : "white",
                                     opacity: highlight ? 1 : 0.5,
                                 },
                                 highlight && lyricStyles.highlightItem,
@@ -1382,14 +1382,14 @@ function MultiLineRegularLyric({
     // Render line based on type
     const renderLine = (type: string, isFirst: boolean) => {
         switch (type) {
-            case "original":
-                return originalLine(isFirst);
-            case "romanization":
-                return romanizationLine(isFirst);
-            case "translation":
-                return translationLine(isFirst);
-            default:
-                return null;
+        case "original":
+            return originalLine(isFirst);
+        case "romanization":
+            return romanizationLine(isFirst);
+        case "translation":
+            return translationLine(isFirst);
+        default:
+            return null;
         }
     };
 
@@ -1416,7 +1416,7 @@ function MultiLineRegularLyric({
             ]}
         >
             {/* Render lines in configured order, first existing line gets large font */}
-            {lyricOrder.map((type, idx) => {
+            {lyricOrder.map(type => {
                 const isFirstExisting = existingLines.indexOf(type) === 0;
                 return renderLine(type, isFirstExisting);
             })}
@@ -1424,7 +1424,7 @@ function MultiLineRegularLyric({
     );
 }
 
-function _LyricItemComponent(props: ILyricItemComponentProps) {
+function LyricItemView(props: ILyricItemComponentProps) {
     const {
         light,
         highlight,
@@ -1451,7 +1451,7 @@ function _LyricItemComponent(props: ILyricItemComponentProps) {
     const pureWhiteMode = useAppConfig("lyric.pureWhiteMode") ?? true;
     const enableBreathingDots = useAppConfig("lyric.enableBreathingDots") ?? true;
 
-    const effectiveHighlightColor = pureWhiteMode ? 'white' : colors.primary;
+    const effectiveHighlightColor = pureWhiteMode ? "white" : colors.primary;
 
     // Render word-by-word layout for ALL lines with word data (both playing and non-playing)
     // This ensures identical flex-wrap line-breaking behavior
@@ -1494,7 +1494,7 @@ function _LyricItemComponent(props: ILyricItemComponentProps) {
     }
 
     // Check if lyric text is empty (empty string or only whitespace)
-    const isEmptyLyric = !text || text.trim() === '';
+    const isEmptyLyric = !text || text.trim() === "";
 
     // Render breathing dots ONLY for current playing empty line (highlight=true)
     if (isEmptyLyric && enableBreathingDots && highlight) {
@@ -1543,7 +1543,7 @@ function _LyricItemComponent(props: ILyricItemComponentProps) {
     if (hasMultiLine) {
         return (
             <MultiLineRegularLyric
-                text={text || ''}
+                text={text || ""}
                 romanizationText={romanization}
                 romanizationWords={romanizationWords}
                 translation={translation}
@@ -1562,7 +1562,7 @@ function _LyricItemComponent(props: ILyricItemComponentProps) {
     // Single line regular lyric rendering
     return (
         <RegularLyricLine
-            text={text || ''}
+            text={text || ""}
             fontSize={actualFontSize}
             highlight={!!highlight}
             light={!!light}
@@ -1585,7 +1585,7 @@ const arraysEqual = (a?: any[], b?: any[]) => {
 };
 
 const LyricItemComponent = memo(
-    _LyricItemComponent,
+    LyricItemView,
     (prev, curr) =>
         prev.light === curr.light &&
         prev.highlight === curr.highlight &&
@@ -1607,10 +1607,10 @@ export default LyricItemComponent;
 
 const styles = StyleSheet.create({
     wordWrapper: {
-        position: 'relative',
+        position: "relative",
     },
     wordText: {
-        fontWeight: '600',
+        fontWeight: "600",
     },
     wordFillOverlay: {
         position: "absolute",
@@ -1620,10 +1620,10 @@ const styles = StyleSheet.create({
         overflow: "hidden",
     },
     translationLineContainer: {
-        position: 'relative',
-        width: '100%',
-        alignItems: 'center',
-        justifyContent: 'center',
+        position: "relative",
+        width: "100%",
+        alignItems: "center",
+        justifyContent: "center",
     },
 });
 
@@ -1651,8 +1651,8 @@ const lyricStyles = StyleSheet.create({
         textAlignVertical: "center",
     },
     multiLineContainer: {
-        flexDirection: 'column',
-        alignItems: 'center',
+        flexDirection: "column",
+        alignItems: "center",
         paddingHorizontal: rpx(64),
         paddingVertical: rpx(24),
         width: "100%",

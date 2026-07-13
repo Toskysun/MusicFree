@@ -300,8 +300,11 @@ export default function Lyric(props: IProps) {
             scrollToIndex(targetIndex, false);
         }
 
-        setIsListReady(true);
-        scrollPhaseRef.current = ScrollPhase.Tracking;
+        // Defer ready flag so we don't setState inside FlatList layout pass.
+        requestAnimationFrame(() => {
+            setIsListReady(true);
+            scrollPhaseRef.current = ScrollPhase.Tracking;
+        });
     }, [lyrics.length, scrollToIndex]);
 
     // Main scroll effect — triggers when current lyric line changes
@@ -402,7 +405,23 @@ export default function Lyric(props: IProps) {
                                 listRef.current = _;
                             }}
                             onLayout={e => {
-                                setLayout(e.nativeEvent.layout);
+                                const next = e.nativeEvent.layout;
+                                // Defer: RN can fire onLayout during commit; setState then
+                                // trips "Cannot update during an existing state transition".
+                                requestAnimationFrame(() => {
+                                    setLayout(prev => {
+                                        if (
+                                            prev &&
+                                            prev.width === next.width &&
+                                            prev.height === next.height &&
+                                            prev.x === next.x &&
+                                            prev.y === next.y
+                                        ) {
+                                            return prev;
+                                        }
+                                        return next;
+                                    });
+                                });
                             }}
                             contentOffset={initialContentOffset}
                             viewabilityConfig={{

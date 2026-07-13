@@ -1,14 +1,10 @@
 import Empty from "@/components/base/empty";
-import { fontWeightConst } from "@/constants/uiConst";
-import { useI18N } from "@/core/i18n";
+import PillTabBar from "@/components/base/pillTabBar";
 import PluginManager from "@/core/pluginManager";
-import useColors from "@/hooks/useColors";
-import rpx, { vw } from "@/utils/rpx";
-import Color from "color";
+import { vw } from "@/utils/rpx";
 import { useAtomValue } from "jotai";
 import React, { memo, useEffect, useMemo, useRef, useState } from "react";
-import { Text } from "react-native";
-import { SceneMap, TabBar, TabView } from "react-native-tab-view";
+import { SceneMap, TabView } from "react-native-tab-view";
 import { searchResultsAtom } from "../../store/atoms";
 import { renderMap } from "./results";
 import DefaultResults from "./results/defaultResults";
@@ -50,14 +46,13 @@ function getResultComponent(
         : () => <DefaultResults />;
 }
 
-/** 结果scene */
+/** 结果 scene */
 function getSubRouterScene(
     tab: ICommon.SupportMediaType,
     routes: Array<{ key: string; title: string }>,
 ) {
     const scene: Record<string, React.FC> = {};
     routes.forEach(r => {
-        // todo: 是否声明不可搜索
         scene[r.key] = getResultComponent(tab, r.key, r.title);
     });
     return SceneMap(scene);
@@ -65,20 +60,23 @@ function getSubRouterScene(
 
 function ResultSubPanel(props: IResultSubPanelProps) {
     const [index, setIndex] = useState(0);
-    const colors = useColors();
-    const { t } = useI18N();
-    const activeTabBackground = Color(colors.primary).alpha(0.12).toString();
-
+    // Do not over-memoize: plugins can load/enable after mount.
     const routes = PluginManager.getSortedSearchablePlugins(props.tab).map(
         _ => ({
             key: _.hash,
             title: _.name,
         }),
     );
+    const routeKey = routes.map(r => r.key).join("|");
     const renderScene = useMemo(
         () => getSubRouterScene(props.tab, routes),
-        [props.tab],
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- rebuild when plugin set changes
+        [props.tab, routeKey],
     );
+
+    const safeIndex = routes.length
+        ? Math.min(index, routes.length - 1)
+        : 0;
 
     if (!routes.length) {
         return <Empty />;
@@ -88,55 +86,15 @@ function ResultSubPanel(props: IResultSubPanelProps) {
         <TabView
             lazy
             navigationState={{
-                index,
+                index: safeIndex,
                 routes,
             }}
-            renderTabBar={_ => (
-                <TabBar
-                    {..._}
-                    scrollEnabled
-                    // eslint-disable-next-line react-native/no-inline-styles -- Dynamic transparent styles for tab appearance
-                    style={{
-                        backgroundColor: "transparent",
-                        shadowColor: "transparent",
-                        borderColor: "transparent",
-                        paddingHorizontal: rpx(16),
-                        paddingTop: rpx(10),
-                        paddingBottom: rpx(6),
-                    }}
-                    inactiveColor={colors.text}
-                    activeColor={colors.text}
-                    // eslint-disable-next-line react-native/no-inline-styles -- Dynamic width for tab flexibility
-                    tabStyle={{
-                        width: "auto",
-                        paddingHorizontal: rpx(4),
-                    }}
-                    renderIndicator={() => null}
-                    pressColor="transparent"
-                    renderLabel={({ route, focused }) => (
-                        <Text
-                            numberOfLines={1}
-                            // eslint-disable-next-line react-native/no-inline-styles -- Dynamic focused state styles
-                            style={{
-                                maxWidth: rpx(200),
-                                fontWeight: focused
-                                    ? fontWeightConst.bolder
-                                    : fontWeightConst.medium,
-                                color: focused
-                                    ? colors.text
-                                    : colors.textSecondary ?? colors.text,
-                                textAlign: "center",
-                                paddingVertical: rpx(8),
-                                paddingHorizontal: rpx(16),
-                                borderRadius: rpx(16),
-                                backgroundColor: focused
-                                    ? activeTabBackground
-                                    : "transparent",
-                                overflow: "hidden",
-                            }}>
-                            {route.title ?? `(${t("common.unknownName")})`}
-                        </Text>
-                    )}
+            renderTabBar={() => (
+                <PillTabBar
+                    routes={routes}
+                    index={safeIndex}
+                    onIndexChange={setIndex}
+                    variant="pill"
                 />
             )}
             renderScene={renderScene}

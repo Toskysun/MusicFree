@@ -13,7 +13,7 @@ import globalStyle from "@/constants/globalStyle";
 import Theme from "@/core/theme";
 import { BootstrapComponent } from "./bootstrap/BootstrapComponent";
 import { ToastBaseComponent } from "@/components/base/toast";
-import { StatusBar } from "react-native";
+import { StatusBar, StyleSheet, View } from "react-native";
 import { ReduceMotion, ReducedMotionConfig } from "react-native-reanimated";
 import { routes } from "@/core/router/routes.tsx";
 import ErrorBoundary from "@/components/errorBoundary";
@@ -31,6 +31,19 @@ const Stack = createNativeStackNavigator<any>();
 
 export default function Pages() {
     const theme = Theme.useTheme();
+    // RN Navigation 7 requires theme.fonts; custom themes may lack it.
+    const navigationTheme = React.useMemo(() => {
+        const fonts = theme?.fonts ?? {
+            regular: { fontFamily: "sans-serif", fontWeight: "normal" as const },
+            medium: {
+                fontFamily: "sans-serif-medium",
+                fontWeight: "normal" as const,
+            },
+            bold: { fontFamily: "sans-serif", fontWeight: "600" as const },
+            heavy: { fontFamily: "sans-serif", fontWeight: "700" as const },
+        };
+        return { ...theme, fonts };
+    }, [theme]);
 
     React.useEffect(() => {
         void appendStartupBreadcrumb("pages-mounted");
@@ -41,37 +54,52 @@ export default function Pages() {
     }, []);
 
     return (
-        <ErrorBoundary>
-            <BootstrapComponent />
-            <NotificationLifecycleManager />
-            <ReducedMotionConfig mode={ReduceMotion.Never} />
-            <GestureHandlerRootView style={globalStyle.flex1}>
-                <SafeAreaProvider>
-                    <NavigationContainer theme={theme}>
-                        <PageBackground />
-                        <Stack.Navigator
-                            initialRouteName={routes[0].path}
-                            screenOptions={{
-                                headerShown: false,
-                                animation: "slide_from_right",
-                                animationDuration: 100,
-                            }}>
-                            {routes.map(route => (
-                                <Stack.Screen
-                                    key={route.path}
-                                    name={route.path}
-                                    component={route.component}
-                                />
-                            ))}
-                        </Stack.Navigator>
-                        <Panels />
-                        <Dialogs />
-                        <Debug />
-                        <ToastBaseComponent />
-                        <PortalHost />
+        <GestureHandlerRootView style={globalStyle.flex1}>
+            {/*
+              ONE flex:1 box. App fills it. Debug is an absolute overlay child
+              of the same box (not a flex sibling). That way a tall log sheet
+              cannot reflow / lift the music bar.
+
+              Android free FAB is a native PopupWindow (outside Yoga entirely).
+            */}
+            <View style={styles.root}>
+                <SafeAreaProvider style={globalStyle.flex1}>
+                    <NavigationContainer theme={navigationTheme as any}>
+                        <ErrorBoundary>
+                            <BootstrapComponent />
+                            <NotificationLifecycleManager />
+                            <ReducedMotionConfig mode={ReduceMotion.Never} />
+                            <PageBackground />
+                            <Stack.Navigator
+                                initialRouteName={routes[0].path}
+                                screenOptions={{
+                                    headerShown: false,
+                                    animation: "slide_from_right",
+                                    animationDuration: 100,
+                                }}>
+                                {routes.map(route => (
+                                    <Stack.Screen
+                                        key={route.path}
+                                        name={route.path}
+                                        component={route.component}
+                                    />
+                                ))}
+                            </Stack.Navigator>
+                            <Panels />
+                            <Dialogs />
+                            <ToastBaseComponent />
+                            <PortalHost />
+                        </ErrorBoundary>
                     </NavigationContainer>
                 </SafeAreaProvider>
-            </GestureHandlerRootView>
-        </ErrorBoundary>
+                <Debug />
+            </View>
+        </GestureHandlerRootView>
     );
 }
+
+const styles = StyleSheet.create({
+    root: {
+        flex: 1,
+    },
+});

@@ -53,6 +53,13 @@ export default function AlbumCover(props: IProps) {
 
     const [containerHeight, setContainerHeight] = useState<number | null>(null);
     const [operationsBottom, setOperationsBottom] = useState<number | null>(null);
+    // Keep latest measurements in refs so layout handlers never call setState
+    // synchronously during React's commit/render (RN onLayout can re-enter).
+    const containerHeightRef = useRef<number | null>(null);
+    const operationsBottomRef = useRef<number | null>(null);
+    const pendingContainerRef = useRef<number | null>(null);
+    const pendingOpsBottomRef = useRef<number | null>(null);
+    const layoutRafRef = useRef<number | null>(null);
 
     const usableWindowHeight = windowHeight - safeAreaInsets.top - safeAreaInsets.bottom;
     const usableAspectRatio = usableWindowHeight / Math.max(1, windowWidth);
@@ -64,8 +71,62 @@ export default function AlbumCover(props: IProps) {
     }, [orientation, usableAspectRatio]);
     const [miniLyricLayout, setMiniLyricLayout] = useState<"normal" | "compact" | "hidden">(baseMiniLyricLayout);
 
+    const flushLayoutState = useCallback(() => {
+        layoutRafRef.current = null;
+        const nextContainer = pendingContainerRef.current;
+        const nextOpsBottom = pendingOpsBottomRef.current;
+        pendingContainerRef.current = null;
+        pendingOpsBottomRef.current = null;
+
+        if (
+            nextContainer != null &&
+            Math.abs((containerHeightRef.current ?? -1) - nextContainer) > 0.5
+        ) {
+            containerHeightRef.current = nextContainer;
+            setContainerHeight(nextContainer);
+        }
+        if (
+            nextOpsBottom != null &&
+            Math.abs((operationsBottomRef.current ?? -1) - nextOpsBottom) > 0.5
+        ) {
+            operationsBottomRef.current = nextOpsBottom;
+            setOperationsBottom(nextOpsBottom);
+        }
+    }, []);
+
+    const scheduleLayoutState = useCallback(
+        (nextContainer?: number, nextOpsBottom?: number) => {
+            if (typeof nextContainer === "number") {
+                pendingContainerRef.current = nextContainer;
+            }
+            if (typeof nextOpsBottom === "number") {
+                pendingOpsBottomRef.current = nextOpsBottom;
+            }
+            if (layoutRafRef.current == null) {
+                layoutRafRef.current = requestAnimationFrame(flushLayoutState);
+            }
+        },
+        [flushLayoutState],
+    );
+
+    const onRootLayout = useCallback(
+        (event: { nativeEvent: { layout: { height: number } } }) => {
+            scheduleLayoutState(event.nativeEvent.layout.height);
+        },
+        [scheduleLayoutState],
+    );
+
+    const onOperationsLayout = useCallback(
+        (event: { nativeEvent: { layout: { y: number; height: number } } }) => {
+            const layout = event.nativeEvent.layout;
+            scheduleLayoutState(undefined, layout.y + layout.height);
+        },
+        [scheduleLayoutState],
+    );
     useEffect(() => {
         setMiniLyricLayout(baseMiniLyricLayout);
+        operationsBottomRef.current = null;
+        setOperationsBottom(null);
     }, [baseMiniLyricLayout, windowHeight, windowWidth, safeAreaInsets.bottom, safeAreaInsets.top]);
 
     useEffect(() => {
@@ -76,19 +137,24 @@ export default function AlbumCover(props: IProps) {
             return;
         }
         if (operationsBottom > containerHeight + rpx(2)) {
+            // Shrink mini lyric until operations fit; reset ops measurement for next pass.
+            operationsBottomRef.current = null;
             setOperationsBottom(null);
-            setMiniLyricLayout((current) => {
+            setMiniLyricLayout(current => {
                 if (current === "normal") return "compact";
                 if (current === "compact") return "hidden";
                 return "hidden";
             });
         }
-    }, [
-        containerHeight,
-        operationsBottom,
-        orientation,
-    ]);
+    }, [containerHeight, operationsBottom, orientation]);
 
+    useEffect(() => {
+        return () => {
+            if (layoutRafRef.current != null) {
+                cancelAnimationFrame(layoutRafRef.current);
+            }
+        };
+    }, []);
     // 旋转动画
     const spinValue = useRef(new Animated.Value(0)).current;
     const animationRef = useRef<Animated.CompositeAnimation | null>(null);
@@ -239,11 +305,7 @@ export default function AlbumCover(props: IProps) {
 
     if (useImmersiveCover) {
         return (
-            <View
-                style={styles.verticalRoot}
-                onLayout={(event) => {
-                    setContainerHeight(event.nativeEvent.layout.height);
-                }}>
+            <View style={styles.verticalRoot} onLayout={onRootLayout}>
                 <GestureDetector gesture={combineGesture}>
                     <Animated.View
                         style={[
@@ -270,11 +332,7 @@ export default function AlbumCover(props: IProps) {
                         />
                     </View>
                     <View style={{ flex: 1 }} />
-                    <View
-                        onLayout={(event) => {
-                            const layout = event.nativeEvent.layout;
-                            setOperationsBottom(layout.y + layout.height);
-                        }}>
+                    <View onLayout={onOperationsLayout}>
                         <Operations />
                     </View>
                 </View>
@@ -283,11 +341,7 @@ export default function AlbumCover(props: IProps) {
     }
 
     return (
-        <View
-            style={styles.verticalRoot}
-            onLayout={(event) => {
-                setContainerHeight(event.nativeEvent.layout.height);
-            }}>
+        <View style={styles.verticalRoot} onLayout={onRootLayout}>
             <View style={containerStyle}>
                 <GestureDetector gesture={combineGesture}>
                     <Animated.View
@@ -313,11 +367,7 @@ export default function AlbumCover(props: IProps) {
                 />
             </View>
             <View style={{ flex: 1 }} />
-            <View
-                onLayout={(event) => {
-                    const layout = event.nativeEvent.layout;
-                    setOperationsBottom(layout.y + layout.height);
-                }}>
+            <View onLayout={onOperationsLayout}>
                 <Operations />
             </View>
         </View>

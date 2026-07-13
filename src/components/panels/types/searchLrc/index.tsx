@@ -1,14 +1,15 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import rpx, { vmax, vw } from "@/utils/rpx";
 
-import { fontSizeConst, fontWeightConst } from "@/constants/uiConst";
+import { fontSizeConst } from "@/constants/uiConst";
 import useColors from "@/hooks/useColors";
 import PanelBase from "../../base/panelBase";
 import { TextInput } from "react-native-gesture-handler";
 import useSearchLrc from "./useSearchLrc";
 import PluginManager from "@/core/pluginManager";
-import { SceneMap, TabBar, TabView } from "react-native-tab-view";
+import { SceneMap, TabView } from "react-native-tab-view";
+import PillTabBar from "@/components/base/pillTabBar";
 import LyricList from "./LyricList";
 import globalStyle from "@/constants/globalStyle";
 import NoPlugin from "@/components/base/noPlugin";
@@ -208,18 +209,16 @@ function LyricResultBodyWrapper() {
 
     }, [routes]);
 
-
-    const activeTabBackground = Color(colors.primary).alpha(0.12).toString();
     return routes?.length ? (
         <View style={globalStyle.fwflex1}>
             <View
-                    style={[
-                        style.pluginSectionCard,
-                        {
-                            backgroundColor: colors.card,
-                        },
-                        cardStyle,
-                    ]}>
+                style={[
+                    style.pluginSectionCard,
+                    {
+                        backgroundColor: colors.card,
+                    },
+                    cardStyle,
+                ]}>
                 <ThemeText
                     fontSize="caption"
                     fontWeight="bold"
@@ -234,51 +233,15 @@ function LyricResultBodyWrapper() {
                         index,
                         routes,
                     }}
-                    renderTabBar={_ => (
-                        <TabBar
-                            {..._}
-                            scrollEnabled
-                            // eslint-disable-next-line react-native/no-inline-styles -- Dynamic transparent styles for tab appearance
-                            style={{
-                                backgroundColor: "transparent",
-                                shadowColor: "transparent",
-                                borderColor: "transparent",
-                                paddingHorizontal: 0,
-                                paddingTop: rpx(2),
-                                paddingBottom: rpx(8),
-                            }}
-                            // eslint-disable-next-line react-native/no-inline-styles -- Dynamic width for tab flexibility
-                            tabStyle={{
-                                width: "auto",
-                                paddingHorizontal: rpx(4),
-                            }}
-                            renderIndicator={() => null}
-                            pressColor="transparent"
-                            inactiveColor={colors.text}
-                            activeColor={colors.primary}
-                            renderLabel={({ route, focused }) => (
-                                <Text
-                                    numberOfLines={1}
-                                    // eslint-disable-next-line react-native/no-inline-styles -- Dynamic focused state styles
-                                    style={{
-                                        maxWidth: rpx(180),
-                                        fontWeight: focused
-                                            ? fontWeightConst.bolder
-                                            : fontWeightConst.medium,
-                                        color: focused
-                                            ? colors.primary
-                                            : colors.textSecondary ?? colors.text,
-                                        textAlign: "center",
-                                        paddingVertical: rpx(8),
-                                        paddingHorizontal: rpx(16),
-                                        borderRadius: rpx(16),
-                                        backgroundColor: focused
-                                            ? activeTabBackground
-                                            : "transparent",
-                                    }}>
-                                    {route.title ?? t("panel.searchLrc.unnamed")}
-                                </Text>
-                            )}
+                    renderTabBar={() => (
+                        <PillTabBar
+                            routes={routes}
+                            index={index}
+                            onIndexChange={setIndex}
+                            variant="pill"
+                            getTitle={(route) =>
+                                route.title ?? t("panel.searchLrc.unnamed")
+                            }
                         />
                     )}
                     renderScene={sceneMap}

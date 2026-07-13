@@ -15,5 +15,9 @@ class UtilsPackage : ReactPackage {
 
     override fun createNativeModules(
         reactContext: ReactApplicationContext
-    ): MutableList<NativeModule> = listOf(UtilsModule(reactContext)).toMutableList()
+    ): MutableList<NativeModule> =
+        listOf(
+            UtilsModule(reactContext),
+            DebugFloatModule(reactContext),
+        ).toMutableList()
 }

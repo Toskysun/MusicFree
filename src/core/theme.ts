@@ -3,14 +3,29 @@ import Config from "@/core/appConfig";
 import {
     DarkTheme as _DarkTheme,
     DefaultTheme as _DefaultTheme,
+    type Theme as NavigationTheme,
 } from "@react-navigation/native";
 import { GlobalState } from "@/utils/stateMapper";
 import { CustomizedColors } from "@/hooks/useColors";
 import Color from "color";
 
+/** RN Navigation 7+ reads theme.fonts.regular in native-stack headers. */
+const navigationFonts: NavigationTheme["fonts"] =
+    _DefaultTheme.fonts ?? _DarkTheme.fonts;
+
+function ensureNavigationFonts<T extends { fonts?: NavigationTheme["fonts"] }>(
+    theme: T,
+): T & { fonts: NavigationTheme["fonts"] } {
+    return {
+        ...theme,
+        fonts: theme.fonts ?? navigationFonts,
+    };
+}
+
 export const lightTheme = {
     id: "p-light",
     ..._DefaultTheme,
+    fonts: navigationFonts,
     colors: {
         ..._DefaultTheme.colors,
         background: "transparent",
@@ -45,6 +60,7 @@ export const lightTheme = {
 export const darkTheme = {
     id: "p-dark",
     ..._DarkTheme,
+    fonts: navigationFonts,
     colors: {
         ..._DarkTheme.colors,
         background: "transparent",
@@ -94,7 +110,7 @@ export const customBackgroundSurfaceColors: Partial<CustomizedColors> = {
     placeholder: "rgba(0,0,0,0.20)",
 };
 
-const themeStore = new GlobalState(darkTheme);
+const themeStore = new GlobalState(ensureNavigationFonts(darkTheme));
 const backgroundStore = new GlobalState<IBackgroundInfo | null>(null);
 
 function sameColor(a?: string, b?: string) {
@@ -230,9 +246,9 @@ function setup() {
     const bgUrl = Config.getConfig("theme.background");
 
     if (currentTheme === "p-dark") {
-        themeStore.setValue(darkTheme);
+        themeStore.setValue(ensureNavigationFonts(darkTheme));
     } else if (currentTheme === "p-light") {
-        themeStore.setValue(lightTheme);
+        themeStore.setValue(ensureNavigationFonts(lightTheme));
     } else {
         const savedColors = (Config.getConfig("theme.colors") as CustomizedColors) ??
             darkTheme.colors;
@@ -266,12 +282,20 @@ function setup() {
             Config.setConfig("theme.colors", cardSynced.colors);
         }
 
-        themeStore.setValue({
-            id: currentTheme,
-            dark: true,
-            // @ts-ignore
-            colors: normalizeCustomBackgroundColors(cardSynced.colors, !!bgUrl),
-        });
+        // Custom themes previously omitted `fonts`, which crashes RN Navigation 7
+        // native-stack (Cannot read property 'regular' of undefined).
+        themeStore.setValue(
+            ensureNavigationFonts({
+                ...darkTheme,
+                id: currentTheme,
+                dark: true,
+                // @ts-ignore
+                colors: normalizeCustomBackgroundColors(
+                    cardSynced.colors,
+                    !!bgUrl,
+                ),
+            }),
+        );
     }
 
     const bgBlur = Config.getConfig("theme.backgroundBlur");
@@ -292,26 +316,29 @@ function setTheme(
     },
 ) {
     if (themeName === "p-light") {
-        themeStore.setValue(lightTheme);
+        themeStore.setValue(ensureNavigationFonts(lightTheme));
     } else if (themeName === "p-dark") {
-        themeStore.setValue(darkTheme);
+        themeStore.setValue(ensureNavigationFonts(darkTheme));
     } else {
         const hasBackground = !!(
             extra?.background?.url ??
             backgroundStore.getValue()?.url ??
             Config.getConfig("theme.background")
         );
-        themeStore.setValue({
-            id: themeName,
-            dark: true,
-            colors: normalizeCustomBackgroundColors(
-                {
-                    ...darkTheme.colors,
-                    ...(extra?.colors ?? {}),
-                },
-                hasBackground,
-            ) as typeof darkTheme.colors,
-        });
+        themeStore.setValue(
+            ensureNavigationFonts({
+                ...darkTheme,
+                id: themeName,
+                dark: true,
+                colors: normalizeCustomBackgroundColors(
+                    {
+                        ...darkTheme.colors,
+                        ...(extra?.colors ?? {}),
+                    },
+                    hasBackground,
+                ) as typeof darkTheme.colors,
+            }),
+        );
     }
 
     Config.setConfig("theme.selectedTheme", themeName);
@@ -373,13 +400,13 @@ function setColors(colors: Partial<CustomizedColors>) {
         const hasBackground = !!(
             backgroundStore.getValue()?.url ?? Config.getConfig("theme.background")
         );
-        const newTheme = {
+        const newTheme = ensureNavigationFonts({
             ...currentTheme,
             colors: normalizeCustomBackgroundColors(
                 newColors,
                 hasBackground,
             ) as typeof currentTheme.colors,
-        };
+        });
         Config.setConfig("theme.colors", newTheme.colors);
         themeStore.setValue(newTheme);
     }

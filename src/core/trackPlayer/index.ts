@@ -150,7 +150,7 @@ class TrackPlayer extends EventEmitter<{
         const musicQueue = PersistStatus.get("music.playList");
         const repeatMode = PersistStatus.get("music.repeatMode");
         const progress = PersistStatus.get("music.progress");
-        const track = PersistStatus.get("music.musicItem");
+        let track = PersistStatus.get("music.musicItem");
         // 偏好音质：优先用户设置的默认播放音质，回退到 master。
         // 不要直接使用 PersistStatus 里的 music.quality —— 它是上一首歌经
         // getSmartQuality 降级后的实际音质，若上一首只支持到 320k(HQ)，会把恢复的
@@ -165,12 +165,12 @@ class TrackPlayer extends EventEmitter<{
         const quality: IMusic.IQualityKey =
             track && (track.qualities || track.source)
                 ? getSmartQuality(
-                      preferredQuality,
+                    preferredQuality,
                       (track.qualities || track.source) as
                           | IMusic.IQuality
                           | undefined,
                       restorePlugin?.supportedQualities,
-                  )
+                )
                 : preferredQuality;
 
         // 状态恢复
@@ -207,12 +207,15 @@ class TrackPlayer extends EventEmitter<{
                     url: track.url,
                     title: track.title,
                 });
-                delete track.url;
-                delete track.headers;
+                // Clone: persisted tracks may be non-extensible on Hermes.
+                const rest = { ...(track as any) };
+                delete rest.url;
+                delete rest.headers;
+                track = rest as IMusic.IMusicItem;
             }
 
             if (!shouldAutoPlayOnStartup) {
-                track.isInit = true;
+                track = { ...track, isInit: true } as IMusic.IMusicItem;
             }
 
             this.setCurrentMusic(track);
@@ -387,19 +390,22 @@ class TrackPlayer extends EventEmitter<{
         const now = Date.now();
         let newPlayList: IMusic.IMusicItem[] = [];
         let currentPlayList = this.playList;
-        musicItems.forEach((item, index) => {
-            item[timeStampSymbol] = now;
-            item[sortIndexSymbol] = index;
-        });
+        // Never mutate in place: items from immer/produce or frozen state throw
+        // Hermes "TypeError: cannot add a new property" when assigning symbols.
+        const stampedItems = musicItems.map((item, index) => ({
+            ...item,
+            [timeStampSymbol]: now,
+            [sortIndexSymbol]: index,
+        }));
 
         if (beforeIndex === undefined || beforeIndex < 0) {
             // 1.1. 添加到歌单末尾，并过滤掉已有的歌曲
             newPlayList = currentPlayList.concat(
-                musicItems.filter(item => !this.isInPlayList(item)),
+                stampedItems.filter(item => !this.isInPlayList(item)),
             );
         } else {
             // 1.2. 新的播放列表，插入
-            const indexMap = createMediaIndexMap(musicItems);
+            const indexMap = createMediaIndexMap(stampedItems);
             const beforeDraft = currentPlayList
                 .slice(0, beforeIndex)
                 .filter(item => !indexMap.has(item));
@@ -407,7 +413,7 @@ class TrackPlayer extends EventEmitter<{
                 .slice(beforeIndex)
                 .filter(item => !indexMap.has(item));
 
-            newPlayList = [...beforeDraft, ...musicItems, ...afterDraft];
+            newPlayList = [...beforeDraft, ...stampedItems, ...afterDraft];
         }
 
         // 如果太长了
@@ -508,10 +514,10 @@ class TrackPlayer extends EventEmitter<{
             platform: musicItem?.platform ?? this.currentMusic?.platform ?? "",
             forcePlay: !!forcePlay,
         });
-        devLog('info', '[TrackPlayer] Play method called', {
+        devLog("info", "[TrackPlayer] Play method called", {
             title: musicItem?.title,
             forcePlay,
-            timestamp: playStartTime
+            timestamp: playStartTime,
         });
 
         try {
@@ -578,17 +584,17 @@ class TrackPlayer extends EventEmitter<{
             }
 
             // 4. 更新列表状态和当前音乐
-            devLog('info', '[TrackPlayer] Setting current music and emitting event', {
+            devLog("info", "[TrackPlayer] Setting current music and emitting event", {
                 title: musicItem.title,
                 timestamp: Date.now(),
-                elapsed: Date.now() - playStartTime
+                elapsed: Date.now() - playStartTime,
             });
 
             this.setCurrentMusic(musicItem);
 
-            devLog('info', '[TrackPlayer] Current music set, initializing queue', {
+            devLog("info", "[TrackPlayer] Current music set, initializing queue", {
                 timestamp: Date.now(),
-                elapsed: Date.now() - playStartTime
+                elapsed: Date.now() - playStartTime,
             });
 
             void appendStartupBreadcrumb("trackplayer-set-proposed-queue", {
@@ -600,9 +606,9 @@ class TrackPlayer extends EventEmitter<{
                 artwork: resolveImportedAssetOrPath(musicItem.artwork?.trim?.()?.length ? musicItem.artwork : ImgAsset.albumDefault) as unknown as any,
             }, this.getFakeNextTrack()]);
 
-            devLog('info', '[TrackPlayer] Queue initialized, fetching media source', {
+            devLog("info", "[TrackPlayer] Queue initialized, fetching media source", {
                 timestamp: Date.now(),
-                elapsed: Date.now() - playStartTime
+                elapsed: Date.now() - playStartTime,
             });
 
             // 5. 获取音源
@@ -644,6 +650,8 @@ class TrackPlayer extends EventEmitter<{
                 )) ?? null;
                 
                 if (source) {
+                    // Clone before mutation — cached/plugin sources may be frozen.
+                    source = { ...source };
                     void appendStartupBreadcrumb("trackplayer-source-selected", {
                         title: musicItem.title,
                         quality: selectedQuality,
@@ -670,6 +678,7 @@ class TrackPlayer extends EventEmitter<{
                             )) ?? null;
                             // 5.4.1 获取到真实源
                             if (source) {
+                                source = { ...source };
                                 try {
                                     const { getLocalStreamUrlIfNeeded } = require("@/service/mflac/proxy");
                                     const localUrl = await getLocalStreamUrlIfNeeded(source.url, (source as any)?.ekey, source.headers, (source as any)?.cek);
@@ -735,23 +744,24 @@ class TrackPlayer extends EventEmitter<{
                                         )) ?? null;
                                     // 5.4.1 获取到真实源
                                     if (source) {
+                                        source = { ...source };
                                         try {
                                             const { getLocalStreamUrlIfNeeded } = require("@/service/mflac/proxy");
-                                            devLog('info', '🎵[trackPlayer] 尝试处理mflac', {
+                                            devLog("info", "🎵[trackPlayer] 尝试处理mflac", {
                                                 url: source.url,
                                                 hasEkey: !!source.ekey,
-                                                ekeyLength: source.ekey?.length
+                                                ekeyLength: source.ekey?.length,
                                             });
                                             const localUrl = await getLocalStreamUrlIfNeeded(source.url, source.ekey, source.headers, source.cek);
                                             if (localUrl) {
-                                                devLog('info', '✅[trackPlayer] mflac代理URL生成成功', { localUrl });
+                                                devLog("info", "✅[trackPlayer] mflac代理URL生成成功", { localUrl });
                                                 source.url = localUrl;
                                                 source.headers = undefined;
                                             } else {
-                                                devLog('warn', '⚠️[trackPlayer] mflac代理URL生成失败');
+                                                devLog("warn", "⚠️[trackPlayer] mflac代理URL生成失败");
                                             }
                                         } catch (error: any) {
-                                            devLog('error', '❌[trackPlayer] mflac处理异常', error);
+                                            devLog("error", "❌[trackPlayer] mflac处理异常", error);
                                         }
                                         this.setQuality(quality);
                                         break;
@@ -780,8 +790,7 @@ class TrackPlayer extends EventEmitter<{
 
             // 6. 特殊类型源
             if (getUrlExt(source.url) === ".m3u8") {
-                // @ts-ignore
-                source.type = "hls";
+                source = { ...source, type: "hls" as any };
             }
             // 7. 合并结果
             track = this.mergeTrackSource(musicItem, source) as IMusic.IMusicItem;
@@ -789,10 +798,10 @@ class TrackPlayer extends EventEmitter<{
             // 8. 新增历史记录
             this.musicHistoryService.addMusic(musicItem);
 
-            devLog('info', '[TrackPlayer] Media source obtained, starting playback', {
+            devLog("info", "[TrackPlayer] Media source obtained, starting playback", {
                 timestamp: Date.now(),
                 elapsed: Date.now() - playStartTime,
-                hasUrl: !!track.url
+                hasUrl: !!track.url,
             });
 
             trace("获取音源成功", track);
@@ -800,9 +809,9 @@ class TrackPlayer extends EventEmitter<{
             // 9. 设置音源并立即开始播放 - CRITICAL: 不等待任何其他操作
             await this.setTrackSource(track as Track);
 
-            devLog('info', '[TrackPlayer] Playback started successfully', {
+            devLog("info", "[TrackPlayer] Playback started successfully", {
                 timestamp: Date.now(),
-                elapsed: Date.now() - playStartTime
+                elapsed: Date.now() - playStartTime,
             });
 
             // 10. 异步获取补充信息 - 完全后台执行，绝对不阻塞播放
@@ -812,16 +821,20 @@ class TrackPlayer extends EventEmitter<{
                     try {
                         const info = (await plugin?.methods?.getMusicInfo?.(musicItem)) ?? null;
                         if (info) {
+                            let safeInfo = info;
                             if (
                                 (typeof info.url === "string" && info.url.trim() === "") ||
                                 (info.url && typeof info.url !== "string")
                             ) {
-                                delete info.url;
+                                // Clone without url when empty/invalid (frozen-safe).
+                                const rest = { ...(info as any) };
+                                delete rest.url;
+                                safeInfo = rest;
                             }
 
                             // 11. 设置补充信息
                             if (this.isCurrentMusic(musicItem)) {
-                                const mergedTrack = this.mergeTrackSource(track, info);
+                                const mergedTrack = this.mergeTrackSource(track, safeInfo);
                                 getDefaultStore().set(currentMusicAtom, mergedTrack as IMusic.IMusicItem);
                                 await ReactNativeTrackPlayer.updateMetadataForTrack(
                                     0,
@@ -830,7 +843,7 @@ class TrackPlayer extends EventEmitter<{
                             }
                         }
                     } catch (err) {
-                        devLog('warn', '[TrackPlayer] Failed to fetch additional music info', err);
+                        devLog("warn", "[TrackPlayer] Failed to fetch additional music info", err);
                     }
                 })();
             }, 0);
@@ -966,10 +979,11 @@ class TrackPlayer extends EventEmitter<{
                 );
             }
 
-            newPlayList.forEach((it, index) => {
-                it[timeStampSymbol] = now;
-                it[sortIndexSymbol] = index;
-            });
+            newPlayList = newPlayList.map((it, index) => ({
+                ...it,
+                [timeStampSymbol]: now,
+                [sortIndexSymbol]: index,
+            }));
 
             this.setPlayList(
                 this.repeatMode === MusicRepeatMode.SHUFFLE

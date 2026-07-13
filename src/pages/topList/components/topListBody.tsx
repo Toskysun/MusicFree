@@ -1,21 +1,20 @@
 import React, { useCallback, useState } from "react";
-import { StyleSheet, Text } from "react-native";
 import rpx from "@/utils/rpx";
 import PluginManager from "@/core/pluginManager";
-import { TabBar, TabView } from "react-native-tab-view";
-import { fontWeightConst } from "@/constants/uiConst";
+import { TabView } from "react-native-tab-view";
 import BoardPanelWrapper from "./boardPanelWrapper";
-import useColors from "@/hooks/useColors";
 import NoPlugin from "@/components/base/noPlugin";
 import i18n from "@/core/i18n";
+import PillTabBar from "@/components/base/pillTabBar";
 
 export default function TopListBody() {
-    const routes = PluginManager.getSortedPluginsWithAbility("getTopLists").map(_ => ({
-        key: _.hash,
-        title: _.name,
-    }));
+    const routes = PluginManager.getSortedPluginsWithAbility("getTopLists").map(
+        _ => ({
+            key: _.hash,
+            title: _.name,
+        }),
+    );
     const [index, setIndex] = useState(0);
-    const colors = useColors();
 
     const renderScene = useCallback(
         (props: { route: { key: string } }) => (
@@ -23,47 +22,26 @@ export default function TopListBody() {
         ),
         [],
     );
+
     if (!routes?.length) {
         return <NoPlugin notSupportType={i18n.t("topList.title")} />;
     }
+
+    const safeIndex = Math.min(index, routes.length - 1);
 
     return (
         <TabView
             lazy
             navigationState={{
-                index,
+                index: safeIndex,
                 routes,
             }}
-            renderTabBar={props => (
-                <TabBar
-                    {...props}
-                    style={styles.tabBarStyle}
-                    tabStyle={styles.tabStyle}
-                    scrollEnabled
-                    inactiveColor={colors.text}
-                    activeColor={colors.primary}
-                    renderLabel={({ route, focused }) => (
-                        <Text
-                            numberOfLines={1}
-                            // eslint-disable-next-line react-native/no-inline-styles -- Dynamic focused state styles
-                            style={{
-                                width: rpx(160),
-                                fontWeight: focused
-                                    ? fontWeightConst.bolder
-                                    : fontWeightConst.medium,
-                                color: focused
-                                    ? colors.primary
-                                    : colors.textSecondary ?? colors.text,
-                                 
-                                textAlign: "center",
-                            }}>
-                            {route.title}
-                        </Text>
-                    )}
-                    indicatorStyle={{
-                        backgroundColor: colors.primary,
-                        height: rpx(4),
-                    }}
+            renderTabBar={() => (
+                <PillTabBar
+                    routes={routes}
+                    index={safeIndex}
+                    onIndexChange={setIndex}
+                    variant="underline"
                 />
             )}
             renderScene={renderScene}
@@ -72,14 +50,3 @@ export default function TopListBody() {
         />
     );
 }
-
-const styles = StyleSheet.create({
-    tabBarStyle: {
-        backgroundColor: "transparent",
-        shadowColor: "transparent",
-        borderColor: "transparent",
-    },
-    tabStyle: {
-        width: "auto",
-    },
-});

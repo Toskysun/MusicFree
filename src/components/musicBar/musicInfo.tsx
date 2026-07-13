@@ -16,7 +16,6 @@ import Animated, {
     useSharedValue,
     withTiming,
 } from "react-native-reanimated";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { timingConfig } from "@/constants/commonConst";
 
 interface IBarMusicItemProps {
@@ -24,10 +23,9 @@ interface IBarMusicItemProps {
     activeIndex: number; // 当前展示的是0/1/2
     transformSharedValue: SharedValue<number>;
 }
-function _BarMusicItem(props: IBarMusicItemProps) {
+function BarMusicItemView(props: IBarMusicItemProps) {
     const { musicItem, activeIndex, transformSharedValue } = props;
     const colors = useColors();
-    const safeAreaInsets = useSafeAreaInsets();
 
     const animatedStyles = useAnimatedStyle(() => {
         return {
@@ -43,9 +41,9 @@ function _BarMusicItem(props: IBarMusicItemProps) {
         <Animated.View
             style={[
                 styles.container,
-                {
-                    paddingLeft: rpx(24) + safeAreaInsets.left,
-                },
+                // Parent MusicBar already applies horizontal safe-area margins.
+                // Do not add safeAreaInsets.left again or text/controls drift apart.
+                styles.containerPadding,
                 animatedStyles,
             ]}>
             <FastImage
@@ -78,7 +76,7 @@ function _BarMusicItem(props: IBarMusicItemProps) {
 }
 
 const BarMusicItem = memo(
-    _BarMusicItem,
+    BarMusicItemView,
     (prev, curr) =>
         prev.musicItem === curr.musicItem &&
         prev.activeIndex === curr.activeIndex,
@@ -91,16 +89,23 @@ const styles = StyleSheet.create({
         alignItems: "center",
         position: "absolute",
     },
+    containerPadding: {
+        paddingLeft: rpx(24),
+        paddingRight: rpx(12),
+    },
     textWrapper: {
         flex: 1,
         flexShrink: 1,
         justifyContent: "center",
+        // Leave room so long titles don't paint under the play controls.
+        minWidth: 0,
     },
     artworkImg: {
         width: rpx(76),
         height: rpx(76),
         borderRadius: rpx(16),
         marginRight: rpx(18),
+        flexShrink: 0,
     },
     artist: {
         marginTop: rpx(7),
