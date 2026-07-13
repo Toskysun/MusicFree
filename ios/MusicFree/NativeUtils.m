@@ -10,7 +10,11 @@
 RCT_EXPORT_MODULE();
 
 RCT_EXPORT_METHOD(exitApp) {
-  exit(0);
+  // iOS has no public quit API. Run exit on main queue after current RN bridge work settles
+  // so an explicit "退出应用" does not race mid-render (reduces crash-like reports).
+  dispatch_async(dispatch_get_main_queue(), ^{
+    exit(0);
+  });
 }
 
 RCT_EXPORT_METHOD(checkStoragePermission:(RCTPromiseResolveBlock)resolve

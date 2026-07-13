@@ -29,7 +29,8 @@ RCT_EXPORT_METHOD(showStatusBarLyric:(NSString *)initLyric
                   config:(NSDictionary *)config
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject) {
-  reject(@"UNSUPPORTED", @"iOS does not support floating lyrics", nil);
+  // Soft no-op: resolve false so JS does not treat this as a hard failure / unhandled rejection.
+  resolve(@NO);
 }
 
 RCT_EXPORT_METHOD(hideStatusBarLyric:(RCTPromiseResolveBlock)resolve

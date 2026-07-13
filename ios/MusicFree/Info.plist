@@ -34,7 +34,7 @@
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSMinimumSystemVersion</key>
-	<string>12.0</string>
+	<string>16.4</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSAppTransportSecurity</key>
@@ -42,6 +42,15 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<!-- Privacy usage descriptions required by iOS for photo picker / local media -->
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>MusicFree 需要访问相册，用于选择歌单封面与主题背景图片</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>MusicFree 需要将图片保存到相册（如导出封面）</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>MusicFree 需要使用本地回环网络进行加密音频流解密播放</string>
+	<key>NSAppleMusicUsageDescription</key>
+	<string>MusicFree 需要访问媒体库以管理本地音乐文件</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>

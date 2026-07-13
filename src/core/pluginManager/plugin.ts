@@ -1156,15 +1156,32 @@ export class Plugin {
                     env,
                 };
 
-                // Buffer is intentionally NOT a function parameter: many plugins declare
-                // `const Buffer = require('buffer').Buffer`, which conflicts with a
-                // parameter binding under Hermes ("Identifier 'Buffer' is already declared").
+                // Sandbox free names (console/env/URL/process/TextDecoder/Buffer) must NOT
+                // be function parameters or local bindings. Plugins often redeclare them
+                // (e.g. `const Buffer = require('buffer').Buffer`), and Hermes throws
+                // "Identifier 'X' is already declared". Expose via globalThis + require only.
+                // Keep require/module/exports as params (standard CJS plugin shape).
                 // eslint-disable-next-line no-new-func
                 _instance = Function(`
                     'use strict';
-                    return function(require, __musicfree_require, module, exports, console, env, URL, process, TextDecoder, TextEncoder, __MusicFreeBuffer) {
-                        if (typeof globalThis.Buffer === 'undefined') {
-                            globalThis.Buffer = __MusicFreeBuffer;
+                    return function(require, __musicfree_require, module, exports, __mfConsole, __mfEnv, __mfURL, __mfProcess, __mfTextDecoder, __mfTextEncoder, __mfBuffer) {
+                        var g = (typeof globalThis !== 'undefined') ? globalThis : (typeof global !== 'undefined' ? global : this);
+                        if (g) {
+                            if (typeof g.Buffer === 'undefined') g.Buffer = __mfBuffer;
+                            if (typeof g.console === 'undefined') g.console = __mfConsole;
+                            else {
+                                try {
+                                    g.console.log = __mfConsole.log || g.console.log;
+                                    g.console.info = __mfConsole.info || g.console.info;
+                                    g.console.warn = __mfConsole.warn || g.console.warn;
+                                    g.console.error = __mfConsole.error || g.console.error;
+                                } catch (_e) {}
+                            }
+                            g.env = __mfEnv;
+                            if (typeof g.URL === 'undefined') g.URL = __mfURL;
+                            if (typeof g.process === 'undefined') g.process = __mfProcess;
+                            if (typeof g.TextDecoder === 'undefined') g.TextDecoder = __mfTextDecoder;
+                            if (typeof g.TextEncoder === 'undefined') g.TextEncoder = __mfTextEncoder;
                         }
                         ${funcCode}
                     }
