@@ -23,6 +23,7 @@ import { produce } from "immer";
 import { nanoid } from "@/utils/nanoid";
 import objectPath from "object-path";
 import qs from "qs";
+import { Platform } from "react-native";
 import { default as DeviceInfo, default as deviceInfoModule } from "react-native-device-info";
 import RNFS, { exists, readFile, stat, writeFile } from "react-native-fs";
 import { URL } from "react-native-url-polyfill";
@@ -176,7 +177,7 @@ function formatAuthUrl(url: string) {
                 auth,
             };
         }
-    } catch (e) {
+    } catch {
         return {
             url,
         };
@@ -1146,19 +1147,25 @@ export class Plugin {
                         return this.getUserVariables() ?? {};
                     },
                     appVersion,
-                    os: "android",
+                    os: Platform.OS,
                     lang: "zh-CN",
                 };
                 const _process = {
-                    platform: "android",
+                    platform: Platform.OS,
                     version: appVersion,
                     env,
                 };
 
+                // Buffer is intentionally NOT a function parameter: many plugins declare
+                // `const Buffer = require('buffer').Buffer`, which conflicts with a
+                // parameter binding under Hermes ("Identifier 'Buffer' is already declared").
                 // eslint-disable-next-line no-new-func
                 _instance = Function(`
                     'use strict';
-                    return function(require, __musicfree_require, module, exports, console, env, URL, process, TextDecoder, TextEncoder, Buffer) {
+                    return function(require, __musicfree_require, module, exports, console, env, URL, process, TextDecoder, TextEncoder, __MusicFreeBuffer) {
+                        if (typeof globalThis.Buffer === 'undefined') {
+                            globalThis.Buffer = __MusicFreeBuffer;
+                        }
                         ${funcCode}
                     }
                 `)()(
