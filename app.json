@@ -2,7 +2,7 @@
   "expo": {
     "name": "MusicFree",
     "slug": "musicfree",
-    "version": "0.7.00",
+    "version": "0.7.11",
     "android": {
       "package": "fun.xwj.musicfree"
     },

@@ -9,9 +9,9 @@
 /* Begin PBXBuildFile section */
 		00E356F31AD99517003FC87E /* MusicFreeTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 00E356F21AD99517003FC87E /* MusicFreeTests.m */; };
 		0C80B921A6F3F58F76C31292 /* libPods-MusicFree.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 5DCACB8F33CDC322A6C60F78 /* libPods-MusicFree.a */; };
-		13B07FBC1A68108700A75B9A /* AppDelegate.mm in Sources */ = {isa = PBXBuildFile; fileRef = 13B07FB01A68108700A75B9A /* AppDelegate.mm */; };
+		D0E1F2A41B68108700A75B9A /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0E1F2A31B68108700A75B9A /* AppDelegate.swift */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
-		13B07FC11A68108700A75B9A /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 13B07FB71A68108700A75B9A /* main.m */; };
+
 		F1A2B3C4D5E6F708192A3B4C /* LyricUtil.m in Sources */ = {isa = PBXBuildFile; fileRef = E1A2B3C4D5E6F708192A3B4C /* LyricUtil.m */; };
 		F1A2B3C4D5E6F708192A3B4D /* Mp3Util.m in Sources */ = {isa = PBXBuildFile; fileRef = E1A2B3C4D5E6F708192A3B4D /* Mp3Util.m */; };
 		F1A2B3C4D5E6F708192A3B4E /* NativeUtils.m in Sources */ = {isa = PBXBuildFile; fileRef = E1A2B3C4D5E6F708192A3B4E /* NativeUtils.m */; };
@@ -43,11 +43,10 @@
 		00E356F11AD99517003FC87E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		00E356F21AD99517003FC87E /* MusicFreeTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MusicFreeTests.m; sourceTree = "<group>"; };
 		13B07F961A680F5B00A75B9A /* MusicFree.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MusicFree.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		13B07FAF1A68108700A75B9A /* AppDelegate.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = AppDelegate.h; path = MusicFree/AppDelegate.h; sourceTree = "<group>"; };
-		13B07FB01A68108700A75B9A /* AppDelegate.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; name = AppDelegate.mm; path = MusicFree/AppDelegate.mm; sourceTree = "<group>"; };
+		D0E1F2A31B68108700A75B9A /* AppDelegate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = MusicFree/AppDelegate.swift; sourceTree = "<group>"; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = MusicFree/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = MusicFree/Info.plist; sourceTree = "<group>"; };
-		13B07FB71A68108700A75B9A /* main.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = main.m; path = MusicFree/main.m; sourceTree = "<group>"; };
+
 		13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = PrivacyInfo.xcprivacy; path = MusicFree/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		E1A2B3C4D5E6F708192A3B4C /* LyricUtil.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = LyricUtil.m; path = MusicFree/LyricUtil.m; sourceTree = "<group>"; };
 		E1A2B3C4D5E6F708192A3B4D /* Mp3Util.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = Mp3Util.m; path = MusicFree/Mp3Util.m; sourceTree = "<group>"; };
@@ -113,13 +112,11 @@
 			isa = PBXGroup;
 			children = (
 				BB2F792B24A3F905000567C9 /* Supporting */,
-				13B07FAF1A68108700A75B9A /* AppDelegate.h */,
-				13B07FB01A68108700A75B9A /* AppDelegate.mm */,
+				D0E1F2A31B68108700A75B9A /* AppDelegate.swift */,
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */,
 				E1A2B3C4D5E6F708192A3B4C /* LyricUtil.m */,
-				13B07FB71A68108700A75B9A /* main.m */,
 				B11B22C33D44E55F66000003 /* Cenc.mm */,
 				B11B22C33D44E55F66000001 /* MFMflacSupport.h */,
 				B11B22C33D44E55F66000002 /* MFMflacSupport.mm */,
@@ -444,8 +441,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				13B07FBC1A68108700A75B9A /* AppDelegate.mm in Sources */,
-				13B07FC11A68108700A75B9A /* main.m in Sources */,
+				D0E1F2A41B68108700A75B9A /* AppDelegate.swift in Sources */,
 				F1A2B3C4D5E6F708192A3B4C /* LyricUtil.m in Sources */,
 				A11B22C33D44E55F66000002 /* Cenc.mm in Sources */,
 				A11B22C33D44E55F66000001 /* MFMflacSupport.mm in Sources */,
