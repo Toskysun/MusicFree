@@ -45,6 +45,7 @@
     "sidebar.exitApp": "Exit App",
     "sidebar.languageSettings": "Language Settings",
     "checkUpdate.error.latestVersion": "Already the latest version",
+    "checkUpdate.error.cannotConnectToServer": "Failed to check for updates, please try again later",
     "home.recommendSheet": "Recommended Playlists",
     "home.topList": "Charts",
     "home.playHistory": "Play History",

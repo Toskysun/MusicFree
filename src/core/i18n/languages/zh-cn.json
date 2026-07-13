@@ -45,6 +45,7 @@
     "sidebar.exitApp": "退出应用",
     "sidebar.languageSettings": "语言设置",
     "checkUpdate.error.latestVersion": "当前已是最新版本",
+    "checkUpdate.error.cannotConnectToServer": "检查更新失败，请稍后重试",
     "home.recommendSheet": "推荐歌单",
     "home.topList": "榜单",
     "home.playHistory": "播放历史",

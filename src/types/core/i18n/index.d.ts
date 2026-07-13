@@ -57,6 +57,7 @@ export interface ILanguageData {
 
     // 检查更新相关
     "checkUpdate.error.latestVersion": string; // 当前已是最新版本
+    "checkUpdate.error.cannotConnectToServer": string; // 检查更新失败
 
     // 首页相关
     "home.recommendSheet": string; // 推荐歌单
