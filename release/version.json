@@ -1,7 +1,16 @@
 {
-  "version": "0.7.12",
+  "version": "0.7.20",
   "changeLog": [
     "【交流】欢迎加入 Q 群：1064805856",
+    "【界面】自定义背景下输入框、对话框等去除外圈深色描边，观感更干净",
+    "【界面】侧边栏 MusicFree 标识橙色短条改为跟随主题主色",
+    "【修复】修复榜单网格在部分机型上因宽度取整被挤成单列的问题",
+    "【修复】修复 tab-view 二级页签高亮失效，统一为自绘 PillTabBar",
+    "【修复】修复 New Architecture 下 TrackPlayer TurboModule / 事件发送相关崩溃",
+    "【修复】修复播放时对冻结媒体对象写入属性导致的无法播放问题",
+    "【修复】优化调试浮钮实现，降低小米等机型 EGL_BAD_ACCESS 闪退风险",
+    "【修复】错误边界与主题 fonts 兼容 React Navigation 7",
+    "--------以上为v0.7.20新特性--------",
     "【修复】修复 New Architecture 下缺失 appmodules，导致 Android 启动崩溃（PlatformConstants）",
     "--------以上为v0.7.12新特性--------",
     "【修复】适配 Expo 57 AppDelegate（ExpoAppDelegate），修复 iOS 编译失败",
@@ -124,7 +133,7 @@
     "【优化】优化了软件启动速度 (需要在【侧边栏-基本设置-插件】中打开【启用插件懒加载】开关)"
   ],
   "download": [
-    "https://github.com/Toskysun/MusicFree/releases/download/v0.7.12/MusicFree-v0.7.12-arm64-v8a-release.apk",
-    "https://github.com/Toskysun/MusicFree/releases/download/v0.7.12/MusicFree-v0.7.12-universal-release.apk"
+    "https://github.com/Toskysun/MusicFree/releases/download/v0.7.20/MusicFree-v0.7.20-arm64-v8a-release.apk",
+    "https://github.com/Toskysun/MusicFree/releases/download/v0.7.20/MusicFree-v0.7.20-universal-release.apk"
   ]
 }
