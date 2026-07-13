@@ -1461,6 +1461,11 @@ RCT_EXPORT_METHOD(downloadWithHttp:(NSDictionary *)options
   NSString *destinationPath = options[@"destinationPath"];
   NSDictionary *headers = options[@"headers"];
 
+  if (url.length == 0 || destinationPath.length == 0) {
+    reject(@"DOWNLOAD_ERROR", @"url and destinationPath are required", nil);
+    return;
+  }
+
   NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:url]];
   if (headers) {
     for (NSString *key in headers) {
@@ -1468,13 +1473,50 @@ RCT_EXPORT_METHOD(downloadWithHttp:(NSDictionary *)options
     }
   }
 
-  NSURLSessionDataTask *task = [[NSURLSession sharedSession] dataTaskWithRequest:request completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+  // Stream to a temp file then move — avoid loading the whole media into memory (OOM risk).
+  NSURLSessionConfiguration *config = [NSURLSessionConfiguration defaultSessionConfiguration];
+  config.timeoutIntervalForRequest = 60.0;
+  config.timeoutIntervalForResource = 60.0 * 30.0;
+  NSURLSession *session = [NSURLSession sessionWithConfiguration:config];
+
+  NSURLSessionDownloadTask *task = [session downloadTaskWithRequest:request
+                                                 completionHandler:^(NSURL *location, NSURLResponse *response, NSError *error) {
     if (error) {
       reject(@"DOWNLOAD_ERROR", error.localizedDescription, error);
       return;
     }
+    if (!location) {
+      reject(@"DOWNLOAD_ERROR", @"Empty download location", nil);
+      return;
+    }
 
-    [data writeToFile:destinationPath atomically:YES];
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSString *parent = [destinationPath stringByDeletingLastPathComponent];
+    if (parent.length > 0) {
+      [fm createDirectoryAtPath:parent withIntermediateDirectories:YES attributes:nil error:nil];
+    }
+    if ([fm fileExistsAtPath:destinationPath]) {
+      [fm removeItemAtPath:destinationPath error:nil];
+    }
+
+    NSError *moveError = nil;
+    BOOL moved = [fm moveItemAtURL:location
+                             toURL:[NSURL fileURLWithPath:destinationPath]
+                             error:&moveError];
+    if (!moved) {
+      // Fallback copy if move across volumes fails.
+      NSError *copyError = nil;
+      BOOL copied = [fm copyItemAtURL:location
+                                toURL:[NSURL fileURLWithPath:destinationPath]
+                                error:&copyError];
+      if (!copied) {
+        reject(@"MOVE_ERROR",
+               (moveError.localizedDescription ?: copyError.localizedDescription) ?: @"Failed to save download",
+               moveError ?: copyError);
+        return;
+      }
+    }
+
     resolve(@"success");
   }];
 

@@ -9,8 +9,8 @@ import { useI18N } from "@/core/i18n";
 import { ROUTE_PATH, useNavigate } from "@/core/router";
 import TrackPlayer from "@/core/trackPlayer";
 import { checkUpdateAndShowResult } from "@/hooks/useCheckUpdate.ts";
-import NativeUtils from "@/native/utils";
 import rpx from "@/utils/rpx";
+import { forceExitApp } from "@/utils/forceExitApp";
 import { useScheduleCloseCountDown } from "@/utils/scheduleClose";
 import timeformat from "@/utils/timeformat";
 import { DrawerContentScrollView } from "@react-navigation/drawer";
@@ -274,8 +274,12 @@ function HomeDrawer(props: any) {
                     <ListItem
                         withHorizontalPadding
                         onPress={async () => {
-                            await TrackPlayer.reset();
-                            NativeUtils.exitApp();
+                            try {
+                                await TrackPlayer.reset();
+                            } catch {
+                                // ignore
+                            }
+                            forceExitApp();
                         }}>
                         <ListItem.ListItemIcon
                             icon={"power-outline"}
@@ -336,7 +340,7 @@ const style = StyleSheet.create({
     },
 });
 
-function _CountDownItem() {
+function CountDownItemInner() {
     const countDown = useScheduleCloseCountDown();
     const { t } = useI18N();
 
@@ -355,4 +359,4 @@ function _CountDownItem() {
     );
 }
 
-const CountDownItem = memo(_CountDownItem, () => true);
+const CountDownItem = memo(CountDownItemInner, () => true);

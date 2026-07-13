@@ -1,6 +1,6 @@
 import { TrackPlayerEvents } from "@/core.defination/trackPlayer";
 import TrackPlayer from "@/core/trackPlayer";
-import NativeUtils from "@/native/utils";
+import { forceExitApp } from "@/utils/forceExitApp";
 import { atom, getDefaultStore, useAtomValue } from "jotai";
 import { useEffect, useRef, useState } from "react";
 import BackgroundTimer from "react-native-background-timer";
@@ -13,8 +13,12 @@ let timerId: any;
 
 
 async function exitApp() {
-    await TrackPlayer.reset();
-    NativeUtils.exitApp();
+    try {
+        await TrackPlayer.reset();
+    } catch {
+        // ignore
+    }
+    forceExitApp();
 }
 
 function setScheduleClose(deadline: number | null) {

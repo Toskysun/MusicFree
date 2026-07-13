@@ -4,7 +4,7 @@ import rpx, { vh } from "@/utils/rpx";
 import useColors from "@/hooks/useColors";
 import ThemeText from "@/components/base/themeText";
 import Config from "@/core/appConfig";
-import NativeUtils from "@/native/utils";
+import { forceExitApp } from "@/utils/forceExitApp";
 import { hideDialog } from "../useDialog";
 import Toast from "@/utils/toast";
 
@@ -30,7 +30,7 @@ function PactDialog() {
     };
 
     const handleReject = () => {
-        NativeUtils.exitApp();
+        forceExitApp();
     };
 
     const handleAccept = () => {
