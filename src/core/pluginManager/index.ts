@@ -87,6 +87,8 @@ class PluginManager implements IPluginManager, IInjectable {
                 cacheControl: plugin.instance.cacheControl,
                 description: plugin.instance.description,
                 hints: plugin.instance.hints,
+                // Schema for settings UI before lazy mount (values still live in MMKV).
+                userVariables: plugin.instance.userVariables,
             };
             pluginCacheStore.set(
                 plugin.path,

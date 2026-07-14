@@ -319,7 +319,14 @@ class PluginMethodsWrapper implements IPlugin.IPluginInstanceMethods {
 
     constructor(plugin: Plugin, ensurePluginIsMounted: () => Promise<void>) {
         this.plugin = plugin;
-        this.ensurePluginIsMounted = ensurePluginIsMounted;
+        // Re-bind this plugin's env/process onto global free-vars before every
+        // method call. Sandbox injects env via globalThis (not Function params)
+        // so multi-plugin mounts would otherwise leave a stale env and break
+        // env.getUserVariables() / env.userVariables for other plugins.
+        this.ensurePluginIsMounted = async () => {
+            await ensurePluginIsMounted();
+            this.plugin.activateSandboxGlobals();
+        };
     }
 
 
@@ -1208,6 +1215,19 @@ export class Plugin {
     private lazyProps: ILazyProps | null = null;
     /** Dedup concurrent ensureMounted() so callers wait for the same load. */
     private mountPromise: Promise<void> | null = null;
+    /** Per-plugin sandbox env (userVariables etc.), rebound before method calls. */
+    private sandboxEnv: {
+        getUserVariables: () => Record<string, string>;
+        readonly userVariables: Record<string, string>;
+        appVersion: string;
+        os: string;
+        lang: string;
+    } | null = null;
+    private sandboxProcess: {
+        platform: string;
+        version: string;
+        env: NonNullable<Plugin["sandboxEnv"]>;
+    } | null = null;
 
     static pluginManager: IPluginManager;
 
@@ -1252,6 +1272,7 @@ export class Plugin {
     async ensureMounted() {
         // Already usable
         if (this.state === PluginState.Mounted || this.state === PluginState.Error) {
+            this.activateSandboxGlobals();
             return;
         }
         // Coalesce concurrent mounts (was a race: 2nd caller skipped await)
@@ -1259,6 +1280,7 @@ export class Plugin {
             return this.mountPromise;
         }
         if (!this.lazyProps) {
+            this.activateSandboxGlobals();
             return;
         }
 
@@ -1280,6 +1302,45 @@ export class Plugin {
         return this.mountPromise;
     }
 
+    /**
+     * Bind this plugin's sandbox env/process to global free identifiers.
+     * Plugin code resolves bare `env` / `process` via globalThis, so every
+     * mount and method call must refresh these bindings for the active plugin.
+     */
+    activateSandboxGlobals() {
+        if (!this.sandboxEnv) {
+            return;
+        }
+        const targets: any[] = [];
+        try {
+            if (typeof globalThis !== "undefined") {
+                targets.push(globalThis);
+            }
+        } catch {
+            // ignore
+        }
+        try {
+            // Hermes may expose a distinct `global`
+            if (typeof global !== "undefined" && global !== globalThis) {
+                targets.push(global);
+            }
+        } catch {
+            // ignore
+        }
+        for (const g of targets) {
+            try {
+                g.env = this.sandboxEnv;
+            } catch {
+                // ignore non-configurable
+            }
+            try {
+                g.process = this.sandboxProcess;
+            } catch {
+                // ignore non-configurable
+            }
+        }
+    }
+
     private mountPlugin(
         funcCode: string | (() => IPlugin.IPluginDefine),
         pluginPath: string) {
@@ -1292,9 +1353,12 @@ export class Plugin {
                 // 插件的环境变量
                 const env = {
                     getUserVariables: () => {
-                        return (
-                            _internalPluginMeta.getUserVariables(this.name)
-                        );
+                        // Prefer live name; fall back to instance.platform during mount.
+                        const platform =
+                            this.name ||
+                            this.instance?.platform ||
+                            "";
+                        return _internalPluginMeta.getUserVariables(platform);
                     },
                     get userVariables() {
                         return this.getUserVariables() ?? {};
@@ -1308,15 +1372,19 @@ export class Plugin {
                     version: appVersion,
                     env,
                 };
+                this.sandboxEnv = env;
+                this.sandboxProcess = _process;
 
                 // Sandbox free names must NOT be function parameters/local bindings.
                 // Plugins often redeclare them under Hermes ("Identifier already declared").
                 // Expose via globalThis so free identifiers (env/process/Buffer/...) resolve.
                 // Use classic Function(params..., body) + string concat — nested
                 // Function(`return function(){ ${code} }`)() can hang Hermes on large plugins.
+                //
+                // ALWAYS refresh env/process per plugin mount (not "if undefined").
+                // Leaving a previous plugin's env on globalThis makes
+                // env.getUserVariables() read the wrong platform's stored vars.
                 // eslint-disable-next-line no-new-func
-                // Only fill missing free-vars. Never mutate existing process/env
-                // (Hermes process is often non-extensible → "cannot add a new property").
                 const sandboxBody =
                     "'use strict';\n" +
                     "var g = (typeof globalThis !== 'undefined')" +
@@ -1324,8 +1392,8 @@ export class Plugin {
                     " : ((typeof global !== 'undefined') ? global : this);\n" +
                     "if (g) {\n" +
                     "  try { if (typeof g.Buffer === 'undefined') g.Buffer = __mfBuffer; } catch (_e0) {}\n" +
-                    "  try { if (typeof g.env === 'undefined') g.env = __mfEnv; } catch (_e1) {}\n" +
-                    "  try { if (typeof g.process === 'undefined') g.process = __mfProcess; } catch (_e2) {}\n" +
+                    "  try { g.env = __mfEnv; } catch (_e1) {}\n" +
+                    "  try { g.process = __mfProcess; } catch (_e2) {}\n" +
                     "  try { if (typeof g.URL === 'undefined') g.URL = __mfURL; } catch (_e3) {}\n" +
                     // ALWAYS inject TextDecoder: Hermes ships a native one that
                     // does not support gb18030/gbk, so "if undefined" leaves KW
@@ -1334,6 +1402,17 @@ export class Plugin {
                     "  try { if (typeof g.TextEncoder === 'undefined') g.TextEncoder = __mfTextEncoder; } catch (_e5) {}\n" +
                     "  try { if (typeof g.console === 'undefined') g.console = __mfConsole; } catch (_e6) {}\n" +
                     "}\n" +
+                    // Mirror onto distinct Hermes `global` when present.
+                    "try {\n" +
+                    "  if (typeof global !== 'undefined' && global !== g) {\n" +
+                    "    try { global.env = __mfEnv; } catch (_e7) {}\n" +
+                    "    try { global.process = __mfProcess; } catch (_e8) {}\n" +
+                    "  }\n" +
+                    "} catch (_e9) {}\n" +
+                    // Do NOT declare local `var env/process` here: some plugins
+                    // redeclare them with let/const and Hermes throws
+                    // "Identifier already declared". Per-call activateSandboxGlobals()
+                    // keeps free-var lookup pointed at the active plugin.
                     funcCode;
 
                 // Plugin sandbox must compile classic script; Function is intentional.
