@@ -13,13 +13,13 @@ import { removeAllMediaExtra } from "@/utils/mediaExtra";
 import axios from "axios";
 import { compare } from "compare-versions";
 import EventEmitter from "eventemitter3";
-import { readAsStringAsync } from "expo-file-system";
+import { readAsStringAsync } from "expo-file-system/legacy";
 import { atom, getDefaultStore, useAtomValue } from "jotai";
 import { nanoid } from "@/utils/nanoid";
 import { useEffect, useState } from "react";
 import { ToastAndroid } from "react-native";
 import { copyFile, readDir, readFile, unlink, writeFile } from "react-native-fs";
-import { errorLog } from "../../utils/log";
+import { devLog, errorLog } from "../../utils/log";
 import pluginMeta from "./meta";
 import { localFilePlugin, Plugin, PluginState } from "./plugin";
 import i18n from "../i18n";
@@ -482,16 +482,23 @@ class PluginManager implements IPluginManager, IInjectable {
         const targetIndex = plugins.findIndex(_ => _.hash === hash);
         devLog("info", "📤[插件管理器] 卸载插件", { targetIndex, hash });
         if (targetIndex !== -1) {
+            const pluginName = plugins[targetIndex].name;
+            const pluginPath = plugins[targetIndex].path;
             try {
-                const pluginName = plugins[targetIndex].name;
-                await unlink(plugins[targetIndex].path);
-                plugins = plugins.filter(_ => _.hash !== hash);
-                this.setPlugins(plugins);
-                // 防止其他重名
-                if (plugins.every(_ => _.name !== pluginName)) {
-                    removeAllMediaExtra(pluginName);
-                }
-            } catch {}
+                await unlink(pluginPath);
+            } catch (e: any) {
+                // 文件已不存在时仍继续从列表移除
+                devLog("warn", "📤[插件管理器] 删除插件文件失败", {
+                    path: pluginPath,
+                    message: e?.message ?? e,
+                });
+            }
+            plugins = plugins.filter(_ => _.hash !== hash);
+            this.setPlugins(plugins);
+            // 防止其他重名
+            if (plugins.every(_ => _.name !== pluginName)) {
+                removeAllMediaExtra(pluginName);
+            }
         }
     }
 

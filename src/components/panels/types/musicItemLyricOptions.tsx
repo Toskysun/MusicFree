@@ -20,7 +20,7 @@ import mediaCache from "@/core/mediaCache";
 import LyricUtil from "@/native/lyricUtil";
 import { resolveLyricPresets } from "@/utils/lyricPreset";
 import { getDocumentAsync } from "expo-document-picker";
-import { readAsStringAsync } from "expo-file-system";
+import { readAsStringAsync } from "expo-file-system/legacy";
 import { FlatList } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import PanelBase from "../base/panelBase";
@@ -267,11 +267,11 @@ export default function MusicItemLyricOptions(
                     const enableWordByWord = Config.getConfig("lyric.enableWordByWord") ?? false;
                     const downloadPath = Config.getConfig("basic.downloadPath") ?? pathConst.downloadMusicPath;
 
-                    devLog('info', '[歌词下载] 配置信息', {
+                    devLog("info", "[歌词下载] 配置信息", {
                         format: lyricFileFormat,
                         order: lyricOrder,
                         enableWordByWord,
-                        downloadPath
+                        downloadPath,
                     });
 
                     // Decrypt lyrics (auto-decrypt QRC format)
@@ -302,15 +302,15 @@ export default function MusicItemLyricOptions(
                     const safeTitle = escapeCharacter(musicItem.title || "unknown");
                     const safeArtist = escapeCharacter(musicItem.artist || "unknown");
                     const filename = `${safeTitle} - ${safeArtist}.${lyricFileFormat}`;
-                    const basePath = downloadPath.endsWith('/') ? downloadPath : `${downloadPath}/`;
+                    const basePath = downloadPath.endsWith("/") ? downloadPath : `${downloadPath}/`;
                     const filePath = `${basePath}${filename}`;
 
                     // Write file
-                    await writeFile(filePath, lyricContent, 'utf8');
+                    await writeFile(filePath, lyricContent, "utf8");
 
-                    devLog('info', '[歌词下载] 保存成功', {
+                    devLog("info", "[歌词下载] 保存成功", {
                         path: filePath,
-                        size: lyricContent.length
+                        size: lyricContent.length,
                     });
 
                     Toast.success(t("panel.musicItemLyricOptions.lyricSaved"));

@@ -16,7 +16,7 @@ import delay from "@/utils/delay";
 import { writeInChunks } from "@/utils/fileUtils.ts";
 import { errorLog, devLog } from "@/utils/log.ts";
 import { getDocumentAsync } from "expo-document-picker";
-import { readAsStringAsync } from "expo-file-system";
+import { readAsStringAsync } from "expo-file-system/legacy";
 import { AuthType, createClient } from "webdav";
 
 export default function BackupSetting() {
