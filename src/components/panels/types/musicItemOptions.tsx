@@ -33,6 +33,7 @@ import { IIconName } from "@/components/base/icon.tsx";
 import MusicSheet from "@/core/musicSheet";
 import downloader from "@/core/downloader";
 import { getMediaExtraProperty } from "@/utils/mediaExtra";
+import { hasAssociatedArtwork, resolveArtwork } from "@/utils/artwork";
 import lyricManager from "@/core/lyricManager";
 import { useI18N } from "@/core/i18n";
 import pluginManager from "@/core/pluginManager";
@@ -127,6 +128,8 @@ export default function MusicItemOptions(props: IMusicItemOptionsProps) {
 
     const downloaded = LocalMusicSheet.isLocalMusic(musicItem);
     const associatedLrc = getMediaExtraProperty(musicItem, "associatedLrc");
+    const associatedCover = hasAssociatedArtwork(musicItem);
+    const displayArtwork = resolveArtwork(musicItem);
 
     const options: IOption[] = [
         {
@@ -421,6 +424,17 @@ export default function MusicItemOptions(props: IMusicItemOptionsProps) {
             },
         },
         {
+            icon: "album-outline",
+            title: associatedCover
+                ? t("panel.musicItemOptions.associatedCover")
+                : t("panel.musicItemOptions.manageCover"),
+            onPress: () => {
+                showPanel("CoverOptions", {
+                    musicItem,
+                });
+            },
+        },
+        {
             icon: "alarm-outline",
             title: t("panel.musicItemOptions.timingClose"),
             show: from === ROUTE_PATH.MUSIC_DETAIL,
@@ -445,7 +459,7 @@ export default function MusicItemOptions(props: IMusicItemOptionsProps) {
                     <View style={style.header}>
                         <FastImage
                             style={style.artwork}
-                            source={musicItem?.artwork}
+                            source={displayArtwork}
                             placeholderSource={ImgAsset.albumDefault}
                         />
                         <View style={style.content}>

@@ -10,6 +10,8 @@ import PlayById from "./playById";
 import PlayList from "./playList";
 import PlayRate from "./playRate";
 import SearchLrc from "./searchLrc";
+import SearchCover from "./searchCover";
+import CoverOptions from "./coverOptions";
 import SetFontSize from "./setFontSize";
 import SetLyricOffset from "./setLyricOffset";
 import SetUserVariables from "./setUserVariables";
@@ -53,6 +55,10 @@ export default {
     SheetTags,
     /** 搜索歌词 */
     SearchLrc,
+    /** 封面操作 */
+    CoverOptions,
+    /** 搜索封面 */
+    SearchCover,
     /** 简单的选择 */
     SimpleSelect,
     /** 颜色选择器 */

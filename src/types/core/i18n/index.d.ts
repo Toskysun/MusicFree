@@ -492,6 +492,28 @@ export interface ILanguageData {
     "panel.imageViewer.saveImageSuccess": string; // 图片已保存
     "panel.imageViewer.saveImageFail": string; // 保存图片失败
 
+    // 面板相关 - 封面操作
+    "panel.coverOptions.viewImage": string; // 查看大图
+    "panel.coverOptions.saveImage": string; // 保存到相册
+    "panel.coverOptions.searchCover": string; // 搜索并关联封面
+    "panel.coverOptions.pickFromGallery": string; // 从相册选择
+    "panel.coverOptions.restoreDefault": string; // 恢复默认封面
+    "panel.coverOptions.associatedHint": string; // 已关联自定义封面
+    "panel.coverOptions.toast.associateSuccess": string; // 关联封面成功
+    "panel.coverOptions.toast.associateFail": string; // 关联封面失败
+    "panel.coverOptions.toast.restoreSuccess": string; // 已恢复默认封面
+    "panel.coverOptions.toast.restoreFail": string; // 恢复封面失败
+
+    // 面板相关 - 搜索封面
+    "panel.searchCover.title": string; // 搜索封面
+    "panel.searchCover.inputPlaceholder": string; // 搜索封面输入占位符
+    "panel.searchCover.unnamed": string; // 未命名
+    "panel.searchCover.notSupported": string; // 搜索封面（无插件）
+    "panel.searchCover.toast.settingSuccess": string; // 设置成功
+    "panel.searchCover.toast.failToSearch": string; // 设置失败
+    "panel.searchCover.toast.noArtwork": string; // 该结果无封面
+    "panel.searchCover.toast.noCurrentMusic": string; // 无当前歌曲
+
     // 面板相关 - 颜色选择器
     "panel.colorPicker.title": string; // 选择颜色
     "panel.createMusicSheet.inputLabel": string; // 输入框
@@ -540,6 +562,8 @@ export interface ILanguageData {
     "panel.musicItemOptions.associateLyric": string; // 关联歌词
     "panel.musicItemOptions.unassociateLyric": string; // 解除关联歌词    
     "panel.musicItemOptions.unassociateLyricSuccess": string; // 已解除关联歌词
+    "panel.musicItemOptions.manageCover": string; // 管理封面
+    "panel.musicItemOptions.associatedCover": string; // 已关联自定义封面
     "panel.musicItemOptions.timingClose": string; // 定时关闭
     "panel.musicItemOptions.clearPluginCache": string; // 清除插件缓存
     "panel.musicItemOptions.cacheCleared": string; // 缓存已清除

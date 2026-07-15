@@ -12,6 +12,8 @@ import TrackPlayer, {
 import useColors from "@/hooks/useColors";
 import rpx, { fontRpx } from "@/utils/rpx";
 import { musicIsPaused } from "@/utils/trackUtils";
+import { resolveArtwork } from "@/utils/artwork";
+import { useMediaExtraProperty } from "@/utils/mediaExtra";
 import Color from "color";
 import React, { useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
@@ -91,10 +93,8 @@ export default function HomeHero() {
         base: primaryColor,
         accent: accentColor,
     });
-    const artwork =
-        typeof currentMusic?.artwork === "string"
-            ? currentMusic.artwork
-            : undefined;
+    useMediaExtraProperty(currentMusic, "associatedArtwork");
+    const artwork = resolveArtwork(currentMusic);
     const progressDuration = duration || currentMusic?.duration;
     const isPlaying = currentMusic && !musicIsPaused(musicState);
 
@@ -293,7 +293,7 @@ export default function HomeHero() {
                     },
                 ]}>
                 <FastImage
-                    source={currentMusic?.artwork}
+                    source={artwork}
                     placeholderSource={ImgAsset.albumDefault}
                     style={styles.cover}
                 />

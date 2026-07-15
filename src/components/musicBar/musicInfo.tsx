@@ -17,6 +17,8 @@ import Animated, {
     withTiming,
 } from "react-native-reanimated";
 import { timingConfig } from "@/constants/commonConst";
+import { resolveArtwork } from "@/utils/artwork";
+import { useMediaExtraProperty } from "@/utils/mediaExtra";
 
 interface IBarMusicItemProps {
     musicItem: IMusic.IMusicItem | null;
@@ -26,6 +28,9 @@ interface IBarMusicItemProps {
 function BarMusicItemView(props: IBarMusicItemProps) {
     const { musicItem, activeIndex, transformSharedValue } = props;
     const colors = useColors();
+    // Subscribe so minibar updates when cover is associated/restored
+    useMediaExtraProperty(musicItem, "associatedArtwork");
+    const displayArtwork = resolveArtwork(musicItem);
 
     const animatedStyles = useAnimatedStyle(() => {
         return {
@@ -48,7 +53,7 @@ function BarMusicItemView(props: IBarMusicItemProps) {
             ]}>
             <FastImage
                 style={styles.artworkImg}
-                source={musicItem.artwork}
+                source={displayArtwork}
                 placeholderSource={ImgAsset.albumDefault}
             />
             <View accessible={false} style={styles.textWrapper}>

@@ -8,6 +8,8 @@ import {
     getImmersiveCoverHeight,
     IMMERSIVE_CLEAR_VISIBLE_RATIO,
 } from "./immersiveCover";
+import { resolveArtwork } from "@/utils/artwork";
+import { useMediaExtraProperty } from "@/utils/mediaExtra";
 
 interface IBackgroundProps {
     immersiveCoverEnabled?: boolean;
@@ -22,28 +24,36 @@ export default function Background(props: IBackgroundProps) {
         showImmersiveCover = false,
     } = props;
     const musicItem = useCurrentMusic();
+    const associatedArtwork = useMediaExtraProperty(
+        musicItem,
+        "associatedArtwork",
+    );
     const { width: windowWidth } = useWindowDimensions();
 
+    const resolvedArtwork = resolveArtwork(musicItem);
+
+    // associatedArtwork forces refresh when mediaExtra changes (resolvedArtwork
+    // string may be identical when switching back after unassociate in edge cases)
     const artworkSource = useMemo(() => {
-        if (!musicItem?.artwork) {
+        if (!resolvedArtwork) {
             return ImgAsset.albumDefault;
         }
 
-        if(typeof musicItem.artwork === "string") {
+        if (typeof resolvedArtwork === "string") {
             return {
-                uri: musicItem.artwork,
+                uri: resolvedArtwork,
             };
         }
-        return musicItem.artwork;
-
-    }, [musicItem?.artwork]);
+        return resolvedArtwork;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [resolvedArtwork, associatedArtwork]);
 
     useEffect(() => {
-        if (!immersiveCoverEnabled || typeof musicItem?.artwork !== "string") {
+        if (!immersiveCoverEnabled || typeof resolvedArtwork !== "string") {
             return;
         }
-        Image.prefetch(musicItem.artwork);
-    }, [immersiveCoverEnabled, musicItem?.artwork]);
+        Image.prefetch(resolvedArtwork);
+    }, [immersiveCoverEnabled, resolvedArtwork]);
 
     const immersiveCoverHeight = getImmersiveCoverHeight(windowWidth);
     const immersiveClearHeight =

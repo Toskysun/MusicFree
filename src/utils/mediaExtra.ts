@@ -20,7 +20,9 @@ interface IMediaExtraProperties {
     /** 歌词偏移 */
     lyricOffset?: number;
     /** 关联歌词 */
-    associatedLrc?: ICommon.IMediaBase
+    associatedLrc?: ICommon.IMediaBase;
+    /** 关联封面（URL 或本地 file:// 路径） */
+    associatedArtwork?: string;
 }
 
 
@@ -203,43 +205,47 @@ function useMediaExtra(mediaItem: ICommon.IMediaBase) {
 }
 
 
-function useMediaExtraProperty<K extends keyof IMediaExtraProperties>(mediaItem: ICommon.IMediaBase, key: K) {
-    const [mediaExtraPropertyState, setMediaExtraPropertyState] = useState<IMediaExtraProperties[K] | null>(getMediaExtraProperty(mediaItem, key));
+function useMediaExtraProperty<K extends keyof IMediaExtraProperties>(
+    mediaItem: ICommon.IMediaBase | null | undefined,
+    key: K,
+) {
+    const [mediaExtraPropertyState, setMediaExtraPropertyState] = useState<
+        IMediaExtraProperties[K] | null
+    >(getMediaExtraProperty(mediaItem ?? null, key));
 
     useEffect(() => {
         const callback = (mediaExtra: IMediaExtraProperties | null) => {
             setMediaExtraPropertyState(mediaExtra ? mediaExtra[key] : null);
         };
 
-        if (!mediaItem) {
+        if (!mediaItem?.platform || !mediaItem?.id) {
             setMediaExtraPropertyState(null);
-        } else {
-            setMediaExtraPropertyState(getMediaExtraProperty(mediaItem, key));
-
-            const mediaKey = getMediaUniqueKey(mediaItem);
-            if (!observerCallbacks.has(mediaKey)) {
-                observerCallbacks.set(mediaKey, new Set());
-            }
-            const callbacks = observerCallbacks.get(mediaKey);
-            if (callbacks) {
-                callbacks.add(callback);
-            }
+            return;
         }
 
+        setMediaExtraPropertyState(getMediaExtraProperty(mediaItem, key));
+
+        const mediaKey = getMediaUniqueKey(mediaItem);
+        if (!observerCallbacks.has(mediaKey)) {
+            observerCallbacks.set(mediaKey, new Set());
+        }
+        const callbacks = observerCallbacks.get(mediaKey);
+        if (callbacks) {
+            callbacks.add(callback);
+        }
 
         return () => {
-            const mediaKey = getMediaUniqueKey(mediaItem);
             if (observerCallbacks.has(mediaKey)) {
-                const callbacks = observerCallbacks.get(mediaKey);
-                if (callbacks) {
-                    callbacks.delete(callback);
-                    if (callbacks.size === 0) {
+                const cbs = observerCallbacks.get(mediaKey);
+                if (cbs) {
+                    cbs.delete(callback);
+                    if (cbs.size === 0) {
                         observerCallbacks.delete(mediaKey);
                     }
                 }
             }
         };
-    }, [mediaItem]);
+    }, [mediaItem, key]);
 
     return mediaExtraPropertyState;
 }

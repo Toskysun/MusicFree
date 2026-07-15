@@ -13,6 +13,7 @@ import { ImgAsset } from "@/constants/assetsConst";
 import Badge, { BadgeType } from "../base/badge";
 
 import { getQualityKeys } from "@/utils/qualities";
+import { resolveArtwork } from "@/utils/artwork";
 
 // master/atmos_plus/atmos/dolby/vinyl 不计入显示，只认以下五级
 const qualityBadgeDisplayMap: Record<string, { type: BadgeType; text: string }> = {
@@ -101,7 +102,7 @@ export default function MusicItem(props: IMusicItemProps) {
                 </ListItem.ListItemText>
             ) : null}
             <ListItem.ListItemImage
-                uri={musicItem.artwork}
+                uri={resolveArtwork(musicItem) ?? musicItem.artwork}
                 fallbackImg={ImgAsset.albumDefault}
             />
             <ListItem.Content

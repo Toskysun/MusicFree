@@ -17,6 +17,8 @@ import {
     getImmersiveCoverHeight,
     IMMERSIVE_CONTENT_TOP_GAP,
 } from "../../immersiveCover";
+import { resolveArtwork } from "@/utils/artwork";
+import { useMediaExtraProperty } from "@/utils/mediaExtra";
 
 const ROTATION_DURATION = 25000; // 25秒转一圈
 export const COVER_SIZE = rpx(600); // 大封面尺寸
@@ -37,6 +39,9 @@ export default function AlbumCover(props: IProps) {
     const { onTurnPageClick, disableMaskedView } = props;
 
     const musicItem = useCurrentMusic();
+    // React to associated cover changes
+    useMediaExtraProperty(musicItem, "associatedArtwork");
+    const displayArtwork = resolveArtwork(musicItem);
     const orientation = useOrientation();
     const { height: windowHeight, width: windowWidth } = useWindowDimensions();
     const safeAreaInsets = useSafeAreaInsets();
@@ -262,9 +267,9 @@ export default function AlbumCover(props: IProps) {
 
     const longPress = Gesture.LongPress()
         .onStart(() => {
-            if (musicItem?.artwork) {
-                showPanel("ImageViewer", {
-                    url: musicItem.artwork,
+            if (musicItem) {
+                showPanel("CoverOptions", {
+                    musicItem,
                 });
             }
         })
@@ -290,7 +295,7 @@ export default function AlbumCover(props: IProps) {
                             ]}>
                             <FastImage
                                 style={artworkStyle}
-                                source={musicItem?.artwork}
+                                source={displayArtwork}
                                 placeholderSource={ImgAsset.albumDefault}
                             />
                         </Animated.View>
@@ -352,7 +357,7 @@ export default function AlbumCover(props: IProps) {
                         }>
                         <FastImage
                             style={artworkStyle}
-                            source={musicItem?.artwork}
+                            source={displayArtwork}
                             placeholderSource={ImgAsset.albumDefault}
                         />
                     </Animated.View>

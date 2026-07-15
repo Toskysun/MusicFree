@@ -43,6 +43,7 @@ import minDistance from "@/utils/minDistance";
 import { IPluginManager } from "@/types/core/pluginManager";
 import { ImgAsset } from "@/constants/assetsConst";
 import { resolveImportedAssetOrPath } from "@/utils/fileUtils";
+import { resolveArtwork } from "@/utils/artwork";
 
 
 
@@ -600,10 +601,15 @@ class TrackPlayer extends EventEmitter<{
             void appendStartupBreadcrumb("trackplayer-set-proposed-queue", {
                 title: musicItem.title,
             });
+            const proposedArtwork =
+                resolveArtwork(musicItem) ||
+                (musicItem.artwork?.trim?.()?.length
+                    ? musicItem.artwork
+                    : ImgAsset.albumDefault);
             await ReactNativeTrackPlayer.setQueue([{
                 ...musicItem,
                 url: TrackPlayer.proposedAudioUrl,
-                artwork: resolveImportedAssetOrPath(musicItem.artwork?.trim?.()?.length ? musicItem.artwork : ImgAsset.albumDefault) as unknown as any,
+                artwork: resolveImportedAssetOrPath(proposedArtwork) as unknown as any,
             }, this.getFakeNextTrack()]);
 
             devLog("info", "[TrackPlayer] Queue initialized, fetching media source", {
@@ -1282,10 +1288,17 @@ class TrackPlayer extends EventEmitter<{
         if (!track) {
             return null;
         }
+        const associatedOrOriginal =
+            resolveArtwork(track as IMusic.IMusicItem) ||
+            (typeof track.artwork === "string" && track.artwork.trim?.()?.length
+                ? track.artwork
+                : undefined);
         return {
             ...track,
             artwork: resolveImportedAssetOrPath(
-                track.artwork?.trim?.()?.length ? track.artwork : ImgAsset.albumDefault,
+                associatedOrOriginal?.length
+                    ? associatedOrOriginal
+                    : ImgAsset.albumDefault,
             ) as unknown as any,
         };
     }
