@@ -24,6 +24,8 @@ import { vh } from "@/utils/rpx.ts";
 const ANIMATION_EASING: EasingFunction = Easing.out(Easing.exp);
 const ANIMATION_DURATION = 250;
 
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
 const timingConfig = {
     duration: ANIMATION_DURATION,
     easing: ANIMATION_EASING,
@@ -157,16 +159,16 @@ export default function (props: IPanelFullScreenProps) {
     return (
         <>
             {hasMask ? (
-                <Pressable
-                    style={style.maskWrapper}
-                    onPress={closePanel}>
-                    <Animated.View
-                        style={[style.maskWrapper, style.mask, maskAnimated]}
-                    />
-                </Pressable>
+                <AnimatedPressable
+                    accessibilityRole="button"
+                    accessibilityLabel="关闭面板"
+                    style={[style.maskWrapper, style.mask, maskAnimated]}
+                    onPress={closePanel}
+                />
             ) : null}
             <Animated.View
                 collapsable={false}
+                pointerEvents="auto"
                 style={[
                     style.wrapper,
                     !hasMask
@@ -195,8 +197,8 @@ const style = StyleSheet.create({
         zIndex: 15000,
     },
     mask: {
+        // Opaque fill; opacity animated via maskAnimated (iOS needs non-clear hit target)
         backgroundColor: "#000",
-        opacity: 0.5,
     },
     wrapper: {
         position: "absolute",

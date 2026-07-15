@@ -30,6 +30,9 @@ import NativeUtils from "@/native/utils";
 const ANIMATION_EASING: EasingFunction = Easing.out(Easing.exp);
 const ANIMATION_DURATION = 250;
 
+/** iOS ignores presses on fully transparent Pressable; animate the pressable itself. */
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
 const timingConfig = {
     duration: ANIMATION_DURATION,
     easing: ANIMATION_EASING,
@@ -235,16 +238,14 @@ export default function (props: IPanelBaseProps) {
             pointerEvents="box-none"
             collapsable={false}
             style={style.host}>
-            <Pressable
-                style={style.maskWrapper}
+            <AnimatedPressable
+                accessibilityRole="button"
+                accessibilityLabel="关闭面板"
+                style={[style.maskWrapper, style.mask, maskAnimated]}
                 onPress={() => {
                     snapPoint.value = withTiming(0, timingConfig);
-                }}>
-                <Animated.View
-                    pointerEvents="none"
-                    style={[style.maskWrapper, style.mask, maskAnimated]}
-                />
-            </Pressable>
+                }}
+            />
             {panelBody}
         </View>
     );
@@ -266,8 +267,8 @@ const style = StyleSheet.create({
         zIndex: 0,
     },
     mask: {
+        // Non-zero paint so iOS hit-tests the dimmer (transparent Pressable is ignored).
         backgroundColor: "#000",
-        opacity: 0.5,
     },
     wrapper: {
         position: "absolute",
