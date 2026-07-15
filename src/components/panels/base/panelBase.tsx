@@ -226,10 +226,7 @@ export default function (props: IPanelBaseProps) {
     );
 
     return (
-        <Animated.View
-            pointerEvents="box-none"
-            collapsable={false}
-            style={style.rootHost}>
+        <>
             <Pressable
                 style={style.maskWrapper}
                 onPress={() => {
@@ -240,15 +237,11 @@ export default function (props: IPanelBaseProps) {
                 />
             </Pressable>
             {panelBody}
-        </Animated.View>
+        </>
     );
 }
 
 const style = StyleSheet.create({
-    rootHost: {
-        ...StyleSheet.absoluteFillObject,
-        zIndex: 15000,
-    },
     maskWrapper: {
         position: "absolute",
         width: "100%",

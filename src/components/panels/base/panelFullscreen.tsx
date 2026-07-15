@@ -57,8 +57,14 @@ export default function (props: IPanelFullScreenProps) {
 
     const windowHeight = useMemo(() => vh(100), []);
 
+    const closePanel = useCallback(() => {
+        snapPoint.value = withTiming(0, timingConfig);
+    }, [snapPoint]);
+
     useEffect(() => {
-        snapPoint.value = 1;
+        // Drive open animation via shared value; styles read it directly
+        // (avoid withTiming inside useAnimatedStyle which can stall).
+        snapPoint.value = withTiming(1, timingConfig);
 
         if (backHandlerRef.current) {
             backHandlerRef.current?.remove();
@@ -67,7 +73,7 @@ export default function (props: IPanelFullScreenProps) {
         backHandlerRef.current = BackHandler.addEventListener(
             "hardwareBackPress",
             () => {
-                snapPoint.value = 0;
+                closePanel();
                 return true;
             },
         );
@@ -78,7 +84,7 @@ export default function (props: IPanelFullScreenProps) {
                 if (callback) {
                     hideCallbackRef.current.push(callback);
                 }
-                snapPoint.value = 0;
+                closePanel();
             },
         );
 
@@ -94,7 +100,7 @@ export default function (props: IPanelFullScreenProps) {
 
     const maskAnimated = useAnimatedStyle(() => {
         return {
-            opacity: withTiming(snapPoint.value * 0.5, timingConfig),
+            opacity: snapPoint.value * 0.5,
         };
     });
 
@@ -103,10 +109,7 @@ export default function (props: IPanelFullScreenProps) {
             return {
                 transform: [
                     {
-                        translateY: withTiming(
-                            (1 - snapPoint.value) * windowHeight,
-                            timingConfig,
-                        ),
+                        translateY: (1 - snapPoint.value) * windowHeight,
                     },
                 ],
             };
@@ -114,13 +117,10 @@ export default function (props: IPanelFullScreenProps) {
             return {
                 transform: [
                     {
-                        scale: withTiming(
-                            0.3 + snapPoint.value * 0.7,
-                            timingConfig,
-                        ),
+                        scale: 0.3 + snapPoint.value * 0.7,
                     },
                 ],
-                opacity: withTiming(snapPoint.value, timingConfig),
+                opacity: snapPoint.value,
             };
         }
     });
@@ -143,30 +143,29 @@ export default function (props: IPanelFullScreenProps) {
     useAnimatedReaction(
         () => snapPoint.value,
         (result, prevResult) => {
-            if (prevResult && result < prevResult && result === 0) {
+            if (
+                prevResult !== null &&
+                prevResult !== undefined &&
+                result < prevResult &&
+                result === 0
+            ) {
                 runOnJS(unmountPanel)();
             }
         },
         [],
     );
     return (
-        <Animated.View
-            pointerEvents="box-none"
-            collapsable={false}
-            style={style.rootHost}>
+        <>
             {hasMask ? (
                 <Pressable
                     style={style.maskWrapper}
-                    onPress={() => {
-                        snapPoint.value = withTiming(0, timingConfig);
-                    }}>
+                    onPress={closePanel}>
                     <Animated.View
                         style={[style.maskWrapper, style.mask, maskAnimated]}
                     />
                 </Pressable>
             ) : null}
             <Animated.View
-                pointerEvents={hasMask ? "box-none" : undefined}
                 collapsable={false}
                 style={[
                     style.wrapper,
@@ -180,15 +179,11 @@ export default function (props: IPanelFullScreenProps) {
                 ]}>
                 {children}
             </Animated.View>
-        </Animated.View>
+        </>
     );
 }
 
 const style = StyleSheet.create({
-    rootHost: {
-        ...StyleSheet.absoluteFillObject,
-        zIndex: 15000,
-    },
     maskWrapper: {
         position: "absolute",
         width: "100%",

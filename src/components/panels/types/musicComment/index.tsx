@@ -29,22 +29,6 @@ export default function MusicComment(props: IMusicCommentProps) {
     const { t } = useI18N();
 
 
-    const listBody = <FlashList
-        ListFooterComponent={comments?.length ? <ListFooter state={reqState} onRetry={getMusicComments} /> : null}
-        ListEmptyComponent={<ListEmpty state={reqState} onRetry={getMusicComments} />}
-        estimatedItemSize={100}
-        renderItem={({ item }) => {
-            return <Comment comment={item} />;
-        }}
-        onEndReachedThreshold={0.1}
-        onEndReached={() => {
-            if (reqState === RequestStateCode.IDLE || reqState === RequestStateCode.PARTLY_DONE) {
-                getMusicComments();
-            }
-        }}
-        data={comments}
-    />;
-
     return (
         <PanelFullscreen>
             <VerticalSafeAreaView style={globalStyle.fwflex1}>
@@ -67,7 +51,38 @@ export default function MusicComment(props: IMusicCommentProps) {
                         </ThemeText>
                     </View>
                 </View>
-                {listBody}
+                <View style={styles.listContainer}>
+                    <FlashList
+                        ListFooterComponent={
+                            comments?.length ? (
+                                <ListFooter
+                                    state={reqState}
+                                    onRetry={getMusicComments}
+                                />
+                            ) : null
+                        }
+                        ListEmptyComponent={
+                            <ListEmpty
+                                state={reqState}
+                                onRetry={getMusicComments}
+                            />
+                        }
+                        estimatedItemSize={100}
+                        renderItem={({ item }) => {
+                            return <Comment comment={item} />;
+                        }}
+                        onEndReachedThreshold={0.1}
+                        onEndReached={() => {
+                            if (
+                                reqState === RequestStateCode.IDLE ||
+                                reqState === RequestStateCode.PARTLY_DONE
+                            ) {
+                                getMusicComments();
+                            }
+                        }}
+                        data={comments}
+                    />
+                </View>
             </VerticalSafeAreaView>
         </PanelFullscreen>
     );
@@ -89,5 +104,9 @@ const styles = StyleSheet.create({
     musicItemContent: {
         flex: 1,
         gap: rpx(16),
+    },
+    listContainer: {
+        flex: 1,
+        width: "100%",
     },
 });
