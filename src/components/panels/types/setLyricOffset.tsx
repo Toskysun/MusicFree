@@ -1,12 +1,11 @@
 import React, { useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { StyleSheet, TouchableOpacity, View } from "react-native";
 import rpx from "@/utils/rpx";
 import ThemeText from "@/components/base/themeText";
 
 import PanelBase from "../base/panelBase";
 import { iconSizeConst } from "@/constants/uiConst";
 import PanelHeader from "../base/panelHeader";
-import { TouchableOpacity } from "react-native-gesture-handler";
 import { hidePanel } from "../usePanel";
 import useColors from "@/hooks/useColors";
 import Icon from "@/components/base/icon.tsx";

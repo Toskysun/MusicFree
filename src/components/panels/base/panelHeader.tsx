@@ -1,7 +1,12 @@
 import React from "react";
-import { StyleProp, StyleSheet, View, ViewStyle } from "react-native";
+import {
+    StyleProp,
+    StyleSheet,
+    TouchableOpacity,
+    View,
+    ViewStyle,
+} from "react-native";
 import rpx from "@/utils/rpx";
-import { TouchableOpacity } from "react-native-gesture-handler";
 import ThemeText from "@/components/base/themeText";
 import Divider from "@/components/base/divider";
 import i18n from "@/core/i18n";
@@ -17,6 +22,10 @@ interface IPanelHeaderProps {
     style?: StyleProp<ViewStyle>;
     loading?: boolean;
 }
+
+// PanelBase is hosted by a native Modal. Keep its command buttons on React
+// Native's responder system: RNGH's legacy touchables can render in the Modal
+// while their Android gesture root remains in the Activity window.
 export default function PanelHeader(props: IPanelHeaderProps) {
     const {
         title,

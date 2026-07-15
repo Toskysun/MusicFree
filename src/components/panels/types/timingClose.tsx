@@ -1,5 +1,5 @@
 import React from "react";
-import { StyleSheet, TouchableOpacity, View } from "react-native";
+import { Pressable, StyleSheet, TouchableOpacity, View } from "react-native";
 import rpx, { fontRpx } from "@/utils/rpx";
 import ThemeText from "@/components/base/themeText";
 
@@ -9,7 +9,6 @@ import PanelBase from "../base/panelBase";
 import Divider from "@/components/base/divider";
 import PanelHeader from "../base/panelHeader";
 import Checkbox from "@/components/base/checkbox";
-import { Pressable } from "react-native-gesture-handler";
 import { useI18N } from "@/core/i18n";
 import { showDialog } from "@/components/dialogs/useDialog";
 
