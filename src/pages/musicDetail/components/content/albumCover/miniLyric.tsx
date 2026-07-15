@@ -74,7 +74,8 @@ function MiniLyricLine(props: {
     showRo: boolean;
     hasTr: boolean;
     hasRo: boolean;
-    align: "left" | "center";
+    /** Mini lyrics intentionally stay left-aligned regardless of detail-page settings. */
+    align: "left";
     /** Active karaoke only on the incoming/settled line */
     highlight: boolean;
     interludeStartTimeMs?: number;
@@ -201,9 +202,9 @@ export default function MiniLyric(props: IMiniLyricProps) {
     const showTr = compact ? false : showTranslation;
     const showRo = compact ? false : showRomanization;
 
-    const detailAlign =
-        (useAppConfig("lyric.detailAlign") as "left" | "center") ?? "left";
-    const align = detailAlign === "center" ? "center" : "left";
+    // Mini lyrics have their own compact layout and must not follow the main
+    // lyric alignment preference.
+    const align = "left" as const;
 
     const currentIndex = currentLyricItem?.index ?? -1;
     const targetIndex = currentIndex;
@@ -414,7 +415,7 @@ export default function MiniLyric(props: IMiniLyricProps) {
         showRo,
         hasTr: hasTranslation,
         hasRo: hasRomanization,
-        align: align as "left" | "center",
+        align,
     };
 
     return (

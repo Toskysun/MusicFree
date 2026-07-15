@@ -83,7 +83,7 @@ export interface IAppConfigProperties {
     "lyric.enableWordByWordFloat": boolean;
     "lyric.pureWhiteMode": boolean;
     "lyric.enableBreathingDots": boolean;
-    "lyric.detailAlign": "left" | "center";
+    "lyric.detailAlign": "left" | "center" | "right";
     "lyric.desktopShowTranslation": boolean;
     "lyric.desktopShowRomanization": boolean;
     "lyric.desktopSecondaryFontRatio": number;

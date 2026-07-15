@@ -22,7 +22,29 @@ import { fontSizeConst } from "@/constants/uiConst";
 import { getCurrentPositionMsShared } from "@/core/lyricManager";
 import { useAppConfig } from "@/core/appConfig";
 
-type LyricAlign = "left" | "center";
+type LyricAlign = "left" | "center" | "right";
+
+type LyricFlexAlignment = "flex-start" | "center" | "flex-end";
+
+function getLyricFlexAlignment(align?: LyricAlign): LyricFlexAlignment {
+    if (align === "left") {
+        return "flex-start";
+    }
+    if (align === "right") {
+        return "flex-end";
+    }
+    return "center";
+}
+
+function getLyricTransformOriginStyle(align?: LyricAlign) {
+    if (align === "left") {
+        return { transformOrigin: "left center" as const };
+    }
+    if (align === "right") {
+        return { transformOrigin: "right center" as const };
+    }
+    return {};
+}
 
 // AMll interlude indicator. This is not a generic looping loader: every frame
 // is derived from the real interlude interval, including the staged reveal,
@@ -153,7 +175,11 @@ export const BreathingDots = memo(({
 
     const containerStyle = useAnimatedStyle(() => {
         const scale = motion.value;
-        const translateX = align === "left" ? (rowWidth * (scale - 1)) / 2 : 0;
+        const translateX = align === "left"
+            ? (rowWidth * (scale - 1)) / 2
+            : align === "right"
+                ? (rowWidth * (1 - scale)) / 2
+                : 0;
         return {
             transform: [{ scale }, { translateX }],
         };
@@ -189,7 +215,7 @@ export const BreathingDots = memo(({
     return (
         <View style={[
             dotsStyles.container,
-            { alignItems: align === "left" ? "flex-start" : "center" },
+            { alignItems: getLyricFlexAlignment(align) },
         ]}>
             <Animated.View
                 style={[
@@ -943,7 +969,7 @@ const TranslationTextLine = memo(({
     return (
         <View style={[
             styles.translationLineContainer,
-            { alignItems: align === "left" ? "flex-start" : "center" },
+            { alignItems: getLyricFlexAlignment(align) },
         ]}>
             <Text
                 style={[
@@ -989,7 +1015,7 @@ function StaticWordByWordLine({
     containerStyle?: StyleProp<ViewStyle>;
 }) {
     const getLineFontSize = (isFirst: boolean) => isFirst ? fontSize : fontSize * SECONDARY_FONT_RATIO;
-    const justifyContent = align === "left" ? "flex-start" as const : "center" as const;
+    const justifyContent = getLyricFlexAlignment(align);
 
     // Render a static word row using IDENTICAL View structure as the playing line
     // (View + flexWrap with per-word/per-char Views) to guarantee identical line-breaking.
@@ -1077,7 +1103,7 @@ function StaticWordByWordLine({
             }}
             style={[
                 lyricStyles.multiLineContainer,
-                { alignItems: align === "left" ? "flex-start" : "center", opacity: 0.5 },
+                { alignItems: getLyricFlexAlignment(align), opacity: 0.5 },
                 containerStyle,
             ]}
         >
@@ -1177,7 +1203,7 @@ function WordByWordLyricLine({
 
     // Font size based on order: first line uses full fontSize, others use smaller
     const getLineFontSize = (isFirst: boolean) => isFirst ? fontSize : fontSize * SECONDARY_FONT_RATIO;
-    const justifyContent = align === "left" ? "flex-start" as const : "center" as const;
+    const justifyContent = getLyricFlexAlignment(align);
 
     // Original line component (word-by-word)
     const originalLine = (isFirst: boolean) => (
@@ -1269,7 +1295,7 @@ function WordByWordLyricLine({
             }}
             style={[
                 lyricStyles.multiLineContainer,
-                { alignItems: align === "left" ? "flex-start" : "center" },
+                { alignItems: getLyricFlexAlignment(align) },
                 containerStyle,
             ]}
         >
@@ -1323,7 +1349,7 @@ function RegularLyricLine({
     }));
 
     // Transform origin based on alignment
-    const transformOriginStyle = align === "left" ? { transformOrigin: "left center" as const } : {};
+    const transformOriginStyle = getLyricTransformOriginStyle(align);
 
     // Outer View reports full row height for FlatList getItemLayout.
     // Measuring Animated.Text alone can under-report on some devices and makes
@@ -1402,7 +1428,7 @@ function MultiLineRegularLyric({
     }));
 
     // Transform origin based on alignment
-    const transformOriginStyle = align === "left" ? { transformOrigin: "left center" as const } : {};
+    const transformOriginStyle = getLyricTransformOriginStyle(align);
 
     // Font size based on order: first line uses full fontSize, others use smaller
     const getLineFontSize = (isFirst: boolean) => isFirst ? fontSize : fontSize * SECONDARY_FONT_RATIO;
@@ -1426,7 +1452,7 @@ function MultiLineRegularLyric({
     );
 
     // Romanization line component - use flex layout when words available for consistent spacing
-    const justifyContent = align === "left" ? "flex-start" : "center";
+    const justifyContent = getLyricFlexAlignment(align);
     const romanizationLine = (isFirst: boolean) => {
         if (!romanizationText && (!romanizationWords || romanizationWords.length === 0)) return null;
 
@@ -1515,7 +1541,7 @@ function MultiLineRegularLyric({
             }}
             style={[
                 lyricStyles.multiLineContainer,
-                { alignItems: align === "left" ? "flex-start" : "center" },
+                { alignItems: getLyricFlexAlignment(align) },
                 transformOriginStyle,
                 animatedContainerStyle,
                 containerStyle,
@@ -1634,7 +1660,7 @@ function LyricItemView(props: ILyricItemComponentProps) {
                 }}
                 style={[
                     lyricStyles.multiLineContainer,
-                    { alignItems: align === "left" ? "flex-start" : "center" },
+                    { alignItems: getLyricFlexAlignment(align) },
                     containerStyle,
                 ]}
             >
@@ -1660,7 +1686,7 @@ function LyricItemView(props: ILyricItemComponentProps) {
                 }}
                 style={[
                     lyricStyles.multiLineContainer,
-                    { alignItems: align === "left" ? "flex-start" : "center" },
+                    { alignItems: getLyricFlexAlignment(align) },
                     containerStyle,
                 ]}
             />

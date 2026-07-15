@@ -41,6 +41,14 @@ interface IMusicItemLyricOptionsProps {
 
 const ITEM_HEIGHT = rpx(96);
 
+type LyricDetailAlign = "left" | "center" | "right";
+
+const LYRIC_ALIGN_ICONS: Record<LyricDetailAlign, IIconName> = {
+    left: "align-left",
+    center: "align-center",
+    right: "align-right",
+};
+
 interface IOption {
     icon: IIconName;
     title: string;
@@ -68,7 +76,16 @@ export default function MusicItemLyricOptions(
 
     const safeAreaInsets = useSafeAreaInsets();
     const { t } = useI18N();
-    const lyricAlign = useAppConfig("lyric.detailAlign") ?? "left";
+    const configuredLyricAlign = useAppConfig("lyric.detailAlign");
+    const lyricAlign: LyricDetailAlign =
+        configuredLyricAlign === "center" || configuredLyricAlign === "right"
+            ? configuredLyricAlign
+            : "left";
+    const lyricAlignLabels: Record<LyricDetailAlign, string> = {
+        left: t("basicSettings.lyric.align.left"),
+        center: t("basicSettings.lyric.align.center"),
+        right: t("basicSettings.lyric.align.right"),
+    };
 
     const options: IOption[] = [
         {
@@ -234,13 +251,16 @@ export default function MusicItemLyricOptions(
             },
         },
         {
-            icon: lyricAlign === "left" ? "align-left" : "align-center",
-            title: t("lyric.detailAlign") + `: ${lyricAlign === "left" ? t("basicSettings.lyric.align.left") : t("basicSettings.lyric.align.center")}`,
+            icon: LYRIC_ALIGN_ICONS[lyricAlign],
+            title: t("lyric.detailAlign") + `: ${lyricAlignLabels[lyricAlign]}`,
             onPress: () => {
-                const newAlign = lyricAlign === "center" ? "left" : "center";
+                const newAlign: LyricDetailAlign = lyricAlign === "left"
+                    ? "center"
+                    : lyricAlign === "center"
+                        ? "right"
+                        : "left";
                 Config.setConfig("lyric.detailAlign", newAlign);
-                const alignText = newAlign === "left" ? t("basicSettings.lyric.align.left") : t("basicSettings.lyric.align.center");
-                Toast.success(t("lyric.alignSwitched") + `: ${alignText}`);
+                Toast.success(t("lyric.alignSwitched") + `: ${lyricAlignLabels[newAlign]}`);
                 hidePanel();
             },
         },
