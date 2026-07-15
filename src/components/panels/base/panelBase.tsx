@@ -12,6 +12,7 @@ import {
     Platform,
     Pressable,
     StyleSheet,
+    View,
 } from "react-native";
 import Animated, {
     Easing,
@@ -205,6 +206,8 @@ export default function (props: IPanelBaseProps) {
 
     const panelBody = (
         <Animated.View
+            // Capture all touches on the sheet so home ScrollView behind cannot scroll.
+            pointerEvents="auto"
             style={[
                 style.wrapper,
                 orientation === "horizontal" ? {
@@ -225,23 +228,33 @@ export default function (props: IPanelBaseProps) {
         </Animated.View>
     );
 
+    // One host keeps mask + sheet in a single stacking context (Fragment siblings
+    // can lose z-order on some Android builds → sheet scrolls pass to home).
     return (
-        <>
+        <View
+            pointerEvents="box-none"
+            collapsable={false}
+            style={style.host}>
             <Pressable
                 style={style.maskWrapper}
                 onPress={() => {
                     snapPoint.value = withTiming(0, timingConfig);
                 }}>
                 <Animated.View
+                    pointerEvents="none"
                     style={[style.maskWrapper, style.mask, maskAnimated]}
                 />
             </Pressable>
             {panelBody}
-        </>
+        </View>
     );
 }
 
 const style = StyleSheet.create({
+    host: {
+        ...StyleSheet.absoluteFillObject,
+        zIndex: 15000,
+    },
     maskWrapper: {
         position: "absolute",
         width: "100%",
@@ -250,7 +263,7 @@ const style = StyleSheet.create({
         left: 0,
         right: 0,
         bottom: 0,
-        zIndex: 15000,
+        zIndex: 0,
     },
     mask: {
         backgroundColor: "#000",
@@ -262,7 +275,10 @@ const style = StyleSheet.create({
         right: 0,
         borderTopLeftRadius: rpx(28),
         borderTopRightRadius: rpx(28),
-        zIndex: 15010,
+        zIndex: 1,
+        // Column so Header + Body(flex:1) layout correctly for FlashList height
+        flexDirection: "column",
+        overflow: "hidden",
     },
     bottomPosition: {
         bottom: 0,

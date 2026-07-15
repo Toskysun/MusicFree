@@ -1,5 +1,6 @@
 import React, { useMemo, useRef } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { ScrollView as GHScrollView } from "react-native-gesture-handler";
 import rpx from "@/utils/rpx";
 import Tag from "@/components/base/tag";
 import ThemeText from "@/components/base/themeText";
@@ -21,7 +22,7 @@ interface IPlayListProps {
     isCurrentMusic: boolean;
 }
 
-function _PlayListItem(props: IPlayListProps) {
+function PlayListItemView(props: IPlayListProps) {
     const colors = useColors();
     const { item, isCurrentMusic } = props;
 
@@ -72,7 +73,7 @@ function _PlayListItem(props: IPlayListProps) {
 }
 
 const PlayListItem = React.memo(
-    _PlayListItem,
+    PlayListItemView,
     (prev, next) =>
         !!isSameMediaItem(prev.item, next.item) &&
         prev.isCurrentMusic === next.isCurrentMusic,
@@ -127,6 +128,11 @@ export default function Body(props: IBodyProps) {
                 data={playList}
                 initialScrollIndex={initIndex}
                 renderItem={renderItem}
+                // RNGH ScrollView wins pan over home RN ScrollView behind the panel
+                renderScrollComponent={GHScrollView as any}
+                nestedScrollEnabled
+                keyboardShouldPersistTaps="handled"
+                bounces
             />
         </View>
     );
@@ -136,6 +142,7 @@ const style = StyleSheet.create({
     playList: {
         width: rpx(750),
         flex: 1,
+        minHeight: 0,
     },
     currentPlaying: {
         marginRight: rpx(6),
