@@ -1,55 +1,181 @@
-import React, { useEffect, useMemo, useRef } from "react";
-import { Platform, StyleSheet, Text, View } from "react-native";
+/**
+ * Mini lyrics: current line only, staggered handoff (low ghosting).
+ *
+ * Adjacent lines use direction-aware staggered motion. Seeks use a shorter
+ * fade-only handoff, while an interrupted handoff snaps to the latest line so
+ * an invisible intermediate lyric can never flash at full opacity.
+ */
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { StyleSheet, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
-    useSharedValue,
-    useAnimatedStyle,
-    withTiming,
     Easing,
+    Extrapolation,
+    cancelAnimation,
+    interpolate,
+    runOnJS,
+    useAnimatedStyle,
+    useSharedValue,
+    withTiming,
 } from "react-native-reanimated";
-import MaskedView from "@react-native-masked-view/masked-view";
-import LinearGradient from "react-native-linear-gradient";
 import rpx from "@/utils/rpx";
 import { useCurrentLyricItem, useLyricState } from "@/core/lyricManager";
-import useColors from "@/hooks/useColors";
 import { fontSizeConst } from "@/constants/uiConst";
 import useOrientation from "@/hooks/useOrientation";
 import PersistStatus from "@/utils/persistStatus";
 import { useAppConfig } from "@/core/appConfig";
-import { BreathingDots } from "../lyric/lyricItem";
 import { getCoverLeftMargin } from "./index";
 import { IMMERSIVE_CONTENT_HORIZONTAL_PADDING } from "../../immersiveCover";
+import LyricItemComponent from "../lyric/lyricItem";
+import type { IParsedLrcItem } from "@/utils/lrcParser";
 
 interface IMiniLyricProps {
     onPress?: () => void;
-    disableMaskedView?: boolean;
     layout?: "normal" | "compact";
     immersive?: boolean;
+    /** Suspend visual work while the album tab is hidden or the page exits. */
+    hidden?: boolean;
 }
 
-const LINE_HEIGHT = rpx(40);
-const SECONDARY_LINE_HEIGHT = rpx(28);
-const GROUP_SPACING = rpx(4);
-const DEFAULT_CONTAINER_HEIGHT = rpx(220);
-const COMPACT_CONTAINER_HEIGHT = rpx(130);
-const DEFAULT_FADE_HEIGHT = rpx(60);
-const COMPACT_FADE_HEIGHT = rpx(30);
-const DEFAULT_CONTAINER_MARGIN_TOP = rpx(24);
-const COMPACT_CONTAINER_MARGIN_TOP = rpx(12);
+type LyricOrder = ("romanization" | "original" | "translation")[];
+
+const VIEWPORT_H_NORMAL = rpx(160);
+const VIEWPORT_H_COMPACT = rpx(100);
+const MARGIN_TOP_NORMAL = rpx(24);
+const MARGIN_TOP_COMPACT = rpx(12);
+
+const MINI_ITEM_CONTAINER_STYLE = {
+    paddingHorizontal: 0,
+    paddingVertical: rpx(4),
+};
+
+const MINI_WORD_FLOAT_EM = 0.05;
+
+/** Small travel — large slide + dual opacity = heavy ghosting */
+const SLIDE_OUT = rpx(12);
+const SLIDE_IN = rpx(16);
+
+const HANDOFF_TIMING = {
+    duration: 260,
+    easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+};
+
+const SEEK_HANDOFF_TIMING = {
+    duration: 140,
+    easing: Easing.out(Easing.quad),
+};
+
+function MiniLyricLine(props: {
+    lyric: IParsedLrcItem;
+    index: number;
+    fontSize: number;
+    order: LyricOrder;
+    showTr: boolean;
+    showRo: boolean;
+    hasTr: boolean;
+    hasRo: boolean;
+    align: "left" | "center";
+    /** Active karaoke only on the incoming/settled line */
+    highlight: boolean;
+    interludeStartTimeMs?: number;
+    interludeEndTimeMs?: number;
+}) {
+    const {
+        lyric,
+        index,
+        fontSize,
+        order,
+        showTr,
+        showRo,
+        hasTr,
+        hasRo,
+        align,
+        highlight,
+        interludeStartTimeMs,
+        interludeEndTimeMs,
+    } = props;
+
+    return (
+        <LyricItemComponent
+            index={index}
+            text={lyric.lrc}
+            fontSize={fontSize}
+            highlight={highlight}
+            words={lyric.words}
+            hasWordByWord={lyric.hasWordByWord}
+            romanizationWords={
+                showRo && hasRo ? lyric.romanizationWords : undefined
+            }
+            romanization={showRo && hasRo ? lyric.romanization : undefined}
+            hasRomanizationWordByWord={
+                showRo && hasRo && lyric.hasRomanizationWordByWord
+                    ? true
+                    : undefined
+            }
+            isRomanizationPseudo={lyric.isRomanizationPseudo}
+            translation={showTr && hasTr ? lyric.translation : undefined}
+            translationWords={
+                showTr && hasTr ? lyric.translationWords : undefined
+            }
+            hasTranslationWordByWord={
+                showTr && hasTr && lyric.hasTranslationWordByWord
+                    ? true
+                    : undefined
+            }
+            lyricOrder={order}
+            align={align}
+            interludeStartTimeMs={interludeStartTimeMs}
+            interludeEndTimeMs={interludeEndTimeMs}
+            containerStyle={MINI_ITEM_CONTAINER_STYLE}
+            wordFloatEm={MINI_WORD_FLOAT_EM}
+        />
+    );
+}
+
+function getInterludeTiming(
+    lyrics: IParsedLrcItem[],
+    index: number,
+    offsetSeconds: number,
+): { startTimeMs?: number; endTimeMs?: number } {
+    const lyric = lyrics[index];
+    if (!lyric) {
+        return {};
+    }
+    const startTimeMs = (lyric.time + offsetSeconds) * 1000;
+    const nextLyric = lyrics[index + 1];
+    const endTimeMs = nextLyric
+        ? Math.max(
+            startTimeMs,
+            (nextLyric.time + offsetSeconds) * 1000 - 250,
+        )
+        : lyric.duration
+            ? startTimeMs + lyric.duration
+            : undefined;
+    return { startTimeMs, endTimeMs };
+}
 
 export default function MiniLyric(props: IMiniLyricProps) {
-    const { onPress, disableMaskedView } = props;
+    const { onPress, hidden = false } = props;
     const layout = props.layout ?? "normal";
     const immersive = props.immersive ?? false;
-    const colors = useColors();
+    const compact = layout === "compact";
+
     const currentLyricItem = useCurrentLyricItem();
-    const { lyrics, loading, hasTranslation, hasRomanization } = useLyricState();
+    const { lyrics, loading, hasTranslation, hasRomanization, meta } =
+        useLyricState();
     const orientation = useOrientation();
     const coverStyle = useAppConfig("theme.coverStyle") ?? "square";
-    const enableBreathingDots = useAppConfig("lyric.enableBreathingDots") ?? true;
-    const pureWhiteMode = useAppConfig("lyric.pureWhiteMode") ?? true;
+    const fontKey = useAppConfig("lyric.detailFontSize") ?? 1;
 
-    const activeColor = pureWhiteMode ? "white" : colors.primary;
+    const fontSize = useMemo(() => {
+        const map: Record<number, number> = {
+            0: rpx(22),
+            1: rpx(28),
+            2: rpx(32),
+            3: rpx(36),
+        };
+        return map[fontKey] ?? fontSizeConst.content;
+    }, [fontKey]);
 
     const showTranslation = PersistStatus.useValue(
         "lyric.showTranslation",
@@ -59,104 +185,191 @@ export default function MiniLyric(props: IMiniLyricProps) {
         "lyric.showRomanization",
         true,
     );
-    const lyricOrder = PersistStatus.useValue(
-        "lyric.lyricOrder",
-        ["romanization", "original", "translation"],
-    );
+    const lyricOrder = PersistStatus.useValue("lyric.lyricOrder", [
+        "romanization",
+        "original",
+        "translation",
+    ]) as LyricOrder;
 
-    const effectiveLyricOrder = useMemo(
-        () => (layout === "compact" ? ["original"] : lyricOrder) ?? ["original"],
-        [layout, lyricOrder],
-    );
-    const effectiveShowTranslation = layout === "compact" ? false : showTranslation;
-    const effectiveShowRomanization = layout === "compact" ? false : showRomanization;
+    const order = useMemo<LyricOrder>(() => {
+        if (compact) {
+            return ["original"];
+        }
+        return lyricOrder ?? ["original"];
+    }, [compact, lyricOrder]);
 
-    const translateY = useSharedValue(0);
-    const lastIndex = useRef(-1);
+    const showTr = compact ? false : showTranslation;
+    const showRo = compact ? false : showRomanization;
+
+    const detailAlign =
+        (useAppConfig("lyric.detailAlign") as "left" | "center") ?? "left";
+    const align = detailAlign === "center" ? "center" : "left";
 
     const currentIndex = currentLyricItem?.index ?? -1;
+    const targetIndex = currentIndex;
 
-    // Calculate height for a single lyric line
-    const getLineHeight = (lyric: typeof lyrics[0]) => {
-        const isEmptyLyric = !lyric.lrc || lyric.lrc.trim() === "";
+    // Displayed "incoming" line index; outgoing is the previous one mid-transition.
+    const [activeIndex, setActiveIndex] = useState(targetIndex);
+    const [outgoingIndex, setOutgoingIndex] = useState<number | null>(null);
+    const activeIndexRef = useRef(activeIndex);
+    const transitionIdRef = useRef(0);
+    const transitionRunningRef = useRef(false);
 
-        // Empty lyrics only show one line
-        if (isEmptyLyric) {
-            return LINE_HEIGHT + GROUP_SPACING;
+    // 0 = start of handoff (outgoing full / incoming below), 1 = settled
+    const handoff = useSharedValue(1);
+    // 1/-1 = next/previous direction; slideMotion=0 disables travel for seeks.
+    const direction = useSharedValue(1);
+    const slideMotion = useSharedValue(1);
+
+    const finishTransition = useCallback((transitionId: number) => {
+        if (transitionId !== transitionIdRef.current) {
+            return;
         }
+        transitionRunningRef.current = false;
+        setOutgoingIndex(null);
+    }, []);
 
-        // Determine which types are visible
-        const visibleTypes: string[] = [];
-        for (const type of effectiveLyricOrder) {
-            if (type === "original") {
-                visibleTypes.push(type);
-            } else if (type === "romanization" && effectiveShowRomanization && hasRomanization) {
-                visibleTypes.push(type);
-            } else if (type === "translation" && effectiveShowTranslation && hasTranslation) {
-                visibleTypes.push(type);
-            }
-        }
-
-        if (visibleTypes.length === 0) {
-            return LINE_HEIGHT + GROUP_SPACING;
-        }
-
-        // First visible uses large font, others use small font
-        let height = LINE_HEIGHT; // First line
-        height += (visibleTypes.length - 1) * SECONDARY_LINE_HEIGHT; // Remaining lines
-
-        return height + GROUP_SPACING;
-    };
-
-    // Calculate cumulative offset for a given index
-    const getCumulativeOffset = (targetIndex: number) => {
-        let offset = 0;
-        for (let i = 0; i < targetIndex; i++) {
-            offset += getLineHeight(lyrics[i]);
-        }
-        return offset;
-    };
-
-    const containerHeight = layout === "compact" ? COMPACT_CONTAINER_HEIGHT : DEFAULT_CONTAINER_HEIGHT;
-
-    const dynamicContainerStyle = useMemo(() => ({
-        paddingHorizontal: immersive
-            ? IMMERSIVE_CONTENT_HORIZONTAL_PADDING
-            : getCoverLeftMargin(coverStyle),
-    }), [coverStyle, immersive]);
-
-    // Handle position updates
+    // A new lyric array means a new song/source. Reset before the target-index
+    // effect runs, preventing an old line index from animating into the new song.
     useEffect(() => {
-        if (currentIndex >= 0 && lyrics.length > 0) {
-            const currentLineHeight = getLineHeight(lyrics[currentIndex]);
-            const cumulativeOffset = getCumulativeOffset(currentIndex);
-            // Center the current line in container
-            const targetY = -cumulativeOffset + (containerHeight - currentLineHeight) / 2;
+        transitionIdRef.current += 1;
+        transitionRunningRef.current = false;
+        cancelAnimation(handoff);
+        activeIndexRef.current = targetIndex;
+        setOutgoingIndex(null);
+        setActiveIndex(targetIndex);
+        handoff.value = 1;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [lyrics]);
 
-            if (lastIndex.current === -1) {
-                // First time: set position directly without animation
-                translateY.value = targetY;
-            } else if (lastIndex.current !== currentIndex) {
-                // Subsequent: animate
-                translateY.value = withTiming(targetY, {
-                    duration: 400,
-                    easing: Easing.bezier(0.25, 0.1, 0.25, 1),
-                });
-            }
-            lastIndex.current = currentIndex;
+    useEffect(() => () => {
+        transitionIdRef.current += 1;
+        transitionRunningRef.current = false;
+        cancelAnimation(handoff);
+    }, [handoff]);
+
+    useEffect(() => {
+        if (hidden) {
+            transitionIdRef.current += 1;
+            transitionRunningRef.current = false;
+            cancelAnimation(handoff);
+            activeIndexRef.current = targetIndex;
+            setOutgoingIndex(null);
+            setActiveIndex(targetIndex);
+            handoff.value = 1;
+            return;
         }
+        const prev = activeIndexRef.current;
+        if (prev === targetIndex) {
+            return;
+        }
+
+        transitionIdRef.current += 1;
+        const transitionId = transitionIdRef.current;
+        cancelAnimation(handoff);
+
+        // First paint, no current line, or a second update before the previous
+        // handoff settled: latest state wins without flashing an intermediate.
+        if (
+            targetIndex < 0 ||
+            prev < 0 ||
+            !lyrics[prev] ||
+            !lyrics[targetIndex] ||
+            transitionRunningRef.current
+        ) {
+            transitionRunningRef.current = false;
+            activeIndexRef.current = targetIndex;
+            setActiveIndex(targetIndex);
+            setOutgoingIndex(null);
+            handoff.value = 1;
+            return;
+        }
+
+        const delta = targetIndex - prev;
+        const isAdjacent = Math.abs(delta) === 1;
+        direction.value = delta >= 0 ? 1 : -1;
+        slideMotion.value = isAdjacent ? 1 : 0;
+        transitionRunningRef.current = true;
+        activeIndexRef.current = targetIndex;
+        setOutgoingIndex(prev);
+        setActiveIndex(targetIndex);
+        handoff.value = 0;
+        handoff.value = withTiming(
+            1,
+            isAdjacent ? HANDOFF_TIMING : SEEK_HANDOFF_TIMING,
+            finished => {
+                if (finished) {
+                    runOnJS(finishTransition)(transitionId);
+                }
+            },
+        );
     }, [
-        containerHeight,
-        currentIndex,
-        effectiveLyricOrder,
-        effectiveShowRomanization,
-        effectiveShowTranslation,
-        lyrics.length,
+        direction,
+        finishTransition,
+        handoff,
+        hidden,
+        lyrics,
+        slideMotion,
+        targetIndex,
     ]);
 
-    const animatedStyle = useAnimatedStyle(() => ({
-        transform: [{ translateY: translateY.value }],
-    }));
+    // Staggered curves: old line nearly gone before new is solid → less residual double image
+    const outgoingStyle = useAnimatedStyle(() => {
+        const p = handoff.value;
+        return {
+            opacity: interpolate(
+                p,
+                [0, 0.4, 1],
+                [1, 0, 0],
+                Extrapolation.CLAMP,
+            ),
+            transform: [
+                {
+                    translateY: -direction.value * slideMotion.value * interpolate(
+                        p,
+                        [0, 0.4, 1],
+                        [0, SLIDE_OUT, SLIDE_OUT],
+                        Extrapolation.CLAMP,
+                    ),
+                },
+            ],
+        };
+    });
+
+    const incomingStyle = useAnimatedStyle(() => {
+        const p = handoff.value;
+        return {
+            opacity: interpolate(
+                p,
+                [0, 0.25, 0.8, 1],
+                [0, 0, 1, 1],
+                Extrapolation.CLAMP,
+            ),
+            transform: [
+                {
+                    translateY: direction.value * slideMotion.value * interpolate(
+                        p,
+                        [0, 0.25, 1],
+                        [SLIDE_IN, SLIDE_IN, 0],
+                        Extrapolation.CLAMP,
+                    ),
+                },
+            ],
+        };
+    });
+
+    const viewportH = compact ? VIEWPORT_H_COMPACT : VIEWPORT_H_NORMAL;
+
+    const outerStyle = useMemo(
+        () => ({
+            paddingHorizontal: immersive
+                ? IMMERSIVE_CONTENT_HORIZONTAL_PADDING
+                : getCoverLeftMargin(coverStyle),
+            marginTop: compact ? MARGIN_TOP_COMPACT : MARGIN_TOP_NORMAL,
+            minHeight: viewportH,
+        }),
+        [compact, coverStyle, immersive, viewportH],
+    );
 
     const tap = Gesture.Tap()
         .onStart(() => {
@@ -164,212 +377,102 @@ export default function MiniLyric(props: IMiniLyricProps) {
         })
         .runOnJS(true);
 
-    const fadeHeight = layout === "compact" ? COMPACT_FADE_HEIGHT : DEFAULT_FADE_HEIGHT;
+    const activeLyric =
+        activeIndex >= 0 && activeIndex < lyrics.length
+            ? lyrics[activeIndex]
+            : null;
+    const outgoingLyric =
+        outgoingIndex != null &&
+        outgoingIndex >= 0 &&
+        outgoingIndex < lyrics.length
+            ? lyrics[outgoingIndex]
+            : null;
+    const lyricOffsetSeconds = +(meta?.offset ?? 0);
+    const activeInterlude = getInterludeTiming(
+        lyrics,
+        activeIndex,
+        lyricOffsetSeconds,
+    );
+    const outgoingInterlude = outgoingIndex == null
+        ? {}
+        : getInterludeTiming(lyrics, outgoingIndex, lyricOffsetSeconds);
 
-    // 使用 rgba 替代 transparent 避免 Android 渲染伪影
-    const maskElement = useMemo(() => (
-        <View style={styles.maskContainer}>
-            <LinearGradient
-                colors={["rgba(0,0,0,0)", "rgba(0,0,0,1)"]}
-                style={{ height: fadeHeight }}
-            />
-            <View style={{ flex: 1, backgroundColor: "black" }} />
-            <LinearGradient
-                colors={["rgba(0,0,0,1)", "rgba(0,0,0,0)"]}
-                style={{ height: fadeHeight }}
-            />
-        </View>
-    ), [fadeHeight]);
-
-    // Don't show when no lyrics, loading, or horizontal orientation
-    const isHidden = !lyrics.length || loading || orientation === "horizontal";
-
-    // Early return when hidden to avoid MaskedView height caching issues
-    if (isHidden) {
+    if (
+        hidden ||
+        !lyrics.length ||
+        loading ||
+        orientation === "horizontal" ||
+        !activeLyric
+    ) {
         return null;
     }
 
-    // Calculate opacity based on distance from current line
-    const getLineOpacity = (index: number) => {
-        if (currentIndex < 0) return 0.5;
-        const distance = Math.abs(index - currentIndex);
-        if (distance === 0) return 1;
-        if (distance === 1) return 0.6;
-        if (distance === 2) return 0.4;
-        return 0.25;
+    const lineProps = {
+        fontSize,
+        order,
+        showTr,
+        showRo,
+        hasTr: hasTranslation,
+        hasRo: hasRomanization,
+        align: align as "left" | "center",
     };
-
-    // Android MaskedView can briefly draw its black mask surface while the
-    // immersive album page is mounted/unmounted during cover/lyric tab switches.
-    // Bypass it in immersive mode to avoid flashing black bars around mini lyrics.
-    const shouldUseMask = Platform.OS !== "android" || (!disableMaskedView && !immersive);
-
-    const lyricsContent = (
-        <View style={styles.contentContainer}>
-            <Animated.View style={[styles.lyricsWrapper, animatedStyle]}>
-            {lyrics.map((lyric, index) => {
-                const isActive = index === currentIndex;
-                const isEmptyLyric = !lyric.lrc || lyric.lrc.trim() === "";
-                const lineOpacity = getLineOpacity(index);
-
-                return (
-                    <View key={index} style={[styles.lyricGroup, { opacity: lineOpacity }]}>
-                        {(() => {
-                            // Find first visible type
-                            const firstVisibleType = effectiveLyricOrder.find((type) => {
-                                if (type === "original") return true;
-                                if (type === "romanization") return effectiveShowRomanization && hasRomanization;
-                                if (type === "translation") return effectiveShowTranslation && hasTranslation;
-                                return false;
-                            });
-
-                            // Empty lyrics only show original line
-                            if (isEmptyLyric) {
-                                if (!enableBreathingDots || !isActive) {
-                                    return <View key="original" style={styles.dotsContainer} />;
-                                }
-                                return (
-                                    <View key="original" style={styles.dotsContainer}>
-                                        <BreathingDots
-                                            color={activeColor}
-                                            align="left"
-                                            highlight={true}
-                                        />
-                                    </View>
-                                );
-                            }
-
-                            return effectiveLyricOrder.map((type) => {
-                                const isPrimary = type === firstVisibleType;
-                                const textStyle = isPrimary ? styles.lyricLine : styles.secondaryLine;
-
-                                if (type === "original") {
-                                    return (
-                                        <Text
-                                            key="original"
-                                            style={[
-                                                textStyle,
-                                                { color: isActive ? activeColor : "white" },
-                                            ]}
-                                            numberOfLines={1}>
-                                            {lyric.lrc}
-                                        </Text>
-                                    );
-                                }
-                                if (type === "romanization" && effectiveShowRomanization && hasRomanization) {
-                                    return (
-                                        <Text
-                                            key="romanization"
-                                            style={[
-                                                textStyle,
-                                                { color: isActive ? activeColor : "white" },
-                                            ]}
-                                            numberOfLines={1}>
-                                            {lyric.romanization || " "}
-                                        </Text>
-                                    );
-                                }
-                                if (type === "translation" && effectiveShowTranslation && hasTranslation) {
-                                    return (
-                                        <Text
-                                            key="translation"
-                                            style={[
-                                                textStyle,
-                                                { color: isActive ? activeColor : "white" },
-                                            ]}
-                                            numberOfLines={1}>
-                                            {lyric.translation || " "}
-                                        </Text>
-                                    );
-                                }
-                                return null;
-                            });
-                        })()}
-                    </View>
-                );
-            })}
-            </Animated.View>
-        </View>
-    );
 
     return (
         <GestureDetector gesture={tap}>
-            <View
-                style={[
-                    styles.container,
-                    dynamicContainerStyle,
-                    {
-                        height: containerHeight,
-                        marginTop: layout === "compact" ? COMPACT_CONTAINER_MARGIN_TOP : DEFAULT_CONTAINER_MARGIN_TOP,
-                    },
-                ]}>
-                {shouldUseMask ? (
-                    <MaskedView
-                        style={styles.maskedView}
-                        maskElement={maskElement}
-                        androidRenderingMode={
-                            Platform.OS === "android" ? "software" : undefined
-                        }
-                        collapsable={false}
-                    >
-                        {lyricsContent}
-                    </MaskedView>
-                ) : (
-                    lyricsContent
-                )}
+            <View style={[styles.outer, outerStyle]}>
+                <View style={[styles.stage, { height: viewportH }]}>
+                    {outgoingLyric && outgoingIndex != null ? (
+                        <Animated.View
+                            style={[styles.layer, outgoingStyle]}
+                            pointerEvents="none">
+                            <MiniLyricLine
+                                lyric={outgoingLyric}
+                                index={outgoingIndex}
+                                highlight
+                                interludeStartTimeMs={outgoingInterlude.startTimeMs}
+                                interludeEndTimeMs={outgoingInterlude.endTimeMs}
+                                {...lineProps}
+                            />
+                        </Animated.View>
+                    ) : null}
+                    <Animated.View
+                        style={[styles.layer, incomingStyle]}
+                        pointerEvents="none">
+                        <MiniLyricLine
+                            key={`in-${activeIndex}`}
+                            lyric={activeLyric}
+                            index={activeIndex}
+                            highlight
+                            interludeStartTimeMs={activeInterlude.startTimeMs}
+                            interludeEndTimeMs={activeInterlude.endTimeMs}
+                            {...lineProps}
+                        />
+                    </Animated.View>
+                </View>
             </View>
         </GestureDetector>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
+    outer: {
         width: "100%",
         justifyContent: "center",
-        alignItems: "center",
-        marginTop: DEFAULT_CONTAINER_MARGIN_TOP,
-    },
-    maskContainer: {
-        flex: 1,
-        width: "100%",
-    },
-    contentContainer: {
-        width: "100%",
-        height: "100%",
-        overflow: "hidden",
-    },
-    maskedView: {
-        width: "100%",
-        height: "100%",
-        overflow: "hidden",
         backgroundColor: "transparent",
     },
-    lyricsWrapper: {
+    /** Fixed viewport keeps regular lines and AMll interlude dots centered. */
+    stage: {
         width: "100%",
-    },
-    lyricGroup: {
-        width: "100%",
-        marginBottom: GROUP_SPACING,
-    },
-    dotsContainer: {
-        height: LINE_HEIGHT,
-        justifyContent: "center",
+        position: "relative",
         overflow: "hidden",
     },
-    lyricLine: {
+    layer: {
+        position: "absolute",
+        left: 0,
+        right: 0,
+        top: 0,
+        bottom: 0,
         width: "100%",
-        fontSize: fontSizeConst.content,
-        fontWeight: "600",
-        textAlign: "left",
-        lineHeight: LINE_HEIGHT,
-        height: LINE_HEIGHT,
-    },
-    secondaryLine: {
-        width: "100%",
-        fontSize: fontSizeConst.description,
-        fontWeight: "400",
-        textAlign: "left",
-        lineHeight: SECONDARY_LINE_HEIGHT,
-        height: SECONDARY_LINE_HEIGHT,
+        justifyContent: "center",
     },
 });

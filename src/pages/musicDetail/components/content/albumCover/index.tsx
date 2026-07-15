@@ -32,11 +32,14 @@ export function getCoverLeftMargin(coverStyle: string) {
 
 interface IProps {
     onTurnPageClick?: () => void;
-    disableMaskedView?: boolean;
+    /** Only true when leaving music-detail — keep mini lyric mounted across cover/lyric tabs */
+    isExiting?: boolean;
+    /** Hidden album tab stays mounted, but expensive animations are suspended. */
+    isActive?: boolean;
 }
 
 export default function AlbumCover(props: IProps) {
-    const { onTurnPageClick, disableMaskedView } = props;
+    const { onTurnPageClick, isExiting = false, isActive = true } = props;
 
     const musicItem = useCurrentMusic();
     // React to associated cover changes
@@ -164,6 +167,7 @@ export default function AlbumCover(props: IProps) {
     const spinValue = useRef(new Animated.Value(0)).current;
     const animationRef = useRef<Animated.CompositeAnimation | null>(null);
     const isAnimatingRef = useRef(false);
+    const lastAnimatedMusicIdRef = useRef(musicItem?.id);
 
     const createAnimation = useCallback(
         (fromValue: number) => {
@@ -202,21 +206,33 @@ export default function AlbumCover(props: IProps) {
 
     // 控制播放/暂停时的动画
     useEffect(() => {
-        if (isPlaying && isCircle) {
+        if (isActive && isPlaying && isCircle) {
             startAnimation();
         } else {
             stopAnimation();
         }
-    }, [isPlaying, isCircle, startAnimation, stopAnimation]);
+    }, [isActive, isPlaying, isCircle, startAnimation, stopAnimation]);
 
     // 切换歌曲时重置
     useEffect(() => {
+        if (lastAnimatedMusicIdRef.current === musicItem?.id) {
+            return;
+        }
+        lastAnimatedMusicIdRef.current = musicItem?.id;
         stopAnimation();
         spinValue.setValue(0);
-        if (isPlaying && isCircle) {
+        if (isActive && isPlaying && isCircle) {
             startAnimation();
         }
-    }, [musicItem?.id]);
+    }, [
+        isActive,
+        isCircle,
+        isPlaying,
+        musicItem?.id,
+        spinValue,
+        startAnimation,
+        stopAnimation,
+    ]);
 
     const spin = spinValue.interpolate({
         inputRange: [0, 1],
@@ -333,9 +349,9 @@ export default function AlbumCover(props: IProps) {
                     <View style={miniLyricLayout === "hidden" ? styles.hidden : null}>
                         <MiniLyric
                             onPress={onTurnPageClick}
-                            disableMaskedView={disableMaskedView}
                             layout={miniLyricLayout === "compact" ? "compact" : "normal"}
                             immersive
+                            hidden={isExiting || !isActive}
                         />
                     </View>
                     <View style={{ flex: 1 }} />
@@ -371,8 +387,8 @@ export default function AlbumCover(props: IProps) {
             <View style={miniLyricLayout === "hidden" ? styles.hidden : null}>
                 <MiniLyric
                     onPress={onTurnPageClick}
-                    disableMaskedView={disableMaskedView}
                     layout={miniLyricLayout === "compact" ? "compact" : "normal"}
+                    hidden={isExiting || !isActive}
                 />
             </View>
             <View style={{ flex: 1 }} />

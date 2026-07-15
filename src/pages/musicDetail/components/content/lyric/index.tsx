@@ -121,7 +121,7 @@ class LayoutCache {
         let lo = 0;
         let hi = this.heights.length - 1;
         while (lo < hi) {
-            const mid = (lo + hi + 1) >>> 1;
+            const mid = Math.floor((lo + hi + 1) / 2);
             if (this.prefixSums[mid] <= target) {
                 lo = mid;
             } else {
@@ -546,7 +546,7 @@ export default function Lyric(props: IProps) {
         currentLrcItem?.index,
         draggingIndex,
         isActive,
-        lyrics.length,
+        lyrics,
         musicState,
         scrollToIndex,
     ]);
@@ -738,6 +738,20 @@ export default function Lyric(props: IProps) {
                             extraData={listExtraData}
                             renderItem={({ item, index }) => {
                                 const isHighlighted = currentLrcItem?.index === index;
+                                const lyricOffsetSeconds = +(meta?.offset ?? 0);
+                                const interludeStartTimeMs =
+                                    (item.time + lyricOffsetSeconds) * 1000;
+                                const nextLyric = lyrics[index + 1];
+                                const interludeEndTimeMs = nextLyric
+                                    ? Math.max(
+                                        interludeStartTimeMs,
+                                        (nextLyric.time + lyricOffsetSeconds) *
+                                            1000 -
+                                            250,
+                                    )
+                                    : item.duration
+                                        ? interludeStartTimeMs + item.duration
+                                        : undefined;
 
                                 // Get romanization text for multi-line display
                                 const romanizationText = showRomanization && hasRomanization ? item.romanization : undefined;
@@ -782,6 +796,8 @@ export default function Lyric(props: IProps) {
                                         }
                                         lyricOrder={resolvedLyricOrder}
                                         align={lyricAlign}
+                                        interludeStartTimeMs={interludeStartTimeMs}
+                                        interludeEndTimeMs={interludeEndTimeMs}
                                     />
                                 );
                             }}

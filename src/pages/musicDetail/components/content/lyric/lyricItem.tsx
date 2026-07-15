@@ -1,10 +1,16 @@
 import React, { memo, useEffect, useMemo, useState } from "react";
-import { Platform, StyleSheet, Text, View } from "react-native";
+import {
+    Platform,
+    StyleProp,
+    StyleSheet,
+    Text,
+    View,
+    ViewStyle,
+} from "react-native";
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
     withTiming,
-    withRepeat,
     useDerivedValue,
     interpolateColor,
     Easing,
@@ -18,115 +24,128 @@ import { useAppConfig } from "@/core/appConfig";
 
 type LyricAlign = "left" | "center";
 
-// Breathing dots animation config
-const DOTS_CONFIG = {
-    number: 3,
-    size: 16,
-    margin: 12,
-    breathingAmplitude: 0.1,
-    breathingCenter: 0.9,
-    breathingCycleDuration: 3000,
-    dotAlphaMin: 0.4,
-    dotAlphaMax: 1.0,
-};
-const DOTS_ROW_WIDTH = DOTS_CONFIG.number * DOTS_CONFIG.size + (DOTS_CONFIG.number - 1) * DOTS_CONFIG.margin;
+// AMll interlude indicator. This is not a generic looping loader: every frame
+// is derived from the real interlude interval, including the staged reveal,
+// subtle breath and the collapse before the next lyric arrives.
+const AMLL_INTERLUDE_MIN_DURATION_MS = 4000;
+const AMLL_INTERLUDE_TARGET_BREATHE_MS = 1500;
 
-// Breathing dots component for empty lyric lines
+function clamp(min: number, current: number, max: number) {
+    "worklet";
+    return Math.max(min, Math.min(current, max));
+}
+
+function easeInOutBack(x: number) {
+    "worklet";
+    const c1 = 1.70158;
+    const c2 = c1 * 1.525;
+    return x < 0.5
+        ? ((2 * x) ** 2 * ((c2 + 1) * 2 * x - c2)) / 2
+        : ((2 * x - 2) ** 2 * ((c2 + 1) * (x * 2 - 2) + c2) + 2) / 2;
+}
+
+function easeOutExpo(x: number) {
+    "worklet";
+    return x === 1 ? 1 : 1 - 2 ** (-10 * x);
+}
+
 export const BreathingDots = memo(({
     color,
     align = "center",
-    highlight = false,
+    fontSize = fontSizeConst.content,
+    startTimeMs,
+    endTimeMs,
 }: {
     color: string;
     align?: LyricAlign;
-    highlight?: boolean;
+    fontSize?: number;
+    startTimeMs?: number;
+    endTimeMs?: number;
 }) => {
-    const breathingProgress = useSharedValue(0);
-    const dotAlpha1 = useSharedValue(DOTS_CONFIG.dotAlphaMin);
-    const dotAlpha2 = useSharedValue(DOTS_CONFIG.dotAlphaMin);
-    const dotAlpha3 = useSharedValue(DOTS_CONFIG.dotAlphaMin);
+    const currentPositionMsShared = useCurrentPositionShared();
+    const duration = Math.max(0, (endTimeMs ?? 0) - (startTimeMs ?? 0));
+    const enabled =
+        startTimeMs !== undefined &&
+        endTimeMs !== undefined &&
+        duration >= AMLL_INTERLUDE_MIN_DURATION_MS;
 
-    useEffect(() => {
-        // Breathing scale animation (sine wave)
-        breathingProgress.value = withRepeat(
-            withTiming(1, {
-                duration: DOTS_CONFIG.breathingCycleDuration,
-                easing: Easing.linear,
-            }),
-            -1,
-            false,
+    // AMll uses 0.5em dots, 0.25em gaps and 0.75em horizontal padding.
+    const dotSize = fontSize * 0.5;
+    const gap = fontSize * 0.25;
+    const horizontalPadding = fontSize * 0.75;
+    const rowWidth = dotSize * 3 + gap * 2 + horizontalPadding * 2;
+
+    const motion = useDerivedValue(() => {
+        "worklet";
+        if (!enabled || startTimeMs === undefined || endTimeMs === undefined) {
+            return { scale: 0, opacity0: 0, opacity1: 0, opacity2: 0 };
+        }
+
+        const currentDuration = currentPositionMsShared.value - startTimeMs;
+        if (currentDuration < 0 || currentDuration > duration) {
+            return { scale: 0, opacity0: 0, opacity1: 0, opacity2: 0 };
+        }
+
+        const breatheDuration =
+            duration / Math.ceil(duration / AMLL_INTERLUDE_TARGET_BREATHE_MS);
+        let scale =
+            Math.sin(1.5 * Math.PI - (currentDuration / breatheDuration) * 2) /
+                20 +
+            1;
+        let globalOpacity = 1;
+
+        if (currentDuration < 2000) {
+            scale *= easeOutExpo(currentDuration / 2000);
+        }
+        if (currentDuration < 500) {
+            globalOpacity = 0;
+        } else if (currentDuration < 1000) {
+            globalOpacity *= (currentDuration - 500) / 500;
+        }
+
+        const remaining = duration - currentDuration;
+        if (remaining < 750) {
+            scale *= 1 - easeInOutBack((750 - remaining) / 750 / 2);
+        }
+        if (remaining < 375) {
+            globalOpacity *= clamp(0, remaining / 375, 1);
+        }
+
+        const dotsDuration = duration - 750;
+        const getDotOpacity = (delay: number) => clamp(
+            0,
+            globalOpacity * clamp(
+                0.25,
+                (((currentDuration - delay) * 3) / dotsDuration) * 0.75,
+                1,
+            ),
+            1,
         );
 
-        // Sequential alpha animations for each dot
-        // Each dot cycles from min to max alpha in a staggered pattern
-        const dotDuration = DOTS_CONFIG.breathingCycleDuration / DOTS_CONFIG.number;
-
-        // Start first dot animation immediately
-        dotAlpha1.value = DOTS_CONFIG.dotAlphaMin;
-        dotAlpha1.value = withRepeat(
-            withTiming(DOTS_CONFIG.dotAlphaMax, {
-                duration: dotDuration,
-                easing: Easing.inOut(Easing.ease),
-            }),
-            -1,
-            true, // Reverse animation to create smooth cycle
-        );
-
-        // Start second dot after delay
-        setTimeout(() => {
-            dotAlpha2.value = withRepeat(
-                withTiming(DOTS_CONFIG.dotAlphaMax, {
-                    duration: dotDuration,
-                    easing: Easing.inOut(Easing.ease),
-                }),
-                -1,
-                true,
-            );
-        }, dotDuration);
-
-        // Start third dot after longer delay
-        setTimeout(() => {
-            dotAlpha3.value = withRepeat(
-                withTiming(DOTS_CONFIG.dotAlphaMax, {
-                    duration: dotDuration,
-                    easing: Easing.inOut(Easing.ease),
-                }),
-                -1,
-                true,
-            );
-        }, dotDuration * 2);
-    }, []);
-
-    // Calculate breathing scale based on sine wave
-    const containerStyle = useAnimatedStyle(() => {
-        const angle = breathingProgress.value * 2 * Math.PI - Math.PI / 2;
-        const scale = DOTS_CONFIG.breathingCenter + DOTS_CONFIG.breathingAmplitude * Math.sin(angle);
-        const finalScale = highlight ? scale * HIGHLIGHT_SCALE : scale;
-        const translateX = align === "left" ? (DOTS_ROW_WIDTH * (finalScale - 1)) / 2 : 0;
         return {
-            transform: [
-                { scale: finalScale },
-                { translateX },
-            ],
+            scale: Math.max(0, scale) * 0.7,
+            opacity0: getDotOpacity(0),
+            opacity1: getDotOpacity(dotsDuration / 3),
+            opacity2: getDotOpacity((dotsDuration / 3) * 2),
         };
-    });
+    }, [duration, enabled, endTimeMs, startTimeMs]);
 
-    const dot1Style = useAnimatedStyle(() => ({
-        opacity: dotAlpha1.value,
-    }));
+    const containerStyle = useAnimatedStyle(() => {
+        const scale = motion.value.scale;
+        const translateX = align === "left" ? (rowWidth * (scale - 1)) / 2 : 0;
+        return {
+            transform: [{ scale }, { translateX }],
+        };
+    }, [align, rowWidth]);
 
-    const dot2Style = useAnimatedStyle(() => ({
-        opacity: dotAlpha2.value,
-    }));
-
-    const dot3Style = useAnimatedStyle(() => ({
-        opacity: dotAlpha3.value,
-    }));
+    const dot0Style = useAnimatedStyle(() => ({ opacity: motion.value.opacity0 }));
+    const dot1Style = useAnimatedStyle(() => ({ opacity: motion.value.opacity1 }));
+    const dot2Style = useAnimatedStyle(() => ({ opacity: motion.value.opacity2 }));
 
     const dotBaseStyle = {
-        width: DOTS_CONFIG.size,
-        height: DOTS_CONFIG.size,
-        borderRadius: DOTS_CONFIG.size / 2,
+        width: dotSize,
+        height: dotSize,
+        borderRadius: dotSize / 2,
         backgroundColor: color,
     };
 
@@ -135,12 +154,19 @@ export const BreathingDots = memo(({
             dotsStyles.container,
             { alignItems: align === "left" ? "flex-start" : "center" },
         ]}>
-            <Animated.View style={[dotsStyles.dotsRow, containerStyle]}>
+            <Animated.View
+                style={[
+                    dotsStyles.dotsRow,
+                    {
+                        columnGap: gap,
+                        paddingHorizontal: horizontalPadding,
+                        paddingVertical: fontSize * 0.2,
+                    },
+                    containerStyle,
+                ]}>
+                <Animated.View style={[dotBaseStyle, dot0Style]} />
                 <Animated.View style={[dotBaseStyle, dot1Style]} />
-                <View style={{ width: DOTS_CONFIG.margin }} />
                 <Animated.View style={[dotBaseStyle, dot2Style]} />
-                <View style={{ width: DOTS_CONFIG.margin }} />
-                <Animated.View style={[dotBaseStyle, dot3Style]} />
             </Animated.View>
         </View>
     );
@@ -153,8 +179,8 @@ interface ILyricItemComponentProps {
     text?: string;
     fontSize?: number;
     words?: ILyric.IWordData[];
-    hasWordByWord?: boolean;
     romanizationWords?: ILyric.IWordData[];
+    hasWordByWord?: boolean;
     romanization?: string;
     hasRomanizationWordByWord?: boolean;
     isRomanizationPseudo?: boolean;
@@ -164,6 +190,17 @@ interface ILyricItemComponentProps {
     lyricOrder?: ("original" | "translation" | "romanization")[];
     onLayout?: (index: number, height: number) => void;
     align?: LyricAlign;
+    /** Actual empty-line/interlude interval, in milliseconds. */
+    interludeStartTimeMs?: number;
+    interludeEndTimeMs?: number;
+    /**
+     * Extra style on the outermost row container.
+     * Mini lyrics use this to drop large detail-page padding while keeping
+     * the same word-by-word / line animation implementation.
+     */
+    containerStyle?: StyleProp<ViewStyle>;
+    /** Word-by-word float amplitude in em (default 0.1). Mini lyrics use 0.05. */
+    wordFloatEm?: number;
 }
 
 // Animation timing configs
@@ -181,7 +218,7 @@ const TRANSLATION_HIGHLIGHT_OPACITY = 0.72;
 
 // AMll motion constants, ported from amll-core/lyric-player/dom/lyric-line.ts.
 const AMLL_MIN_DURATION_MS = 1000;
-// Base float height in em; slightly higher so word-by-word lift is more noticeable.
+// Default float height in em (full lyric page). Mini lyrics can override via wordFloatEm.
 const AMLL_WORD_FLOAT_EM = 0.1;
 const AMLL_EMPHASIS_STAGGER_RATIO = 2.5;
 const AMLL_EMPHASIS_FLOAT_DURATION_RATIO = 1.4;
@@ -440,7 +477,7 @@ function useLineActiveState(flatTimings: { startTime: number; endTime: number }[
         // Binary search for active char
         let lo = 0, hi = len - 1;
         while (lo <= hi) {
-            const mid = (lo + hi) >>> 1;
+            const mid = Math.floor((lo + hi) / 2);
             if (t < flatTimings[mid].startTime) {
                 hi = mid - 1;
             } else if (t >= flatTimings[mid].endTime) {
@@ -486,6 +523,7 @@ const KaraokeWordSplit = memo(({
     fontSize,
     isCurrentLine,
     enableFloat = true,
+    wordFloatEm = AMLL_WORD_FLOAT_EM,
     isPseudo = false,
     noSpace = false,
     charFlatOffset,
@@ -499,6 +537,7 @@ const KaraokeWordSplit = memo(({
     fontSize: number;
     isCurrentLine: boolean;
     enableFloat?: boolean;
+    wordFloatEm?: number;
     isPseudo?: boolean;
     noSpace?: boolean;
     charFlatOffset: number;
@@ -520,7 +559,7 @@ const KaraokeWordSplit = memo(({
         const easedProgress = cubicBezier(progress, 0, 0, 0.58, 1);
 
         return {
-            transform: [{ translateY: -fontSize * AMLL_WORD_FLOAT_EM * easedProgress }],
+            transform: [{ translateY: -fontSize * wordFloatEm * easedProgress }],
         };
     }, [
         enableFloat,
@@ -529,6 +568,7 @@ const KaraokeWordSplit = memo(({
         word.startTime,
         word.duration,
         fontSize,
+        wordFloatEm,
     ]);
 
     // AMll applies the base float to the whole timed word. Per-character motion
@@ -551,6 +591,7 @@ const KaraokeWordSplit = memo(({
                     activeCharIndex={activeCharIndex}
                     activeCharProgress={activeCharProgress}
                     emphasisTiming={isPseudo ? undefined : emphasisTimings[0]}
+                    wordFloatEm={wordFloatEm}
                 />
             </Animated.View>
         );
@@ -578,6 +619,7 @@ const KaraokeWordSplit = memo(({
                     activeCharIndex={activeCharIndex}
                     activeCharProgress={activeCharProgress}
                     emphasisTiming={isPseudo ? undefined : emphasisTimings[i]}
+                    wordFloatEm={wordFloatEm}
                 />
             ))}
             {groupTrailingSpace ? (
@@ -590,10 +632,12 @@ const KaraokeWordSplit = memo(({
 const AmllEmphasisWrapper = memo(({
     timing,
     fontSize,
+    wordFloatEm = AMLL_WORD_FLOAT_EM,
     children,
 }: {
     timing: AmllEmphasisTiming;
     fontSize: number;
+    wordFloatEm?: number;
     children: React.ReactNode;
 }) => {
     const currentPositionMsShared = useCurrentPositionShared();
@@ -611,7 +655,7 @@ const AmllEmphasisWrapper = memo(({
             1,
             (currentTime - floatStartTime) / floatDuration,
         ));
-        const floatOffset = Math.sin(floatProgress * Math.PI) * AMLL_WORD_FLOAT_EM;
+        const floatOffset = Math.sin(floatProgress * Math.PI) * wordFloatEm;
 
         const translateX = -emphasis * 0.03 * timing.amount *
             timing.offsetFactor * fontSize;
@@ -631,7 +675,7 @@ const AmllEmphasisWrapper = memo(({
                 ],
             }],
         };
-    }, [timing, fontSize]);
+    }, [timing, fontSize, wordFloatEm]);
 
     return (
         <Animated.View
@@ -728,6 +772,7 @@ const KaraokeWord = memo(({
     activeCharIndex,
     activeCharProgress,
     emphasisTiming,
+    wordFloatEm = AMLL_WORD_FLOAT_EM,
 }: {
     word: ILyric.IWordData;
     primaryColor: string;
@@ -739,6 +784,7 @@ const KaraokeWord = memo(({
     activeCharIndex: SharedValue<number>;
     activeCharProgress: SharedValue<number>;
     emphasisTiming?: AmllEmphasisTiming;
+    wordFloatEm?: number;
 }) => {
     const { text, space } = word;
     const [textWidth, setTextWidth] = useState(0);
@@ -833,7 +879,10 @@ const KaraokeWord = memo(({
     // The highlighted copy is masked instead of recoloring the complete glyph.
     // Both copies use identical text metrics, keeping the sweep pixel-aligned.
     return emphasisTiming ? (
-        <AmllEmphasisWrapper timing={emphasisTiming} fontSize={fontSize}>
+        <AmllEmphasisWrapper
+            timing={emphasisTiming}
+            fontSize={fontSize}
+            wordFloatEm={wordFloatEm}>
             {content}
         </AmllEmphasisWrapper>
     ) : content;
@@ -889,6 +938,7 @@ function StaticWordByWordLine({
     index,
     onLayout,
     align = "center",
+    containerStyle,
 }: {
     words: ILyric.IWordData[];
     romanizationWords?: ILyric.IWordData[];
@@ -899,6 +949,7 @@ function StaticWordByWordLine({
     index?: number;
     onLayout?: (index: number, height: number) => void;
     align?: LyricAlign;
+    containerStyle?: StyleProp<ViewStyle>;
 }) {
     const getLineFontSize = (isFirst: boolean) => isFirst ? fontSize : fontSize * SECONDARY_FONT_RATIO;
     const justifyContent = align === "left" ? "flex-start" as const : "center" as const;
@@ -990,6 +1041,7 @@ function StaticWordByWordLine({
             style={[
                 lyricStyles.multiLineContainer,
                 { alignItems: align === "left" ? "flex-start" : "center", opacity: 0.5 },
+                containerStyle,
             ]}
         >
             {lyricOrder.map((type) => {
@@ -1014,8 +1066,10 @@ interface IWordByWordLyricProps {
     index?: number;
     onLayout?: (index: number, height: number) => void;
     enableFloat?: boolean;
+    wordFloatEm?: number;
     align?: LyricAlign;
     isCurrentLine?: boolean;
+    containerStyle?: StyleProp<ViewStyle>;
 }
 
 function WordByWordLyricLine({
@@ -1029,8 +1083,10 @@ function WordByWordLyricLine({
     index,
     onLayout,
     enableFloat = true,
+    wordFloatEm = AMLL_WORD_FLOAT_EM,
     align = "center",
     isCurrentLine = true,
+    containerStyle,
 }: IWordByWordLyricProps) {
     // Normalize space flags to prevent double spaces in all word lists
     const normalizedWords = useMemo(() => normalizeWordSpaces(words), [words]);
@@ -1098,7 +1154,7 @@ function WordByWordLyricLine({
                     fontSize={getLineFontSize(isFirst)}
                     isCurrentLine={isCurrentLine}
                     enableFloat={enableFloat}
-    
+                    wordFloatEm={wordFloatEm}
                     charFlatOffset={originalCharOffsets[wordIndex]}
                     activeCharIndex={originalActive.activeCharIndex}
                     activeCharProgress={originalActive.activeCharProgress}
@@ -1120,7 +1176,7 @@ function WordByWordLyricLine({
                     fontSize={getLineFontSize(isFirst)}
                     isCurrentLine={isCurrentLine}
                     enableFloat={enableFloat}
-    
+                    wordFloatEm={wordFloatEm}
                     isPseudo={isRomanizationPseudo}
                     noSpace={true}
                     charFlatOffset={romanizationCharOffsets[wordIndex]}
@@ -1177,6 +1233,7 @@ function WordByWordLyricLine({
             style={[
                 lyricStyles.multiLineContainer,
                 { alignItems: align === "left" ? "flex-start" : "center" },
+                containerStyle,
             ]}
         >
             {/* Render lines in configured order, first existing line gets large font */}
@@ -1198,6 +1255,7 @@ function RegularLyricLine({
     onLayout,
     primaryColor,
     align = "center",
+    containerStyle,
 }: {
     text: string;
     fontSize: number;
@@ -1207,9 +1265,10 @@ function RegularLyricLine({
     onLayout?: (index: number, height: number) => void;
     primaryColor: string;
     align?: LyricAlign;
+    containerStyle?: StyleProp<ViewStyle>;
 }) {
-    const textOpacity = useSharedValue(highlight ? 0.5 : 0.5);
-    const textScale = useSharedValue(highlight ? 1 : 1);
+    const textOpacity = useSharedValue(highlight ? 1 : 0.5);
+    const textScale = useSharedValue(highlight ? HIGHLIGHT_SCALE : 1);
 
     useEffect(() => {
         if (highlight) {
@@ -1219,7 +1278,7 @@ function RegularLyricLine({
             textOpacity.value = withTiming(0.5, { duration: 280 });
             textScale.value = withTiming(1, SCALE_TIMING_CONFIG);
         }
-    }, [highlight]);
+    }, [highlight, textOpacity, textScale]);
 
     const animatedStyle = useAnimatedStyle(() => ({
         opacity: textOpacity.value,
@@ -1238,7 +1297,8 @@ function RegularLyricLine({
                 if (index !== undefined) {
                     onLayout?.(index, nativeEvent.layout.height);
                 }
-            }}>
+            }}
+            style={containerStyle}>
             <Animated.Text
                 style={[
                     lyricStyles.item,
@@ -1269,6 +1329,7 @@ function MultiLineRegularLyric({
     index,
     onLayout,
     align = "center",
+    containerStyle,
 }: {
     text: string;
     romanizationText?: string;
@@ -1282,10 +1343,11 @@ function MultiLineRegularLyric({
     index?: number;
     onLayout?: (index: number, height: number) => void;
     align?: LyricAlign;
+    containerStyle?: StyleProp<ViewStyle>;
 }) {
     // Scale animation for highlight effect
-    const containerScale = useSharedValue(highlight ? 1 : 1);
-    const containerOpacity = useSharedValue(highlight ? 0.5 : 0.5);
+    const containerScale = useSharedValue(highlight ? HIGHLIGHT_SCALE : 1);
+    const containerOpacity = useSharedValue(highlight ? 1 : 0.5);
 
     useEffect(() => {
         if (highlight) {
@@ -1295,7 +1357,7 @@ function MultiLineRegularLyric({
             containerScale.value = withTiming(1, SCALE_TIMING_CONFIG);
             containerOpacity.value = withTiming(0.5, { duration: 280 });
         }
-    }, [highlight]);
+    }, [containerOpacity, containerScale, highlight]);
 
     const animatedContainerStyle = useAnimatedStyle(() => ({
         transform: [{ scale: containerScale.value }],
@@ -1419,6 +1481,7 @@ function MultiLineRegularLyric({
                 { alignItems: align === "left" ? "flex-start" : "center" },
                 transformOriginStyle,
                 animatedContainerStyle,
+                containerStyle,
             ]}
         >
             {/* Render lines in configured order, first existing line gets large font */}
@@ -1449,6 +1512,10 @@ function LyricItemView(props: ILyricItemComponentProps) {
         hasTranslationWordByWord,
         lyricOrder,
         align,
+        interludeStartTimeMs,
+        interludeEndTimeMs,
+        containerStyle,
+        wordFloatEm = AMLL_WORD_FLOAT_EM,
     } = props;
 
     const colors = useColors();
@@ -1476,6 +1543,7 @@ function LyricItemView(props: ILyricItemComponentProps) {
                     index={index}
                     onLayout={onLayout}
                     align={align}
+                    containerStyle={containerStyle}
                 />
             );
         }
@@ -1493,17 +1561,33 @@ function LyricItemView(props: ILyricItemComponentProps) {
                 index={index}
                 onLayout={onLayout}
                 enableFloat={enableFloat}
+                wordFloatEm={wordFloatEm}
                 align={align}
                 isCurrentLine={true}
+                containerStyle={containerStyle}
             />
         );
     }
 
     // Check if lyric text is empty (empty string or only whitespace)
-    const isEmptyLyric = !text || text.trim() === "";
+    const isEmptyLyric =
+        (!text || text.trim() === "") &&
+        (!translation || translation.trim() === "") &&
+        (!romanization || romanization.trim() === "") &&
+        (!romanizationWords || romanizationWords.length === 0);
+    const hasRenderableInterlude =
+        interludeStartTimeMs !== undefined &&
+        interludeEndTimeMs !== undefined &&
+        interludeEndTimeMs - interludeStartTimeMs >=
+            AMLL_INTERLUDE_MIN_DURATION_MS;
 
     // Render breathing dots ONLY for current playing empty line (highlight=true)
-    if (isEmptyLyric && enableBreathingDots && highlight) {
+    if (
+        isEmptyLyric &&
+        enableBreathingDots &&
+        highlight &&
+        hasRenderableInterlude
+    ) {
         return (
             <View
                 onLayout={({ nativeEvent }) => {
@@ -1514,12 +1598,15 @@ function LyricItemView(props: ILyricItemComponentProps) {
                 style={[
                     lyricStyles.multiLineContainer,
                     { alignItems: align === "left" ? "flex-start" : "center" },
+                    containerStyle,
                 ]}
             >
                 <BreathingDots
                     color={effectiveHighlightColor}
                     align={align}
-                    highlight={true}
+                    fontSize={actualFontSize}
+                    startTimeMs={interludeStartTimeMs}
+                    endTimeMs={interludeEndTimeMs}
                 />
             </View>
         );
@@ -1537,6 +1624,7 @@ function LyricItemView(props: ILyricItemComponentProps) {
                 style={[
                     lyricStyles.multiLineContainer,
                     { alignItems: align === "left" ? "flex-start" : "center" },
+                    containerStyle,
                 ]}
             />
         );
@@ -1561,6 +1649,7 @@ function LyricItemView(props: ILyricItemComponentProps) {
                 index={index}
                 onLayout={onLayout}
                 align={align}
+                containerStyle={containerStyle}
             />
         );
     }
@@ -1576,6 +1665,7 @@ function LyricItemView(props: ILyricItemComponentProps) {
             onLayout={onLayout}
             primaryColor={effectiveHighlightColor}
             align={align}
+            containerStyle={containerStyle}
         />
     );
 }
@@ -1598,6 +1688,7 @@ const LyricItemComponent = memo(
         prev.text === curr.text &&
         prev.index === curr.index &&
         prev.fontSize === curr.fontSize &&
+        prev.words === curr.words &&
         prev.hasWordByWord === curr.hasWordByWord &&
         prev.hasRomanizationWordByWord === curr.hasRomanizationWordByWord &&
         prev.isRomanizationPseudo === curr.isRomanizationPseudo &&
@@ -1605,7 +1696,12 @@ const LyricItemComponent = memo(
         prev.romanization === curr.romanization &&
         prev.romanizationWords === curr.romanizationWords &&
         prev.translation === curr.translation &&
+        prev.translationWords === curr.translationWords &&
         prev.align === curr.align &&
+        prev.interludeStartTimeMs === curr.interludeStartTimeMs &&
+        prev.interludeEndTimeMs === curr.interludeEndTimeMs &&
+        prev.containerStyle === curr.containerStyle &&
+        prev.wordFloatEm === curr.wordFloatEm &&
         arraysEqual(prev.lyricOrder, curr.lyricOrder),
 );
 
@@ -1688,7 +1784,6 @@ const dotsStyles = StyleSheet.create({
         width: "100%",
         justifyContent: "center",
         alignItems: "center",
-        paddingVertical: rpx(12),
     },
     dotsRow: {
         flexDirection: "row",

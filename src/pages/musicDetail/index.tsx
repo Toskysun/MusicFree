@@ -62,11 +62,18 @@ export default function MusicDetail() {
         const unsubscribeFocus = navigation.addListener("focus", () => {
             setIsExiting(false);
         });
+        const unsubscribeGestureCancel = navigation.addListener(
+            "gestureCancel",
+            () => {
+                setIsExiting(false);
+            },
+        );
 
         return () => {
             unsubscribeBeforeRemove();
             unsubscribeTransitionStart();
             unsubscribeFocus();
+            unsubscribeGestureCancel();
         };
     }, [navigation]);
 
@@ -90,10 +97,12 @@ export default function MusicDetail() {
                         ]}>
                         <NavBar onBack={() => setIsExiting(true)} />
                         <Content
-                            disableMaskedView={isExiting}
-                            keepAlbumCoverMounted={!immersiveCoverEnabled}
+                            // Always keep cover tree mounted across album/lyric tabs
+                            // so mini lyrics are not torn down (only unmount on page exit).
+                            keepAlbumCoverMounted
                             tab={tab}
                             selectTab={selectTab}
+                            isExiting={isExiting}
                         />
                         <Bottom />
                     </View>

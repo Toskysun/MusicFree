@@ -8,18 +8,19 @@ import globalStyle from "@/constants/globalStyle";
 export type MusicDetailContentTab = "album" | "lyric";
 
 interface IContentProps {
-    disableMaskedView?: boolean;
     keepAlbumCoverMounted?: boolean;
     tab: MusicDetailContentTab;
     selectTab: React.Dispatch<React.SetStateAction<MusicDetailContentTab>>;
+    /** Leave page — hide mini lyric before transition to avoid surface flash */
+    isExiting?: boolean;
 }
 
 export default function Content(props: IContentProps) {
     const {
-        disableMaskedView,
         keepAlbumCoverMounted = true,
         tab,
         selectTab,
+        isExiting = false,
     } = props;
     const orientation = useOrientation();
 
@@ -47,7 +48,8 @@ export default function Content(props: IContentProps) {
                 ]}>
                     <AlbumCover
                         onTurnPageClick={onTurnPageClick}
-                        disableMaskedView={disableMaskedView}
+                        isExiting={isExiting}
+                        isActive={showAlbumCover}
                     />
                 </View>
             ) : null}
