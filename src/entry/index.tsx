@@ -5,6 +5,7 @@ import bootstrap from "./bootstrap/bootstrap";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import Dialogs from "@/components/dialogs";
 import Panels from "@/components/panels";
+import { panelInfoStore } from "@/components/panels/usePanel";
 import PageBackground from "@/components/base/pageBackground";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import Debug from "@/components/debug";
@@ -31,6 +32,10 @@ const Stack = createNativeStackNavigator<any>();
 
 export default function Pages() {
     const theme = Theme.useTheme();
+    const panelInfo = panelInfoStore.useValue();
+    // Freeze the navigator while a panel overlay is open so Android Fabric +
+    // native-stack cannot receive presses through the absolute panel layer.
+    const blockBackground = panelInfo.name != null;
     // RN Navigation 7 requires theme.fonts; custom themes may lack it.
     const navigationTheme = React.useMemo(() => {
         const fonts = theme?.fonts ?? {
@@ -70,21 +75,28 @@ export default function Pages() {
                             <NotificationLifecycleManager />
                             <ReducedMotionConfig mode={ReduceMotion.Never} />
                             <PageBackground />
-                            <Stack.Navigator
-                                initialRouteName={routes[0].path}
-                                screenOptions={{
-                                    headerShown: false,
-                                    animation: "slide_from_right",
-                                    animationDuration: 100,
-                                }}>
-                                {routes.map(route => (
-                                    <Stack.Screen
-                                        key={route.path}
-                                        name={route.path}
-                                        component={route.component}
-                                    />
-                                ))}
-                            </Stack.Navigator>
+                            <View
+                                style={globalStyle.flex1}
+                                pointerEvents={
+                                    blockBackground ? "none" : "auto"
+                                }
+                                collapsable={false}>
+                                <Stack.Navigator
+                                    initialRouteName={routes[0].path}
+                                    screenOptions={{
+                                        headerShown: false,
+                                        animation: "slide_from_right",
+                                        animationDuration: 100,
+                                    }}>
+                                    {routes.map(route => (
+                                        <Stack.Screen
+                                            key={route.path}
+                                            name={route.path}
+                                            component={route.component}
+                                        />
+                                    ))}
+                                </Stack.Navigator>
+                            </View>
                             <Panels />
                             <Dialogs />
                             <ToastBaseComponent />

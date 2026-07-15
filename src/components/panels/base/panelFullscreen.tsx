@@ -3,8 +3,8 @@ import {
     BackHandler,
     DeviceEventEmitter,
     NativeEventSubscription,
-    Pressable,
     StyleSheet,
+    View,
     ViewStyle,
 } from "react-native";
 
@@ -12,7 +12,6 @@ import Animated, {
     Easing,
     EasingFunction,
     runOnJS,
-    useAnimatedReaction,
     useAnimatedStyle,
     useSharedValue,
     withTiming,
@@ -24,24 +23,22 @@ import { vh } from "@/utils/rpx.ts";
 const ANIMATION_EASING: EasingFunction = Easing.out(Easing.exp);
 const ANIMATION_DURATION = 250;
 
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-
 const timingConfig = {
     duration: ANIMATION_DURATION,
     easing: ANIMATION_EASING,
 };
 
 interface IPanelFullScreenProps {
-    // 有遮罩
     hasMask?: boolean;
-    // 内容
     children?: React.ReactNode;
-    // 内容区样式
     containerStyle?: ViewStyle;
-
     animationType?: "SlideToTop" | "Scale";
 }
 
+/**
+ * Fullscreen panel — absolute overlay (same model as Dialogs / PanelBase).
+ * Avoid Modal + nested GestureHandlerRootView; mask taps fail on Android Fabric.
+ */
 export default function (props: IPanelFullScreenProps) {
     const {
         hasMask,
@@ -54,18 +51,41 @@ export default function (props: IPanelFullScreenProps) {
     const colors = useColors();
 
     const backHandlerRef = useRef<NativeEventSubscription | null>(null);
-
     const hideCallbackRef = useRef<Function[]>([]);
+    const closingRef = useRef(false);
 
     const windowHeight = useMemo(() => vh(100), []);
 
+    const unmountPanel = useCallback(() => {
+        closingRef.current = false;
+        const callbacks = hideCallbackRef.current.slice();
+        hideCallbackRef.current = [];
+        if (callbacks.length > 0) {
+            callbacks.forEach(cb => cb?.());
+            return;
+        }
+        panelInfoStore.setValue({
+            name: null,
+            payload: null,
+        });
+    }, []);
+
     const closePanel = useCallback(() => {
-        snapPoint.value = withTiming(0, timingConfig);
-    }, [snapPoint]);
+        if (closingRef.current) {
+            return;
+        }
+        closingRef.current = true;
+        snapPoint.value = withTiming(0, timingConfig, finished => {
+            if (finished) {
+                runOnJS(unmountPanel)();
+            } else {
+                closingRef.current = false;
+            }
+        });
+    }, [snapPoint, unmountPanel]);
 
     useEffect(() => {
-        // Drive open animation via shared value; styles read it directly
-        // (avoid withTiming inside useAnimatedStyle which can stall).
+        closingRef.current = false;
         snapPoint.value = withTiming(1, timingConfig);
 
         if (backHandlerRef.current) {
@@ -100,12 +120,6 @@ export default function (props: IPanelFullScreenProps) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const maskAnimated = useAnimatedStyle(() => {
-        return {
-            opacity: snapPoint.value * 0.5,
-        };
-    });
-
     const panelAnimated = useAnimatedStyle(() => {
         if (animationType === "SlideToTop") {
             return {
@@ -115,55 +129,28 @@ export default function (props: IPanelFullScreenProps) {
                     },
                 ],
             };
-        } else {
-            return {
-                transform: [
-                    {
-                        scale: 0.3 + snapPoint.value * 0.7,
-                    },
-                ],
-                opacity: snapPoint.value,
-            };
         }
+        return {
+            transform: [
+                {
+                    scale: 0.3 + snapPoint.value * 0.7,
+                },
+            ],
+            opacity: snapPoint.value,
+        };
     });
 
-    const unmountPanel = useCallback(() => {
-        // Prefer direct panel-to-panel switch over null intermediate state.
-        // Fabric can crash on rapid remove/insert of non-ViewGroup hosts.
-        const callbacks = hideCallbackRef.current.slice();
-        hideCallbackRef.current = [];
-        if (callbacks.length > 0) {
-            callbacks.forEach(cb => cb?.());
-            return;
-        }
-        panelInfoStore.setValue({
-            name: null,
-            payload: null,
-        });
-    }, []);
-
-    useAnimatedReaction(
-        () => snapPoint.value,
-        (result, prevResult) => {
-            if (
-                prevResult !== null &&
-                prevResult !== undefined &&
-                result < prevResult &&
-                result === 0
-            ) {
-                runOnJS(unmountPanel)();
-            }
-        },
-        [],
-    );
     return (
-        <>
+        <View style={style.rootHost} collapsable={false}>
             {hasMask ? (
-                <AnimatedPressable
+                <View
                     accessibilityRole="button"
                     accessibilityLabel="关闭面板"
-                    style={[style.maskWrapper, style.mask, maskAnimated]}
-                    onPress={closePanel}
+                    style={style.mask}
+                    collapsable={false}
+                    onStartShouldSetResponder={() => true}
+                    onResponderRelease={closePanel}
+                    onTouchEnd={closePanel}
                 />
             ) : null}
             <Animated.View
@@ -181,35 +168,43 @@ export default function (props: IPanelFullScreenProps) {
                 ]}>
                 {children}
             </Animated.View>
-        </>
+        </View>
     );
 }
 
 const style = StyleSheet.create({
-    maskWrapper: {
+    rootHost: {
         position: "absolute",
-        width: "100%",
-        height: "100%",
-        top: 0,
         left: 0,
+        top: 0,
         right: 0,
         bottom: 0,
+        width: "100%",
+        height: "100%",
         zIndex: 15000,
+        elevation: 15000,
     },
     mask: {
-        // Opaque fill; opacity animated via maskAnimated (iOS needs non-clear hit target)
-        backgroundColor: "#000",
+        position: "absolute",
+        left: 0,
+        top: 0,
+        right: 0,
+        bottom: 0,
+        width: "100%",
+        height: "100%",
+        backgroundColor: "rgba(0, 0, 0, 0.5)",
+        zIndex: 0,
     },
     wrapper: {
         position: "absolute",
+        left: 0,
+        top: 0,
+        right: 0,
+        bottom: 0,
         width: "100%",
         height: "100%",
-        bottom: 0,
-        right: 0,
-        zIndex: 15010,
+        zIndex: 1,
+        elevation: 16,
         flexDirection: "column",
-    },
-    kbContainer: {
-        zIndex: 15010,
     },
 });

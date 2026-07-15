@@ -10,8 +10,8 @@ import {
     Keyboard,
     NativeEventSubscription,
     Platform,
-    Pressable,
     StyleSheet,
+    View,
 } from "react-native";
 import Animated, {
     Easing,
@@ -24,12 +24,9 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { panelInfoStore } from "../usePanel";
-import NativeUtils from "@/native/utils";
 
 const ANIMATION_EASING: EasingFunction = Easing.out(Easing.exp);
 const ANIMATION_DURATION = 250;
-
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 const timingConfig = {
     duration: ANIMATION_DURATION,
@@ -44,19 +41,26 @@ interface IPanelBaseProps {
     renderBody: (loading: boolean) => React.ReactNode;
 }
 
+/**
+ * Bottom sheet panel — same overlay model as Dialogs (absolute fill + mask + body).
+ * Background click-through is blocked in entry via pointerEvents when a panel is open.
+ * Do NOT wrap the mask in Modal/nested GestureHandlerRootView; those break mask taps
+ * on Android Fabric while back-gesture (onRequestClose/BackHandler) still works.
+ */
 export default function (props: IPanelBaseProps) {
-    const { 
+    const {
         height = vh(60),
         renderBody,
         keyboardAvoidBehavior,
         positionMethod = "bottom",
     } = props;
-    const keyboardAvoidMode = Config.getConfig("basic.keyboardAvoidMode") ?? "auto";
+    const keyboardAvoidMode =
+        Config.getConfig("basic.keyboardAvoidMode") ?? "auto";
     const snapPoint = useSharedValue(0);
     const keyboardHeight = useSharedValue(0);
 
     const colors = useColors();
-    const [loading, setLoading] = useState(true); // 是否处于弹出状态
+    const [loading, setLoading] = useState(true);
     const timerRef = useRef<any>(null);
     const safeAreaInsets = useSafeAreaInsets();
     const orientation = useOrientation();
@@ -66,18 +70,48 @@ export default function (props: IPanelBaseProps) {
     );
 
     const backHandlerRef = useRef<NativeEventSubscription | null>(null);
-
     const hideCallbackRef = useRef<Function[]>([]);
+    const closingRef = useRef(false);
+
+    const unmountPanel = useCallback(() => {
+        closingRef.current = false;
+        const callbacks = hideCallbackRef.current.slice();
+        hideCallbackRef.current = [];
+        if (callbacks.length > 0) {
+            callbacks.forEach(cb => cb?.());
+            return;
+        }
+        panelInfoStore.setValue({
+            name: null,
+            payload: null,
+        });
+    }, []);
+
+    const closePanel = useCallback(() => {
+        if (closingRef.current) {
+            return;
+        }
+        closingRef.current = true;
+        snapPoint.value = withTiming(0, timingConfig, finished => {
+            if (finished) {
+                runOnJS(unmountPanel)();
+            } else {
+                // Animation interrupted — allow another close attempt.
+                closingRef.current = false;
+            }
+        });
+    }, [snapPoint, unmountPanel]);
 
     useEffect(() => {
+        closingRef.current = false;
         snapPoint.value = withTiming(1, timingConfig);
 
         timerRef.current = setTimeout(() => {
             if (loading) {
-                // 兜底
                 setLoading(false);
             }
         }, 400);
+
         if (backHandlerRef.current) {
             backHandlerRef.current.remove();
             backHandlerRef.current = null;
@@ -85,7 +119,7 @@ export default function (props: IPanelBaseProps) {
         backHandlerRef.current = BackHandler.addEventListener(
             "hardwareBackPress",
             () => {
-                snapPoint.value = withTiming(0, timingConfig);
+                closePanel();
                 return true;
             },
         );
@@ -96,41 +130,56 @@ export default function (props: IPanelBaseProps) {
                 if (callback) {
                     hideCallbackRef.current.push(callback);
                 }
-                snapPoint.value = withTiming(0, timingConfig);
+                closePanel();
             },
         );
 
-        // 监听键盘事件
-        const keyboardShowEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
-        const keyboardHideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+        const keyboardShowEvent =
+            Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+        const keyboardHideEvent =
+            Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
 
-        const keyboardShowListener = Keyboard.addListener(keyboardShowEvent, (e) => {
-            if (keyboardAvoidBehavior !== "none") {
-                if (keyboardAvoidMode === "off") {
-                    keyboardHeight.value = withTiming(0, {
+        const keyboardShowListener = Keyboard.addListener(
+            keyboardShowEvent,
+            e => {
+                if (keyboardAvoidBehavior !== "none") {
+                    if (keyboardAvoidMode === "off") {
+                        keyboardHeight.value = withTiming(0, {
+                            duration: Platform.OS === "ios" ? 250 : 150,
+                        });
+                        return;
+                    }
+                    const windowHeight = Dimensions.get("window").height;
+                    const keyboardTopY =
+                        typeof e.endCoordinates.screenY === "number"
+                            ? e.endCoordinates.screenY
+                            : windowHeight - e.endCoordinates.height;
+                    const effectiveKeyboardHeight = Math.max(
+                        0,
+                        windowHeight - keyboardTopY,
+                    );
+                    const targetHeight =
+                        keyboardAvoidMode === "manual"
+                            ? e.endCoordinates.height
+                            : Math.min(
+                                e.endCoordinates.height,
+                                effectiveKeyboardHeight,
+                            );
+                    keyboardHeight.value = withTiming(targetHeight, {
                         duration: Platform.OS === "ios" ? 250 : 150,
                     });
-                    return;
                 }
-                const windowHeight = Dimensions.get("window").height;
-                const keyboardTopY = typeof e.endCoordinates.screenY === "number"
-                    ? e.endCoordinates.screenY
-                    : windowHeight - e.endCoordinates.height;
-                const effectiveKeyboardHeight = Math.max(0, windowHeight - keyboardTopY);
-                const targetHeight = keyboardAvoidMode === "manual"
-                    ? e.endCoordinates.height
-                    : Math.min(e.endCoordinates.height, effectiveKeyboardHeight);
-                keyboardHeight.value = withTiming(targetHeight, {
+            },
+        );
+
+        const keyboardHideListener = Keyboard.addListener(
+            keyboardHideEvent,
+            () => {
+                keyboardHeight.value = withTiming(0, {
                     duration: Platform.OS === "ios" ? 250 : 150,
                 });
-            }
-        });
-
-        const keyboardHideListener = Keyboard.addListener(keyboardHideEvent, () => {
-            keyboardHeight.value = withTiming(0, {
-                duration: Platform.OS === "ios" ? 250 : 150,
-            });
-        });
+            },
+        );
 
         return () => {
             if (timerRef.current) {
@@ -148,43 +197,19 @@ export default function (props: IPanelBaseProps) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const maskAnimated = useAnimatedStyle(() => {
-        return {
-            opacity: snapPoint.value * 0.5,
-        };
-    });
-
     const panelAnimated = useAnimatedStyle(() => {
-        const baseTransform = orientation === "vertical"
-            ? { translateY: (1 - snapPoint.value) * useAnimatedBase }
-            : { translateX: (1 - snapPoint.value) * useAnimatedBase };
+        const baseTransform =
+            orientation === "vertical"
+                ? { translateY: (1 - snapPoint.value) * useAnimatedBase }
+                : { translateX: (1 - snapPoint.value) * useAnimatedBase };
 
         return {
-            transform: [
-                baseTransform,
-                { translateY: -keyboardHeight.value },
-            ],
+            transform: [baseTransform, { translateY: -keyboardHeight.value }],
         };
-    }, [orientation]);
+    }, [orientation, useAnimatedBase]);
 
     const mountPanel = useCallback(() => {
         setLoading(false);
-    }, []);
-
-    const unmountPanel = useCallback(() => {
-        // If hide was requested in order to open another panel, switch directly.
-        // Intermediate name=null unmount + remount races Fabric mount ops and can
-        // crash with "Unable to remove a view from a view that is not a ViewGroup".
-        const callbacks = hideCallbackRef.current.slice();
-        hideCallbackRef.current = [];
-        if (callbacks.length > 0) {
-            callbacks.forEach(cb => cb?.());
-            return;
-        }
-        panelInfoStore.setValue({
-            name: null,
-            payload: null,
-        });
     }, []);
 
     useAnimatedReaction(
@@ -197,85 +222,91 @@ export default function (props: IPanelBaseProps) {
             ) {
                 runOnJS(mountPanel)();
             }
-
-            if (prevResult && result < prevResult && result === 0) {
-                runOnJS(unmountPanel)();
-            }
         },
         [],
     );
 
-    const panelBody = (
-        <Animated.View
-            style={[
-                style.wrapper,
-                orientation === "horizontal" ? {
-                    height: vh(100) - safeAreaInsets.top,
-                    ...style.bottomPosition,
-                } : {
-                    top: positionMethod === "top" ? (NativeUtils.getWindowDimensions().height + safeAreaInsets.top) - height - safeAreaInsets.bottom : undefined,
-
-                    bottom: positionMethod === "bottom" ? 0 : undefined,
-                    height: height,
-                },
-                {
-                    backgroundColor: colors.backdrop,
-                },
-                panelAnimated,
-            ]}>
-            {renderBody(loading)}
-        </Animated.View>
-    );
+    const windowHeight = Dimensions.get("window").height;
+    const verticalPositionStyle =
+        positionMethod === "top"
+            ? {
+                top: Math.max(
+                    safeAreaInsets.top,
+                    windowHeight - height - safeAreaInsets.bottom,
+                ),
+                height,
+            }
+            : {
+                bottom: 0,
+                height,
+            };
 
     return (
-        <Animated.View
-            pointerEvents="box-none"
-            collapsable={false}
-            style={style.rootHost}>
-            {Platform.OS === "ios" ? (
-                <AnimatedPressable
-                    accessibilityRole="button"
-                    accessibilityLabel="关闭面板"
-                    style={[style.maskWrapper, style.mask, maskAnimated]}
-                    onPress={() => {
-                        snapPoint.value = withTiming(0, timingConfig);
-                    }}
-                />
-            ) : (
-                <Pressable
-                    style={style.maskWrapper}
-                    onPress={() => {
-                        snapPoint.value = withTiming(0, timingConfig);
-                    }}>
-                    <Animated.View
-                        pointerEvents="none"
-                        style={[style.maskWrapper, style.mask, maskAnimated]}
-                    />
-                </Pressable>
-            )}
-            {panelBody}
-        </Animated.View>
+        // auto (not box-none): the panel layer must own the full window while open.
+        // Background screens are already frozen in entry via pointerEvents="none".
+        <View style={style.rootHost} collapsable={false}>
+            {/*
+              Dimmer: solid fill + responder/touch handlers (not nested GH/Modal).
+              Do NOT put onStartShouldSetResponder on the sheet — it steals touches
+              from Slider / buttons / ScrollView inside the body.
+            */}
+            <View
+                accessibilityRole="button"
+                accessibilityLabel="关闭面板"
+                style={style.mask}
+                collapsable={false}
+                onStartShouldSetResponder={() => true}
+                onResponderRelease={closePanel}
+                onTouchEnd={closePanel}
+            />
+
+            <Animated.View
+                pointerEvents="auto"
+                collapsable={false}
+                style={[
+                    style.wrapper,
+                    orientation === "horizontal"
+                        ? {
+                            height: vh(100) - safeAreaInsets.top,
+                            ...style.bottomPosition,
+                        }
+                        : verticalPositionStyle,
+                    {
+                        backgroundColor: colors.backdrop,
+                    },
+                    panelAnimated,
+                ]}>
+                <View style={style.sheetBody} pointerEvents="auto">
+                    {renderBody(loading)}
+                </View>
+            </Animated.View>
+        </View>
     );
 }
 
 const style = StyleSheet.create({
+    // Match dialog backContainer: full-window host in the app overlay tree.
     rootHost: {
-        ...StyleSheet.absoluteFillObject,
-        zIndex: 15000,
-    },
-    maskWrapper: {
         position: "absolute",
-        width: "100%",
-        height: "100%",
-        top: 0,
         left: 0,
+        top: 0,
         right: 0,
         bottom: 0,
+        width: "100%",
+        height: "100%",
         zIndex: 15000,
+        elevation: 15000,
     },
     mask: {
-        backgroundColor: "#000",
-        opacity: 0.5,
+        position: "absolute",
+        left: 0,
+        top: 0,
+        right: 0,
+        bottom: 0,
+        width: "100%",
+        height: "100%",
+        backgroundColor: "rgba(0, 0, 0, 0.5)",
+        zIndex: 0,
     },
     wrapper: {
         position: "absolute",
@@ -283,7 +314,14 @@ const style = StyleSheet.create({
         right: 0,
         borderTopLeftRadius: rpx(28),
         borderTopRightRadius: rpx(28),
-        zIndex: 15010,
+        flexDirection: "column",
+        overflow: "hidden",
+        zIndex: 1,
+        elevation: 16,
+    },
+    sheetBody: {
+        flex: 1,
+        width: "100%",
     },
     bottomPosition: {
         bottom: 0,
