@@ -8,9 +8,11 @@ import {
     DeviceEventEmitter,
     Dimensions,
     Keyboard,
+    Modal,
     NativeEventSubscription,
     Platform,
     StyleSheet,
+    TouchableWithoutFeedback,
     View,
 } from "react-native";
 import Animated, {
@@ -42,10 +44,13 @@ interface IPanelBaseProps {
 }
 
 /**
- * Bottom sheet panel — same overlay model as Dialogs (absolute fill + mask + body).
- * Background click-through is blocked in entry via pointerEvents when a panel is open.
- * Do NOT wrap the mask in Modal/nested GestureHandlerRootView; those break mask taps
- * on Android Fabric while back-gesture (onRequestClose/BackHandler) still works.
+ * Bottom sheet panel.
+ *
+ * Panels are rendered in a Modal rather than as a sibling of native-stack.  A
+ * native-stack screen is a native window on Android/Fabric; an absolute React
+ * sibling can therefore be painted above it while still losing the hit test.
+ * Modal gives the panel its own Dialog window, so the dimmer and native
+ * controls (notably Slider and TextInput) share the same touch surface.
  */
 export default function (props: IPanelBaseProps) {
     const {
@@ -208,6 +213,13 @@ export default function (props: IPanelBaseProps) {
         };
     }, [orientation, useAnimatedBase]);
 
+    const maskAnimated = useAnimatedStyle(() => ({
+        // Keep the mask opaque for hit testing and animate only its opacity.
+        // This is the same structure used by Dialog and avoids stacking a
+        // static 0.5 opacity with an animated value.
+        opacity: snapPoint.value * 0.5,
+    }));
+
     const mountPanel = useCallback(() => {
         setLoading(false);
     }, []);
@@ -242,45 +254,46 @@ export default function (props: IPanelBaseProps) {
             };
 
     return (
-        // auto (not box-none): the panel layer must own the full window while open.
-        // Background screens are already frozen in entry via pointerEvents="none".
-        <View style={style.rootHost} collapsable={false}>
-            {/*
-              Dimmer: solid fill + responder/touch handlers (not nested GH/Modal).
-              Do NOT put onStartShouldSetResponder on the sheet — it steals touches
-              from Slider / buttons / ScrollView inside the body.
-            */}
-            <View
-                accessibilityRole="button"
-                accessibilityLabel="关闭面板"
-                style={style.mask}
-                collapsable={false}
-                onStartShouldSetResponder={() => true}
-                onResponderRelease={closePanel}
-                onTouchEnd={closePanel}
-            />
+        <Modal
+            visible
+            transparent
+            animationType="none"
+            statusBarTranslucent
+            presentationStyle="overFullScreen"
+            onRequestClose={closePanel}>
+            <View style={style.rootHost} collapsable={false}>
+                <TouchableWithoutFeedback
+                    accessibilityRole="button"
+                    accessibilityLabel="关闭面板"
+                    onPress={closePanel}>
+                    <Animated.View
+                        collapsable={false}
+                        style={[style.mask, maskAnimated]}
+                    />
+                </TouchableWithoutFeedback>
 
-            <Animated.View
-                pointerEvents="auto"
-                collapsable={false}
-                style={[
-                    style.wrapper,
-                    orientation === "horizontal"
-                        ? {
-                            height: vh(100) - safeAreaInsets.top,
-                            ...style.bottomPosition,
-                        }
-                        : verticalPositionStyle,
-                    {
-                        backgroundColor: colors.backdrop,
-                    },
-                    panelAnimated,
-                ]}>
-                <View style={style.sheetBody} pointerEvents="auto">
-                    {renderBody(loading)}
-                </View>
-            </Animated.View>
-        </View>
+                <Animated.View
+                    pointerEvents="auto"
+                    collapsable={false}
+                    style={[
+                        style.wrapper,
+                        orientation === "horizontal"
+                            ? {
+                                height: vh(100) - safeAreaInsets.top,
+                                ...style.bottomPosition,
+                            }
+                            : verticalPositionStyle,
+                        {
+                            backgroundColor: colors.backdrop,
+                        },
+                        panelAnimated,
+                    ]}>
+                    <View style={style.sheetBody} pointerEvents="auto">
+                        {renderBody(loading)}
+                    </View>
+                </Animated.View>
+            </View>
+        </Modal>
     );
 }
 
@@ -294,8 +307,6 @@ const style = StyleSheet.create({
         bottom: 0,
         width: "100%",
         height: "100%",
-        zIndex: 15000,
-        elevation: 15000,
     },
     mask: {
         position: "absolute",
@@ -305,7 +316,7 @@ const style = StyleSheet.create({
         bottom: 0,
         width: "100%",
         height: "100%",
-        backgroundColor: "rgba(0, 0, 0, 0.5)",
+        backgroundColor: "#000",
         zIndex: 0,
     },
     wrapper: {

@@ -2,8 +2,10 @@ import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import {
     BackHandler,
     DeviceEventEmitter,
+    Modal,
     NativeEventSubscription,
     StyleSheet,
+    TouchableWithoutFeedback,
     View,
     ViewStyle,
 } from "react-native";
@@ -36,8 +38,9 @@ interface IPanelFullScreenProps {
 }
 
 /**
- * Fullscreen panel — absolute overlay (same model as Dialogs / PanelBase).
- * Avoid Modal + nested GestureHandlerRootView; mask taps fail on Android Fabric.
+ * Fullscreen panel rendered in its own Modal window.  Keeping the panel out of
+ * the native-stack sibling tree is what makes native scrolling and controls
+ * receive the same hit tests as the pixels drawn on screen on Android/Fabric.
  */
 export default function (props: IPanelFullScreenProps) {
     const {
@@ -140,35 +143,47 @@ export default function (props: IPanelFullScreenProps) {
         };
     });
 
+    const maskAnimated = useAnimatedStyle(() => ({
+        opacity: snapPoint.value * 0.5,
+    }));
+
     return (
-        <View style={style.rootHost} collapsable={false}>
-            {hasMask ? (
-                <View
-                    accessibilityRole="button"
-                    accessibilityLabel="关闭面板"
-                    style={style.mask}
+        <Modal
+            visible
+            transparent
+            animationType="none"
+            statusBarTranslucent
+            presentationStyle="overFullScreen"
+            onRequestClose={closePanel}>
+            <View style={style.rootHost} collapsable={false}>
+                {hasMask ? (
+                    <TouchableWithoutFeedback
+                        accessibilityRole="button"
+                        accessibilityLabel="关闭面板"
+                        onPress={closePanel}>
+                        <Animated.View
+                            collapsable={false}
+                            style={[style.mask, maskAnimated]}
+                        />
+                    </TouchableWithoutFeedback>
+                ) : null}
+                <Animated.View
                     collapsable={false}
-                    onStartShouldSetResponder={() => true}
-                    onResponderRelease={closePanel}
-                    onTouchEnd={closePanel}
-                />
-            ) : null}
-            <Animated.View
-                collapsable={false}
-                pointerEvents="auto"
-                style={[
-                    style.wrapper,
-                    !hasMask
-                        ? {
-                            backgroundColor: colors.background,
-                        }
-                        : null,
-                    panelAnimated,
-                    containerStyle,
-                ]}>
-                {children}
-            </Animated.View>
-        </View>
+                    pointerEvents="auto"
+                    style={[
+                        style.wrapper,
+                        !hasMask
+                            ? {
+                                backgroundColor: colors.background,
+                            }
+                            : null,
+                        panelAnimated,
+                        containerStyle,
+                    ]}>
+                    {children}
+                </Animated.View>
+            </View>
+        </Modal>
     );
 }
 
@@ -181,8 +196,6 @@ const style = StyleSheet.create({
         bottom: 0,
         width: "100%",
         height: "100%",
-        zIndex: 15000,
-        elevation: 15000,
     },
     mask: {
         position: "absolute",
@@ -192,7 +205,7 @@ const style = StyleSheet.create({
         bottom: 0,
         width: "100%",
         height: "100%",
-        backgroundColor: "rgba(0, 0, 0, 0.5)",
+        backgroundColor: "#000",
         zIndex: 0,
     },
     wrapper: {
