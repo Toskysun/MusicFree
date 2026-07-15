@@ -1,5 +1,5 @@
 import React from "react";
-import { Image, StyleSheet } from "react-native";
+import { Image, StyleSheet, View } from "react-native";
 import rpx, { vh, vw } from "@/utils/rpx";
 import Toast from "@/utils/toast";
 import useOrientation from "@/hooks/useOrientation.ts";
@@ -24,17 +24,19 @@ export default function ImageViewer(props: IImageViewerProps) {
             hasMask
             animationType="Scale"
             containerStyle={styles.container}>
-            <Image
-                style={[
-                    styles.image,
-                    orientation === "vertical"
-                        ? styles.imageVertical
-                        : styles.imageHorizontal,
-                ]}
-                source={{
-                    uri: url,
-                }}
-            />
+            <View collapsable={false}>
+                <Image
+                    style={[
+                        styles.image,
+                        orientation === "vertical"
+                            ? styles.imageVertical
+                            : styles.imageHorizontal,
+                    ]}
+                    source={{
+                        uri: url,
+                    }}
+                />
+            </View>
             <Button
                 text={t("panel.imageViewer.saveImage")}
                 type="primary"

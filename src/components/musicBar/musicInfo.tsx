@@ -51,11 +51,14 @@ function BarMusicItemView(props: IBarMusicItemProps) {
                 styles.containerPadding,
                 animatedStyles,
             ]}>
-            <FastImage
-                style={styles.artworkImg}
-                source={displayArtwork}
-                placeholderSource={ImgAsset.albumDefault}
-            />
+            <View collapsable={false}>
+                <FastImage
+                    key={displayArtwork ?? "default"}
+                    style={styles.artworkImg}
+                    source={displayArtwork}
+                    placeholderSource={ImgAsset.albumDefault}
+                />
+            </View>
             <View accessible={false} style={styles.textWrapper}>
                 <ThemeText
                     fontSize="subTitle"

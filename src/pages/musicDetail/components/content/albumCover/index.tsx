@@ -289,11 +289,13 @@ export default function AlbumCover(props: IProps) {
                 <View style={styles.horizontalCoverArea}>
                     <GestureDetector gesture={combineGesture}>
                         <Animated.View
+                            collapsable={false}
                             style={[
                                 styles.horizontalCoverWrapper,
                                 isCircle ? { transform: [{ rotate: spin }] } : null,
                             ]}>
                             <FastImage
+                                key={displayArtwork ?? "default"}
                                 style={artworkStyle}
                                 source={displayArtwork}
                                 placeholderSource={ImgAsset.albumDefault}
@@ -350,12 +352,14 @@ export default function AlbumCover(props: IProps) {
             <View style={containerStyle}>
                 <GestureDetector gesture={combineGesture}>
                     <Animated.View
+                        collapsable={false}
                         style={
                             isCircle
                                 ? { transform: [{ rotate: spin }] }
                                 : undefined
                         }>
                         <FastImage
+                            key={displayArtwork ?? "default"}
                             style={artworkStyle}
                             source={displayArtwork}
                             placeholderSource={ImgAsset.albumDefault}

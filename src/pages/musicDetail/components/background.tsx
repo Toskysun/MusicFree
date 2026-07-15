@@ -86,10 +86,16 @@ export default function Background(props: IBackgroundProps) {
             ) : null}
             {shouldRenderImmersiveCover ? (
                 <View
+                    key={
+                        typeof resolvedArtwork === "string"
+                            ? resolvedArtwork
+                            : "immersive-default"
+                    }
                     pointerEvents="none"
                     renderToHardwareTextureAndroid
                     shouldRasterizeIOS
-                    style={style.immersiveLayer}>
+                    style={style.immersiveLayer}
+                    collapsable={false}>
                     <MaskedView
                         style={[
                             style.immersiveArtworkMask,

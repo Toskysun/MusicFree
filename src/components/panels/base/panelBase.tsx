@@ -170,11 +170,19 @@ export default function (props: IPanelBaseProps) {
     }, []);
 
     const unmountPanel = useCallback(() => {
+        // If hide was requested in order to open another panel, switch directly.
+        // Intermediate name=null unmount + remount races Fabric mount ops and can
+        // crash with "Unable to remove a view from a view that is not a ViewGroup".
+        const callbacks = hideCallbackRef.current.slice();
+        hideCallbackRef.current = [];
+        if (callbacks.length > 0) {
+            callbacks.forEach(cb => cb?.());
+            return;
+        }
         panelInfoStore.setValue({
             name: null,
             payload: null,
         });
-        hideCallbackRef.current.forEach(cb => cb?.());
     }, []);
 
     useAnimatedReaction(
@@ -218,7 +226,10 @@ export default function (props: IPanelBaseProps) {
     );
 
     return (
-        <>
+        <Animated.View
+            pointerEvents="box-none"
+            collapsable={false}
+            style={style.rootHost}>
             <Pressable
                 style={style.maskWrapper}
                 onPress={() => {
@@ -229,11 +240,15 @@ export default function (props: IPanelBaseProps) {
                 />
             </Pressable>
             {panelBody}
-        </>
+        </Animated.View>
     );
 }
 
 const style = StyleSheet.create({
+    rootHost: {
+        ...StyleSheet.absoluteFillObject,
+        zIndex: 15000,
+    },
     maskWrapper: {
         position: "absolute",
         width: "100%",

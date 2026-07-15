@@ -153,13 +153,16 @@ export default function CoverOptions(props: ICoverOptionsProps) {
         <PanelBase
             height={rpx(750)}
             renderBody={() => (
-                <>
+                <View style={styles.body}>
                     <View style={styles.header}>
-                        <FastImage
-                            style={styles.artwork}
-                            source={artwork}
-                            placeholderSource={ImgAsset.albumDefault}
-                        />
+                        <View collapsable={false}>
+                            <FastImage
+                                key={artwork ?? "default"}
+                                style={styles.artwork}
+                                source={artwork}
+                                placeholderSource={ImgAsset.albumDefault}
+                            />
+                        </View>
                         <View style={styles.content}>
                             <ThemeText numberOfLines={2} style={styles.title}>
                                 {musicItem?.title}
@@ -215,13 +218,17 @@ export default function CoverOptions(props: ICoverOptionsProps) {
                             )}
                         />
                     </View>
-                </>
+                </View>
             )}
         />
     );
 }
 
 const styles = StyleSheet.create({
+    body: {
+        width: rpx(750),
+        flex: 1,
+    },
     header: {
         width: rpx(750),
         height: rpx(200),

@@ -126,11 +126,18 @@ export default function (props: IPanelFullScreenProps) {
     });
 
     const unmountPanel = useCallback(() => {
+        // Prefer direct panel-to-panel switch over null intermediate state.
+        // Fabric can crash on rapid remove/insert of non-ViewGroup hosts.
+        const callbacks = hideCallbackRef.current.slice();
+        hideCallbackRef.current = [];
+        if (callbacks.length > 0) {
+            callbacks.forEach(cb => cb?.());
+            return;
+        }
         panelInfoStore.setValue({
             name: null,
             payload: null,
         });
-        hideCallbackRef.current.forEach(cb => cb?.());
     }, []);
 
     useAnimatedReaction(
@@ -143,7 +150,10 @@ export default function (props: IPanelFullScreenProps) {
         [],
     );
     return (
-        <>
+        <Animated.View
+            pointerEvents="box-none"
+            collapsable={false}
+            style={style.rootHost}>
             {hasMask ? (
                 <Pressable
                     style={style.maskWrapper}
@@ -157,6 +167,7 @@ export default function (props: IPanelFullScreenProps) {
             ) : null}
             <Animated.View
                 pointerEvents={hasMask ? "box-none" : undefined}
+                collapsable={false}
                 style={[
                     style.wrapper,
                     !hasMask
@@ -169,11 +180,15 @@ export default function (props: IPanelFullScreenProps) {
                 ]}>
                 {children}
             </Animated.View>
-        </>
+        </Animated.View>
     );
 }
 
 const style = StyleSheet.create({
+    rootHost: {
+        ...StyleSheet.absoluteFillObject,
+        zIndex: 15000,
+    },
     maskWrapper: {
         position: "absolute",
         width: "100%",
