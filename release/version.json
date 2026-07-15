@@ -1,7 +1,11 @@
 {
-  "version": "0.7.51",
+  "version": "0.7.52",
   "changeLog": [
     "【交流】欢迎加入 Q 群：1064805856",
+    "【优化】优化浅色/自定义主题启动时的首屏绘制，减少先显示深色主题再切换的问题",
+    "【优化】启动阶段预热自定义背景图缓存，并限制新背景图尺寸，缩短壁纸加载时间",
+    "【优化】背景图按视图尺寸缩放并取消默认淡入，降低高分辨率壁纸解码与模糊开销",
+    "--------以上为v0.7.52新特性--------",
     "【修复】修复 Android New Architecture 下底部/全屏面板可能不可见、无法点击、Slider 无法拖动或遮罩无法关闭的问题",
     "【迷你歌词】固定为左对齐，不再跟随主歌词对齐设置",
     "【主歌词】对齐方式新增右对齐，普通歌词、逐字歌词、翻译、罗马音及间奏呼吸点均完整适配",
@@ -164,7 +168,7 @@
     "【优化】优化了软件启动速度 (需要在【侧边栏-基本设置-插件】中打开【启用插件懒加载】开关)"
   ],
   "download": [
-    "https://github.com/Toskysun/MusicFree/releases/download/v0.7.51/MusicFree-v0.7.51-arm64-v8a-release.apk",
-    "https://github.com/Toskysun/MusicFree/releases/download/v0.7.51/MusicFree-v0.7.51-universal-release.apk"
+    "https://github.com/Toskysun/MusicFree/releases/download/v0.7.52/MusicFree-v0.7.52-arm64-v8a-release.apk",
+    "https://github.com/Toskysun/MusicFree/releases/download/v0.7.52/MusicFree-v0.7.52-universal-release.apk"
   ]
 }

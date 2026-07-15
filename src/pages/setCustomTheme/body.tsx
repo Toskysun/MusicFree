@@ -22,6 +22,8 @@ import { ScrollView, TouchableOpacity } from "react-native-gesture-handler";
 import ImageColors from "react-native-image-colors";
 import { launchImageLibrary } from "react-native-image-picker";
 
+const BACKGROUND_MAX_DIMENSION = 2048;
+
 export default function Body() {
     const theme = Theme.useTheme();
     const backgroundInfo = Theme.useBackground();
@@ -31,6 +33,11 @@ export default function Body() {
         try {
             const result = await launchImageLibrary({
                 mediaType: "photo",
+                // A full-resolution camera image makes Fresco's blur
+                // postprocessor decode far more pixels than the screen needs.
+                maxWidth: BACKGROUND_MAX_DIMENSION,
+                maxHeight: BACKGROUND_MAX_DIMENSION,
+                quality: 0.85,
             });
             const uri = result.assets?.[0].uri;
             if (!uri) {
@@ -81,7 +88,7 @@ export default function Body() {
                     whitenedColor: primaryColor
                         .whiten(3 * primaryGrayRate)
                         .hex()
-                        .toString()
+                        .toString(),
                 });
                 themeColors = {
                     ...customBackgroundSurfaceColors,

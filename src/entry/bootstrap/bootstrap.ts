@@ -30,6 +30,18 @@ import bootstrapAtom from "./bootstrap.atom";
 import { getDefaultStore } from "jotai";
 import announcementService from "@/services/announcementService";
 
+// Request this at module load, before the first React commit. Calling it only
+// after the async bootstrap starts can let Expo auto-hide the native splash
+// before the persisted light/custom theme is ready.
+const splashScreenPreventPromise = SplashScreen.preventAutoHideAsync()
+    .then(result => {
+        devLog("info", "✅[Bootstrap] SplashScreen防自动隐藏成功", { result });
+        return result;
+    })
+    .catch(error => {
+        devLog("warn", "⚠️[Bootstrap] SplashScreen防自动隐藏失败", error);
+        return false;
+    });
 
 // 依赖管理
 PluginManager.injectDependencies(Config);
@@ -66,11 +78,7 @@ async function bootstrapImpl() {
     registerEarlyGlobalErrorHandlers();
     await appendStartupBreadcrumb("global-handler-registered");
 
-    await SplashScreen.preventAutoHideAsync()
-        .then(result =>
-            devLog("info", "✅[Bootstrap] SplashScreen防自动隐藏成功", { result }),
-        )
-        .catch((error) => devLog("warn", "⚠️[Bootstrap] SplashScreen防自动隐藏失败", error)); // it's good to explicitly catch and inspect any error
+    await splashScreenPreventPromise;
     await appendStartupBreadcrumb("splashscreen-prevented");
     const logger = perfLogger();
     // 1. 检查权限

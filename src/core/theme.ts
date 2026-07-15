@@ -8,6 +8,7 @@ import {
 import { GlobalState } from "@/utils/stateMapper";
 import { CustomizedColors } from "@/hooks/useColors";
 import Color from "color";
+import { Appearance, Image as RNImage } from "react-native";
 
 /** RN Navigation 7+ reads theme.fonts.regular in native-stack headers. */
 const navigationFonts: NavigationTheme["fonts"] =
@@ -242,7 +243,15 @@ function syncCardSurfaceColors(
 }
 
 function setup() {
-    const currentTheme = Config.getConfig("theme.selectedTheme") ?? "p-dark";
+    const configuredTheme = Config.getConfig("theme.selectedTheme") ?? "p-dark";
+    const followSystem = Config.getConfig("theme.followSystem");
+    const systemTheme = followSystem ? Appearance.getColorScheme() : null;
+    const currentTheme =
+        systemTheme === "light"
+            ? "p-light"
+            : systemTheme === "dark"
+                ? "p-dark"
+                : configuredTheme;
     const bgUrl = Config.getConfig("theme.background");
 
     if (currentTheme === "p-dark") {
@@ -306,6 +315,16 @@ function setup() {
         blur: bgBlur ?? 20,
         opacity: bgOpacity ?? 0.6,
     });
+
+    // Warm the native image cache while the splash screen is still visible.
+    // This is fire-and-forget: a slow/corrupt image must never delay startup.
+    if (bgUrl && typeof RNImage.prefetch === "function") {
+        try {
+            RNImage.prefetch(bgUrl).catch(() => false);
+        } catch {
+            // A malformed persisted URI must not abort the bootstrap path.
+        }
+    }
 }
 
 function setTheme(

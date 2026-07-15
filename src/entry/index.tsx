@@ -26,6 +26,15 @@ StatusBar.setTranslucent(true);
 void appendStartupBreadcrumb("entry-module-loaded");
 void appendStartupBreadcrumb("statusbar-configured");
 void appendStartupBreadcrumb("bootstrap-dispatch");
+
+// MMKV-backed theme values are available synchronously. Resolve them before
+// the first React render so light/custom launches do not paint the dark
+// fallback while the asynchronous bootstrap performs migrations and setup.
+try {
+    Theme.setup();
+} catch {
+    // bootstrap() retries theme setup after Config.setup() has completed.
+}
 bootstrap();
 
 const Stack = createNativeStackNavigator<any>();

@@ -29,6 +29,9 @@ function PageBackground() {
                             opacity: background?.opacity ?? 0.6,
                         },
                     ]}
+                    resizeMethod="resize"
+                    resizeMode="cover"
+                    fadeDuration={0}
                     blurRadius={background?.blur ?? 20}
                 />
             ) : null}
