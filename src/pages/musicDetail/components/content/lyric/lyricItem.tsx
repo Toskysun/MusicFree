@@ -49,6 +49,25 @@ function easeOutExpo(x: number) {
     return x === 1 ? 1 : 1 - 2 ** (-10 * x);
 }
 
+function getAmllDotOpacity(
+    elapsed: number,
+    duration: number,
+    delay: number,
+    globalOpacity: number,
+) {
+    "worklet";
+    const dotsDuration = Math.max(1, duration - 750);
+    return clamp(
+        0,
+        globalOpacity * clamp(
+            0.25,
+            (((elapsed - delay) * 3) / dotsDuration) * 0.75,
+            1,
+        ),
+        1,
+    );
+}
+
 export const BreathingDots = memo(({
     color,
     align = "center",
@@ -75,15 +94,24 @@ export const BreathingDots = memo(({
     const horizontalPadding = fontSize * 0.75;
     const rowWidth = dotSize * 3 + gap * 2 + horizontalPadding * 2;
 
-    const motion = useDerivedValue(() => {
+    // Keep the UI-runtime value scalar. Returning a fresh object and creating
+    // a nested worklet callback on every frame can trigger Hermes/worklets
+    // native crashes on some Android 16 devices.
+    const elapsed = useDerivedValue(() => {
         "worklet";
         if (!enabled || startTimeMs === undefined || endTimeMs === undefined) {
-            return { scale: 0, opacity0: 0, opacity1: 0, opacity2: 0 };
+            return -1;
         }
 
-        const currentDuration = currentPositionMsShared.value - startTimeMs;
-        if (currentDuration < 0 || currentDuration > duration) {
-            return { scale: 0, opacity0: 0, opacity1: 0, opacity2: 0 };
+        const value = currentPositionMsShared.value - startTimeMs;
+        return value < 0 || value > duration ? -1 : value;
+    }, [duration, enabled, endTimeMs, startTimeMs]);
+
+    const motion = useDerivedValue(() => {
+        "worklet";
+        const currentDuration = elapsed.value;
+        if (currentDuration < 0) {
+            return 0;
         }
 
         const breatheDuration =
@@ -92,55 +120,64 @@ export const BreathingDots = memo(({
             Math.sin(1.5 * Math.PI - (currentDuration / breatheDuration) * 2) /
                 20 +
             1;
-        let globalOpacity = 1;
-
         if (currentDuration < 2000) {
             scale *= easeOutExpo(currentDuration / 2000);
-        }
-        if (currentDuration < 500) {
-            globalOpacity = 0;
-        } else if (currentDuration < 1000) {
-            globalOpacity *= (currentDuration - 500) / 500;
         }
 
         const remaining = duration - currentDuration;
         if (remaining < 750) {
             scale *= 1 - easeInOutBack((750 - remaining) / 750 / 2);
         }
-        if (remaining < 375) {
-            globalOpacity *= clamp(0, remaining / 375, 1);
+
+        return Math.max(0, scale) * 0.7;
+    }, [duration, elapsed]);
+
+    const globalOpacity = useDerivedValue(() => {
+        "worklet";
+        const currentDuration = elapsed.value;
+        if (currentDuration < 0) {
+            return 0;
         }
-
-        const dotsDuration = duration - 750;
-        const getDotOpacity = (delay: number) => clamp(
-            0,
-            globalOpacity * clamp(
-                0.25,
-                (((currentDuration - delay) * 3) / dotsDuration) * 0.75,
-                1,
-            ),
-            1,
-        );
-
-        return {
-            scale: Math.max(0, scale) * 0.7,
-            opacity0: getDotOpacity(0),
-            opacity1: getDotOpacity(dotsDuration / 3),
-            opacity2: getDotOpacity((dotsDuration / 3) * 2),
-        };
-    }, [duration, enabled, endTimeMs, startTimeMs]);
+        let opacity = 1;
+        if (currentDuration < 500) {
+            opacity = 0;
+        } else if (currentDuration < 1000) {
+            opacity = (currentDuration - 500) / 500;
+        }
+        const remaining = duration - currentDuration;
+        if (remaining < 375) {
+            opacity *= clamp(0, remaining / 375, 1);
+        }
+        return opacity;
+    }, [duration, elapsed]);
 
     const containerStyle = useAnimatedStyle(() => {
-        const scale = motion.value.scale;
+        const scale = motion.value;
         const translateX = align === "left" ? (rowWidth * (scale - 1)) / 2 : 0;
         return {
             transform: [{ scale }, { translateX }],
         };
     }, [align, rowWidth]);
 
-    const dot0Style = useAnimatedStyle(() => ({ opacity: motion.value.opacity0 }));
-    const dot1Style = useAnimatedStyle(() => ({ opacity: motion.value.opacity1 }));
-    const dot2Style = useAnimatedStyle(() => ({ opacity: motion.value.opacity2 }));
+    const dot0Style = useAnimatedStyle(() => ({
+        opacity: getAmllDotOpacity(elapsed.value, duration, 0, globalOpacity.value),
+    }), [duration]);
+    const dot1Style = useAnimatedStyle(() => ({
+        opacity: getAmllDotOpacity(
+            elapsed.value,
+            duration,
+            Math.max(1, duration - 750) / 3,
+            globalOpacity.value,
+        ),
+    }), [duration]);
+    const dot2Style = useAnimatedStyle(() => ({
+        opacity: getAmllDotOpacity(
+            elapsed.value,
+            duration,
+            (Math.max(1, duration - 750) / 3) * 2,
+            globalOpacity.value,
+        ),
+    }), [duration]);
 
     const dotBaseStyle = {
         width: dotSize,
