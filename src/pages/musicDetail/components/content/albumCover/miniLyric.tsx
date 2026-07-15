@@ -420,7 +420,7 @@ export default function MiniLyric(props: IMiniLyricProps) {
     return (
         <GestureDetector gesture={tap}>
             <View style={[styles.outer, outerStyle]}>
-                <View style={[styles.stage, { height: viewportH }]}>
+                <View style={styles.stage}>
                     {outgoingLyric && outgoingIndex != null ? (
                         <Animated.View
                             style={[styles.layer, outgoingStyle]}
@@ -436,7 +436,11 @@ export default function MiniLyric(props: IMiniLyricProps) {
                         </Animated.View>
                     ) : null}
                     <Animated.View
-                        style={[styles.layer, incomingStyle]}
+                        style={[
+                            styles.incomingLayer,
+                            { minHeight: viewportH },
+                            incomingStyle,
+                        ]}
                         pointerEvents="none">
                         <MiniLyricLine
                             key={`in-${activeIndex}`}
@@ -457,14 +461,16 @@ export default function MiniLyric(props: IMiniLyricProps) {
 const styles = StyleSheet.create({
     outer: {
         width: "100%",
+        flexShrink: 0,
         justifyContent: "center",
         backgroundColor: "transparent",
     },
-    /** Fixed viewport keeps regular lines and AMll interlude dots centered. */
+    /** The active line defines height; overflow stays visible during handoff. */
     stage: {
         width: "100%",
+        flexShrink: 0,
         position: "relative",
-        overflow: "hidden",
+        overflow: "visible",
     },
     layer: {
         position: "absolute",
@@ -473,6 +479,11 @@ const styles = StyleSheet.create({
         top: 0,
         bottom: 0,
         width: "100%",
+        justifyContent: "center",
+    },
+    incomingLayer: {
+        width: "100%",
+        flexShrink: 0,
         justifyContent: "center",
     },
 });
