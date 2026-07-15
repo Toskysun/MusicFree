@@ -181,7 +181,8 @@ const TRANSLATION_HIGHLIGHT_OPACITY = 0.72;
 
 // AMll motion constants, ported from amll-core/lyric-player/dom/lyric-line.ts.
 const AMLL_MIN_DURATION_MS = 1000;
-const AMLL_WORD_FLOAT_EM = 0.05;
+// Base float height in em; slightly higher so word-by-word lift is more noticeable.
+const AMLL_WORD_FLOAT_EM = 0.1;
 const AMLL_EMPHASIS_STAGGER_RATIO = 2.5;
 const AMLL_EMPHASIS_FLOAT_DURATION_RATIO = 1.4;
 const AMLL_EMPHASIS_FLOAT_LEAD_MS = 400;
@@ -1228,24 +1229,29 @@ function RegularLyricLine({
     // Transform origin based on alignment
     const transformOriginStyle = align === "left" ? { transformOrigin: "left center" as const } : {};
 
+    // Outer View reports full row height for FlatList getItemLayout.
+    // Measuring Animated.Text alone can under-report on some devices and makes
+    // line-by-line lyrics scroll short of center (current line below viewport).
     return (
-        <Animated.Text
+        <View
             onLayout={({ nativeEvent }) => {
                 if (index !== undefined) {
                     onLayout?.(index, nativeEvent.layout.height);
                 }
-            }}
-            style={[
-                lyricStyles.item,
-                { fontSize, textAlign: align },
-                transformOriginStyle,
-                animatedStyle,
-                highlight ? [lyricStyles.highlightItem, { color: primaryColor }] : null,
-                light ? lyricStyles.draggingItem : null,
-            ]}
-        >
-            {text}
-        </Animated.Text>
+            }}>
+            <Animated.Text
+                style={[
+                    lyricStyles.item,
+                    { fontSize, textAlign: align },
+                    transformOriginStyle,
+                    animatedStyle,
+                    highlight ? [lyricStyles.highlightItem, { color: primaryColor }] : null,
+                    light ? lyricStyles.draggingItem : null,
+                ]}
+            >
+                {text}
+            </Animated.Text>
+        </View>
     );
 }
 

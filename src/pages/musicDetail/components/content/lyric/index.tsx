@@ -204,6 +204,10 @@ export default function Lyric(props: IProps) {
     const lastScrollIndexRef = useRef(-1);
     const wasActiveRef = useRef(isActive);
     const recenterTimersRef = useRef<Array<ReturnType<typeof setTimeout>>>([]);
+    /** FlatList viewport height — used for accurate center offset math */
+    const listHeightRef = useRef(0);
+    /** Coalesce layout-driven re-centers into one rAF */
+    const layoutRecenterRafRef = useRef<number | null>(null);
 
     // Layout cache (prefix-sum based)
     const layoutCacheRef = useRef(new LayoutCache(lyrics.length));
@@ -216,13 +220,35 @@ export default function Lyric(props: IProps) {
         recenterTimersRef.current = [];
     }, []);
 
-    /** Scroll list to a given lyric index (center in viewport). */
+    /**
+     * Scroll list to a given lyric index (center in viewport).
+     * Prefer scrollToOffset + LayoutCache prefix sums over scrollToIndex:
+     * line-by-line / multi-line rows are often taller than the default
+     * ITEM_HEIGHT, so scrollToIndex(viewPosition:0.5) under-scrolls and the
+     * current line ends up below the viewport. Word-by-word rows are closer to
+     * the estimate, which is why they look fine.
+     */
     const scrollToIndex = useCallback((index: number, animated: boolean) => {
         if (!listRef.current || lyrics.length === 0) {
             return false;
         }
         const safeIndex = Math.max(0, Math.min(index, lyrics.length - 1));
         try {
+            const itemLayout = layoutCacheRef.current.getItemLayout(safeIndex);
+            const listHeight = listHeightRef.current;
+            if (listHeight > 0) {
+                const targetOffset = Math.max(
+                    0,
+                    itemLayout.offset - (listHeight - itemLayout.length) * 0.5,
+                );
+                listRef.current.scrollToOffset({
+                    offset: targetOffset,
+                    animated,
+                });
+                lastScrollIndexRef.current = safeIndex;
+                return true;
+            }
+            // Viewport height unknown yet — fall back to scrollToIndex.
             listRef.current.scrollToIndex({
                 index: safeIndex,
                 viewPosition: 0.5,
@@ -335,7 +361,13 @@ export default function Lyric(props: IProps) {
         clearRecenterTimers();
     }, [clearRecenterTimers, currentMusicItem?.id]);
 
-    useEffect(() => () => clearRecenterTimers(), [clearRecenterTimers]);
+    useEffect(() => () => {
+        clearRecenterTimers();
+        if (layoutRecenterRafRef.current != null) {
+            cancelAnimationFrame(layoutRecenterRafRef.current);
+            layoutRecenterRafRef.current = null;
+        }
+    }, [clearRecenterTimers]);
 
     // When user opens the lyric tab, re-center immediately (list often sat at top
     // after mounting off-screen, and Tracking waits for the *next* line change).
@@ -379,25 +411,78 @@ export default function Lyric(props: IProps) {
         return { x: 0, y: Math.max(0, targetIndex * ITEM_HEIGHT) };
     }, [lyrics]);
 
+    /**
+     * After real item/header heights land, re-center the current line.
+     * Virtualized rows above the playhead often keep the default ITEM_HEIGHT
+     * until measured; without a re-scroll the playhead drifts downward.
+     */
+    const scheduleLayoutRecenter = useCallback(() => {
+        if (scrollPhaseRef.current === ScrollPhase.UserDragging) {
+            return;
+        }
+        if (scrollPhaseRef.current === ScrollPhase.WaitingForContent) {
+            return;
+        }
+        if (layoutRecenterRafRef.current != null) {
+            return;
+        }
+        layoutRecenterRafRef.current = requestAnimationFrame(() => {
+            layoutRecenterRafRef.current = null;
+            if (scrollPhaseRef.current === ScrollPhase.UserDragging) {
+                return;
+            }
+            if (!listRef.current || lyrics.length === 0) {
+                return;
+            }
+            const idx =
+                lyricManager.currentLyricItem?.index ??
+                lastScrollIndexRef.current;
+            if (idx < 0) {
+                return;
+            }
+            // Allow re-scroll even when index is unchanged (offset was wrong).
+            lastScrollIndexRef.current = -1;
+            scrollToIndex(idx, false);
+            lastScrollIndexRef.current = Math.max(
+                0,
+                Math.min(idx, lyrics.length - 1),
+            );
+            scrollPhaseRef.current = ScrollPhase.Tracking;
+        });
+    }, [lyrics.length, scrollToIndex]);
+
     // 设置空白组件，获取组件高度
     const blankComponent = useMemo(() => {
         return (
             <View
                 style={[styles.empty, isHorizontal ? styles.emptyHorizontal : null]}
                 onLayout={evt => {
-                    layoutCacheRef.current.setHeaderHeight(
+                    const changed = layoutCacheRef.current.setHeaderHeight(
                         evt.nativeEvent.layout.height,
                     );
+                    if (changed) {
+                        scheduleLayoutRecenter();
+                    }
                 }}
             />
         );
-    }, [isHorizontal]);
+    }, [isHorizontal, scheduleLayoutRecenter]);
 
     const handleLyricItemLayout = useCallback(
         (index: number, height: number) => {
-            layoutCacheRef.current.setItemHeight(index, height);
+            const changed = layoutCacheRef.current.setItemHeight(index, height);
+            if (!changed) {
+                return;
+            }
+            // Only heights at/before the current line affect its center offset.
+            const currentIndex =
+                lyricManager.currentLyricItem?.index ??
+                lastScrollIndexRef.current;
+            if (currentIndex >= 0 && index <= currentIndex) {
+                scheduleLayoutRecenter();
+            }
         },
-        [],
+        [scheduleLayoutRecenter],
     );
 
     // O(1) getItemLayout via prefix-sum cache
@@ -539,6 +624,9 @@ export default function Lyric(props: IProps) {
                             }}
                             onLayout={e => {
                                 const next = e.nativeEvent.layout;
+                                const heightChanged =
+                                    listHeightRef.current !== next.height;
+                                listHeightRef.current = next.height;
                                 // Defer: RN can fire onLayout during commit; setState then
                                 // trips "Cannot update during an existing state transition".
                                 requestAnimationFrame(() => {
@@ -554,6 +642,10 @@ export default function Lyric(props: IProps) {
                                         }
                                         return next;
                                     });
+                                    // First real viewport height → re-center with offset math.
+                                    if (heightChanged && next.height > 0) {
+                                        scheduleLayoutRecenter();
+                                    }
                                 });
                             }}
                             contentOffset={initialContentOffset}
