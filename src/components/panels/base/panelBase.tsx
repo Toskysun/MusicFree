@@ -12,7 +12,6 @@ import {
     Platform,
     Pressable,
     StyleSheet,
-    View,
 } from "react-native";
 import Animated, {
     Easing,
@@ -30,7 +29,6 @@ import NativeUtils from "@/native/utils";
 const ANIMATION_EASING: EasingFunction = Easing.out(Easing.exp);
 const ANIMATION_DURATION = 250;
 
-/** iOS ignores presses on fully transparent Pressable; animate the pressable itself. */
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 const timingConfig = {
@@ -209,8 +207,6 @@ export default function (props: IPanelBaseProps) {
 
     const panelBody = (
         <Animated.View
-            // Capture all touches on the sheet so home ScrollView behind cannot scroll.
-            pointerEvents="auto"
             style={[
                 style.wrapper,
                 orientation === "horizontal" ? {
@@ -231,28 +227,39 @@ export default function (props: IPanelBaseProps) {
         </Animated.View>
     );
 
-    // One host keeps mask + sheet in a single stacking context (Fragment siblings
-    // can lose z-order on some Android builds → sheet scrolls pass to home).
     return (
-        <View
+        <Animated.View
             pointerEvents="box-none"
             collapsable={false}
-            style={style.host}>
-            <AnimatedPressable
-                accessibilityRole="button"
-                accessibilityLabel="关闭面板"
-                style={[style.maskWrapper, style.mask, maskAnimated]}
-                onPress={() => {
-                    snapPoint.value = withTiming(0, timingConfig);
-                }}
-            />
+            style={style.rootHost}>
+            {Platform.OS === "ios" ? (
+                <AnimatedPressable
+                    accessibilityRole="button"
+                    accessibilityLabel="关闭面板"
+                    style={[style.maskWrapper, style.mask, maskAnimated]}
+                    onPress={() => {
+                        snapPoint.value = withTiming(0, timingConfig);
+                    }}
+                />
+            ) : (
+                <Pressable
+                    style={style.maskWrapper}
+                    onPress={() => {
+                        snapPoint.value = withTiming(0, timingConfig);
+                    }}>
+                    <Animated.View
+                        pointerEvents="none"
+                        style={[style.maskWrapper, style.mask, maskAnimated]}
+                    />
+                </Pressable>
+            )}
             {panelBody}
-        </View>
+        </Animated.View>
     );
 }
 
 const style = StyleSheet.create({
-    host: {
+    rootHost: {
         ...StyleSheet.absoluteFillObject,
         zIndex: 15000,
     },
@@ -264,11 +271,11 @@ const style = StyleSheet.create({
         left: 0,
         right: 0,
         bottom: 0,
-        zIndex: 0,
+        zIndex: 15000,
     },
     mask: {
-        // Non-zero paint so iOS hit-tests the dimmer (transparent Pressable is ignored).
         backgroundColor: "#000",
+        opacity: 0.5,
     },
     wrapper: {
         position: "absolute",
@@ -276,10 +283,7 @@ const style = StyleSheet.create({
         right: 0,
         borderTopLeftRadius: rpx(28),
         borderTopRightRadius: rpx(28),
-        zIndex: 1,
-        // Column so Header + Body(flex:1) layout correctly for FlashList height
-        flexDirection: "column",
-        overflow: "hidden",
+        zIndex: 15010,
     },
     bottomPosition: {
         bottom: 0,
