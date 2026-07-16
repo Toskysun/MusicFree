@@ -105,6 +105,49 @@ class LyricManager implements IInjectable {
         return getDefaultStore().get(lyricStateAtom);
     }
 
+    syncAfterSeek(
+        positionSeconds: number,
+        isPlaying: boolean,
+    ): IParsedLrcItem | null | undefined {
+        if (!Number.isFinite(positionSeconds)) {
+            return;
+        }
+
+        const safePositionSeconds = Math.max(0, positionSeconds);
+        const positionMs = safePositionSeconds * 1000;
+
+        if (this.positionUpdateTimer) {
+            clearTimeout(this.positionUpdateTimer);
+            this.positionUpdateTimer = null;
+        }
+        this.pendingPositionMs = positionMs;
+        this.lastPositionUpdateTime = Date.now();
+        this.lastProgressPositionMs = positionMs;
+        this.isPlaybackAdvancing = isPlaying;
+
+        getDefaultStore().set(currentPositionMsAtom, positionMs);
+        this.syncPositionClock(positionMs, true);
+
+        const parser = this.lyricParser;
+        if (!parser || !this.trackPlayer.isCurrentMusic(parser.musicItem)) {
+            return;
+        }
+
+        const lyricItem = parser.getPosition(safePositionSeconds);
+        getDefaultStore().set(currentLyricItemAtom, lyricItem ?? null);
+
+        if (this.appConfig.getConfig("lyric.showStatusBarLyric")) {
+            this.updateDesktopLyricDisplay(lyricItem);
+            LyricUtil.syncPlaybackState({
+                status: isPlaying ? "playing" : "paused",
+                positionMs,
+                isSeek: true,
+            });
+        }
+
+        return lyricItem ?? null;
+    }
+
     injectDependencies(trackPlayerService: ITrackPlayer, appConfigService: IAppConfig, pluginManager: IPluginManager): void {
         this.trackPlayer = trackPlayerService;
         this.appConfig = appConfigService;
@@ -637,9 +680,12 @@ class LyricManager implements IInjectable {
     }
 
 
-    updateLyricOffset(musicItem: IMusic.IMusicItem, offset: number) {
+    async updateLyricOffset(
+        musicItem: IMusic.IMusicItem,
+        offset: number,
+    ): Promise<IParsedLrcItem | null> {
         if (!musicItem) {
-            return;
+            return null;
         }
 
         // 更新歌词偏移
@@ -648,11 +694,54 @@ class LyricManager implements IInjectable {
         });
 
         if (this.trackPlayer.isCurrentMusic(musicItem)) {
-            // Async refresh, non-blocking
-            this.refreshLyric(true, false).catch(err => {
-                devLog('warn', 'Lyric refresh after offset update failed', err);
-            });
+            const parser = this.lyricParser;
+            if (parser && this.trackPlayer.isCurrentMusic(parser.musicItem)) {
+                parser.setExtraOffset(offset * -1);
+
+                let positionSeconds =
+                    getDefaultStore().get(currentPositionMsAtom) / 1000;
+                try {
+                    positionSeconds = (await this.trackPlayer.getProgress()).position;
+                } catch (err) {
+                    devLog(
+                        "warn",
+                        "Using cached playback position for lyric offset update",
+                        err,
+                    );
+                }
+
+                const currentLyric = parser.getPosition(positionSeconds);
+                const currentState = this.lyricState;
+                getDefaultStore().set(lyricStateAtom, {
+                    ...currentState,
+                    meta: { ...parser.getMeta() },
+                });
+                getDefaultStore().set(
+                    currentLyricItemAtom,
+                    currentLyric ?? null,
+                );
+
+                if (this.appConfig.getConfig("lyric.showStatusBarLyric")) {
+                    if (currentLyric) {
+                        this.updateDesktopLyricDisplay(currentLyric);
+                    }
+                    LyricUtil.syncPlaybackState({
+                        status: this.isPlaybackAdvancing
+                            ? "playing"
+                            : "paused",
+                        positionMs: positionSeconds * 1000,
+                        isSeek: true,
+                    });
+                }
+
+                return currentLyric ?? null;
+            }
+
+            await this.refreshLyric(true, false);
+            return this.currentLyricItem ?? null;
         }
+
+        return null;
     }
 
     private setLyricAsLoadingState() {

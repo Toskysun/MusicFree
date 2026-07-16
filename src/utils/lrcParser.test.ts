@@ -187,4 +187,24 @@ describe("LyricParser", () => {
         expect(item.romanization).toBe("do n na ke i ke n shi te mo");
         expect(item.translation).toBe("经历再多风霜");
     });
+
+    it("updates the extra offset without rebuilding lyric items", () => {
+        const parser = new LyricParser(
+            "[offset:500][00:10.000]first\n[00:20.000]second",
+            { extra: { offset: -0.2 } },
+        );
+        const items = parser.getLyricItems();
+
+        expect(parser.getMeta().offset).toBeCloseTo(0.3);
+        expect(parser.getPosition(10.2)).toBeNull();
+
+        parser.setExtraOffset(-0.4);
+
+        expect(parser.getLyricItems()).toBe(items);
+        expect(parser.getMeta().offset).toBeCloseTo(0.1);
+        expect(parser.getPosition(10.2)?.index).toBe(0);
+
+        parser.setExtraOffset(-0.1);
+        expect(parser.getMeta().offset).toBeCloseTo(0.4);
+    });
 });

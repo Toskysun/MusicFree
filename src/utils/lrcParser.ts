@@ -1360,6 +1360,20 @@ export default class LyricParser {
         return this.lrcItems;
     }
 
+    setExtraOffset(offset: number) {
+        const previousOffset = Number(this.extra.offset) || 0;
+        const nextOffset = Number.isFinite(offset) ? offset : 0;
+
+        this.extra = {
+            ...this.extra,
+            offset: nextOffset,
+        };
+        this.meta = {
+            ...this.meta,
+            offset: (Number(this.meta.offset) || 0) - previousOffset + nextOffset,
+        };
+    }
+
     getMeta() {
         return this.meta;
     }

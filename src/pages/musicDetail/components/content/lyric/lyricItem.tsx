@@ -1826,12 +1826,14 @@ const lyricStyles = StyleSheet.create({
         flexDirection: "row",
         flexWrap: "wrap",
         justifyContent: "center",
-        alignItems: "baseline",
+        // Fabric can call ParagraphShadowNode::baseline while a seek swaps
+        // static and animated glyph trees, mutating an already sealed node.
+        alignItems: "flex-end",
         width: "100%",
     },
     charGroupRow: {
         flexDirection: "row",
-        alignItems: "baseline",
+        alignItems: "flex-end",
     },
     secondaryLine: {
         marginTop: rpx(8),

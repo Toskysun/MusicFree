@@ -16,7 +16,7 @@ import lyricManager, { useLyricState } from "@/core/lyricManager";
 import { devLog } from "@/utils/log";
 
 interface ILyricOperationsProps {
-    scrollToCurrentLrcItem: () => void;
+    scrollToCurrentLrcItem: (targetIndex?: number) => void;
 }
 
 export default function LyricOperations(props: ILyricOperationsProps) {
@@ -63,9 +63,15 @@ export default function LyricOperations(props: ILyricOperationsProps) {
                     if (currentMusicItem) {
                         showPanel("SetLyricOffset", {
                             musicItem: currentMusicItem,
-                            onSubmit(offset) {
-                                lyricManager.updateLyricOffset(currentMusicItem, offset);
-                                scrollToCurrentLrcItem();
+                            async onSubmit(offset) {
+                                const currentLyricItem =
+                                    await lyricManager.updateLyricOffset(
+                                        currentMusicItem,
+                                        offset,
+                                    );
+                                scrollToCurrentLrcItem(
+                                    currentLyricItem?.index,
+                                );
                                 hidePanel();
                             },
                         });

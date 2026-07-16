@@ -15,7 +15,7 @@ import { useI18N } from "@/core/i18n";
 interface IProps {
     musicItem: IMusic.IMusicItem;
     /** 点击回调 */
-    onSubmit?: (offset: number) => void;
+    onSubmit?: (offset: number) => void | Promise<void>;
 }
 
 export default function SetLyricOffset(props: IProps) {
