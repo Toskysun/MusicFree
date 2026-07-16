@@ -1,11 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, TextInput, View } from "react-native";
 import rpx, { vmax, vw } from "@/utils/rpx";
 
 import { fontSizeConst } from "@/constants/uiConst";
 import useColors from "@/hooks/useColors";
 import PanelBase from "../../base/panelBase";
-import { TextInput } from "react-native-gesture-handler";
 import useSearchCover from "./useSearchCover";
 import PluginManager from "@/core/pluginManager";
 import { TabView } from "react-native-tab-view";

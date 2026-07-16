@@ -2,10 +2,9 @@ import { fontSizeConst } from "@/constants/uiConst";
 import useColors from "@/hooks/useColors";
 import rpx, { vmax } from "@/utils/rpx";
 import React, { useState } from "react";
-import { StyleSheet } from "react-native";
+import { StyleSheet, TextInput } from "react-native";
 
 import MusicSheet from "@/core/musicSheet";
-import { TextInput } from "react-native-gesture-handler";
 import PanelBase from "../base/panelBase";
 import PanelHeader from "../base/panelHeader";
 import { hidePanel } from "../usePanel";

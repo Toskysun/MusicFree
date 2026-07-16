@@ -1,6 +1,6 @@
 import rpx, { vmax } from "@/utils/rpx";
 import React, { useState } from "react";
-import { StyleSheet } from "react-native";
+import { StyleSheet, TextInput } from "react-native";
 
 import { fontSizeConst } from "@/constants/uiConst";
 import lyricManager from "@/core/lyricManager";
@@ -10,7 +10,6 @@ import { errorLog } from "@/utils/log";
 import { parseMediaUniqueKey } from "@/utils/mediaUtils";
 import Toast from "@/utils/toast";
 import Clipboard from "@react-native-clipboard/clipboard";
-import { TextInput } from "react-native-gesture-handler";
 import PanelBase from "../base/panelBase";
 import PanelHeader from "../base/panelHeader";
 import { hidePanel } from "../usePanel";

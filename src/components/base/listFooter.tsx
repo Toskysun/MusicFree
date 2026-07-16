@@ -1,11 +1,16 @@
 import React from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import {
+    ActivityIndicator,
+    Pressable,
+    StyleSheet,
+    Text,
+    View,
+} from "react-native";
 import rpx from "@/utils/rpx";
 import { fontSizeConst } from "@/constants/uiConst";
 import ThemeText from "./themeText";
 import useColors from "@/hooks/useColors";
 import { RequestStateCode } from "@/constants/commonConst";
-import { Pressable } from "react-native-gesture-handler";
 import { useI18N } from "@/core/i18n";
 
 

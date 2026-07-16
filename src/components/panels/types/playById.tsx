@@ -1,10 +1,14 @@
 import React, { useState } from "react";
-import { StyleSheet, View, TouchableOpacity } from "react-native";
+import {
+    StyleSheet,
+    TextInput,
+    TouchableOpacity,
+    View,
+} from "react-native";
 import rpx, { vmax } from "@/utils/rpx";
 import { fontSizeConst } from "@/constants/uiConst";
 import useColors from "@/hooks/useColors";
 import ThemeText from "@/components/base/themeText";
-import { TextInput } from "react-native-gesture-handler";
 import PanelBase from "../base/panelBase";
 import { hidePanel } from "../usePanel";
 import PanelHeader from "../base/panelHeader";
@@ -120,7 +124,7 @@ export default function PlayById() {
             navigate(ROUTE_PATH.MUSIC_DETAIL);
 
             Toast.success(t("panel.playById.playingNow"));
-        } catch (error) {
+        } catch {
             Toast.warn(t("panel.playById.fetchFailed"));
         } finally {
             setLoading(false);
