@@ -1,10 +1,14 @@
 import React from "react";
-import { StyleProp, StyleSheet, ViewStyle } from "react-native";
+import {
+    StyleProp,
+    StyleSheet,
+    TouchableOpacity,
+    ViewStyle,
+} from "react-native";
 import rpx from "@/utils/rpx";
 import ThemeText from "./themeText";
 import { iconSizeConst } from "@/constants/uiConst";
 import useColors from "@/hooks/useColors";
-import { TouchableOpacity } from "react-native-gesture-handler";
 import Icon, { IIconName } from "@/components/base/icon.tsx";
 
 interface IProps {
@@ -13,6 +17,9 @@ interface IProps {
     containerStyle?: StyleProp<ViewStyle>;
     children?: string;
 }
+
+// Playlist actions render inside PanelBase's native Modal. Use React Native's
+// responder touchable so Android does not depend on the Activity's RNGH root.
 export default function (props: IProps) {
     const { icon, children, onPress, containerStyle } = props;
     const colors = useColors();
