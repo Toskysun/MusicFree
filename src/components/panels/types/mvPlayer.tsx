@@ -503,69 +503,59 @@ export default function MvPlayer({ musicItem, initialSource }: IMvPlayerProps) {
             animationType="Scale"
             containerStyle={styles.container}>
             <View style={styles.stage}>
-                {source ? (
-                    <Video
-                        ref={videoRef}
-                        key={`${source.uri}:${quality}:${sourceVersion}`}
-                        source={{ uri: source.uri, headers: source.headers }}
-                        style={styles.video}
-                        pointerEvents="none"
-                        paused={paused}
-                        useTextureView
-                        resizeMode="contain"
-                        onLoadStart={() => setLoading(true)}
-                        onLoad={data => {
-                            setDuration(data.duration || 0);
-                            lockVideoOrientation(
-                                data.naturalSize?.width,
-                                data.naturalSize?.height,
-                            );
-                            if (pendingSeekRef.current !== null) {
-                                videoRef.current?.seek(pendingSeekRef.current);
-                                pendingSeekRef.current = null;
-                            }
-                            setLoading(false);
-                        }}
-                        onProgress={data => setPosition(data.currentTime)}
-                        onBuffer={({ isBuffering }) => setLoading(isBuffering)}
-                        onEnd={() => {
-                            setPaused(true);
-                            showControls();
-                        }}
-                        onError={() => {
-                            if (source.backupUrls?.[backupIndex]) {
-                                setSource(current =>
-                                    current
-                                        ? {
-                                            ...current,
-                                            uri: source.backupUrls![
-                                                backupIndex
-                                            ],
-                                        }
-                                        : current,
+                <View pointerEvents="none" style={styles.videoLayer}>
+                    {source ? (
+                        <Video
+                            ref={videoRef}
+                            key={`${source.uri}:${quality}:${sourceVersion}`}
+                            source={{ uri: source.uri, headers: source.headers }}
+                            style={styles.video}
+                            pointerEvents="none"
+                            paused={paused}
+                            useTextureView
+                            resizeMode="contain"
+                            onLoadStart={() => setLoading(true)}
+                            onLoad={data => {
+                                setDuration(data.duration || 0);
+                                lockVideoOrientation(
+                                    data.naturalSize?.width,
+                                    data.naturalSize?.height,
                                 );
-                                setSourceVersion(version => version + 1);
-                                setBackupIndex(index => index + 1);
-                                setLoading(true);
-                                return;
-                            }
-                            setLoading(false);
-                            setError(true);
-                        }}
-                    />
-                ) : null}
-
-                {!controlsVisible ? (
-                    <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel={paused ? "播放视频" : "显示播放器控件"}
-                        onPress={showControls}
-                        // Mount the full-screen wake surface only while the
-                        // controls are hidden. This keeps it out of Android's
-                        // hit-test tree while sliders and buttons are shown.
-                        style={styles.tapSurface}
-                    />
-                ) : null}
+                                if (pendingSeekRef.current !== null) {
+                                    videoRef.current?.seek(pendingSeekRef.current);
+                                    pendingSeekRef.current = null;
+                                }
+                                setLoading(false);
+                            }}
+                            onProgress={data => setPosition(data.currentTime)}
+                            onBuffer={({ isBuffering }) => setLoading(isBuffering)}
+                            onEnd={() => {
+                                setPaused(true);
+                                showControls();
+                            }}
+                            onError={() => {
+                                if (source.backupUrls?.[backupIndex]) {
+                                    setSource(current =>
+                                        current
+                                            ? {
+                                                ...current,
+                                                uri: source.backupUrls![
+                                                    backupIndex
+                                                ],
+                                            }
+                                            : current,
+                                    );
+                                    setSourceVersion(version => version + 1);
+                                    setBackupIndex(index => index + 1);
+                                    setLoading(true);
+                                    return;
+                                }
+                                setLoading(false);
+                                setError(true);
+                            }}
+                        />
+                    ) : null}
+                </View>
                 <View
                     pointerEvents={controlsVisible ? "box-none" : "none"}
                     style={styles.overlay}>
@@ -712,6 +702,20 @@ export default function MvPlayer({ musicItem, initialSource }: IMvPlayerProps) {
                         </Pressable>
                     </View>
                 ) : null}
+
+                {/* 唤醒层：始终渲染，靠 JSX 顺序置于最上层，
+                    控件/错误态时用 pointerEvents 禁掉，避免遮挡。 */}
+                <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                        paused ? "播放视频" : "显示播放器控件"
+                    }
+                    onPress={showControls}
+                    pointerEvents={
+                        controlsVisible || error ? "none" : "auto"
+                    }
+                    style={styles.tapSurface}
+                />
             </View>
         </PanelFullscreen>
     );
@@ -734,6 +738,11 @@ const styles = StyleSheet.create({
         backgroundColor: "#000",
         overflow: "hidden",
     },
+    videoLayer: {
+        ...StyleSheet.absoluteFillObject,
+        // 视频是原生 TextureView，禁用整层触摸，避免它吞掉全屏点击。
+        zIndex: 0,
+    },
     video: {
         ...StyleSheet.absoluteFillObject,
         width: "100%",
@@ -741,6 +750,7 @@ const styles = StyleSheet.create({
     },
     tapSurface: {
         ...StyleSheet.absoluteFillObject,
+        // 依赖 JSX 渲染顺序而非 zIndex（Fabric 下 zIndex 命中不可靠）。
         zIndex: 3,
     },
     overlay: {
