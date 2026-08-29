@@ -511,6 +511,8 @@ export default function MvPlayer({ musicItem, initialSource }: IMvPlayerProps) {
                             source={{ uri: source.uri, headers: source.headers }}
                             style={styles.video}
                             pointerEvents="none"
+                            controls={false}
+                            focusable={false}
                             paused={paused}
                             useTextureView
                             resizeMode="contain"
