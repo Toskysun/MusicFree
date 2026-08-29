@@ -4,15 +4,19 @@ const path = require("path");
 /**
  * react-native-video's Android view (ReactExoplayerView) extends plain
  * FrameLayout, not ReactViewGroup, so RN's pointerEvents="none" cannot stop
- * its native touch handling. ExoPlayer's PlayerView is initialized with
- * useController=true + controllerHideOnTouch=true, which registers a touch
- * listener that consumes every tap to toggle its own (hidden) control bar.
- * That swallows the whole-screen tap-to-show-controls surface in MvPlayer.
+ * its native touch handling. Two native problems break the full-screen
+ * tap-to-show-controls surface in MvPlayer:
  *
- * Patch: disable the ExoPlayer controller and its touch listener at the
- * source, and make updateSurfaceView actually switch to a TextureView so the
- * video layer stays inside the RN view hierarchy (where zIndex/pointerEvents
- * work) instead of a floating SurfaceView.
+ *   1. ExoPlayer's PlayerView is initialized with useController=true +
+ *      controllerHideOnTouch=true, which registers a touch listener that
+ *      consumes every tap to toggle its own (hidden) control bar.
+ *   2. The video surface defaults to a SurfaceView, which floats above the
+ *      RN view hierarchy and swallows touches; updateSurfaceView was a no-op
+ *      so useTextureView never took effect.
+ *
+ * Patch: disable the ExoPlayer controller + touch listener at the source,
+ * and make updateSurfaceView switch to a TextureView (normal RN hierarchy).
+ * Idempotent: safe to run after npm install or repeated postinstall runs.
  */
 const viewPath = path.join(
     __dirname,
@@ -44,13 +48,15 @@ function patchExoPlayerView() {
         return;
     }
 
-    // 1. Do not enable ExoPlayer's own controller / touch handling.
+    let changed = false;
+
+    // 1. Controller defaults: force the PlayerView to never arm its own
+    //    controller / touch handling at construction time.
     const controllerDefaults = [
         ["useController = true", "useController = false"],
         ["controllerAutoShow = true", "controllerAutoShow = false"],
         ["controllerHideOnTouch = true", "controllerHideOnTouch = false"],
     ];
-    let changed = false;
     for (const [from, to] of controllerDefaults) {
         if (source.includes(from)) {
             source = source.replace(from, to);
@@ -58,8 +64,8 @@ function patchExoPlayerView() {
         }
     }
 
-    // 2. Keep setUseController from ever re-arming the controller UI or
-    //    its touch listener when someone flips controls on.
+    // 2. setUseController: always keep controller + touch listener off no
+    //    matter what the caller asks for.
     const oldSetUseController =
         "fun setUseController(useController: Boolean) {\n" +
         "        playerView.useController = useController\n" +
@@ -86,22 +92,25 @@ function patchExoPlayerView() {
         changed = true;
     }
 
-    // 3. Keep updateSurfaceView from switching surface types; surface type is a
-    //    private field in media3 PlayerView and toggling it is not required to
-    //    fix touch handling (PlayerView consumes touches via its controller's
-    //    touch listener, which we already disable above).
-    const oldUpdateSurface =
-        "fun updateSurfaceView(viewType: Int) {\n" +
-        "        // TODO: Implement proper surface type switching if needed\n" +
-        "    }";
-    const newUpdateSurface =
-        "fun updateSurfaceView(viewType: Int) {\n" +
-        "        // MusicFree: surface type switching intentionally left as a\n" +
-        "        // no-op; ExoPlayer PlayerView's private surfaceType cannot be\n" +
-        "        // read from here, and the touch fix does not need it.\n" +
-        "    }";
-    if (source.includes(oldUpdateSurface)) {
-        source = source.replace(oldUpdateSurface, newUpdateSurface);
+    // 3. updateSurfaceView: honor useTextureView so the video layer uses a
+    //    TextureView (inside the RN hierarchy) instead of a SurfaceView that
+    //    floats above RN views and swallows touches.
+    let updateSurfaceRegex =
+        /fun updateSurfaceView\(viewType: Int\)\s*\{[\s\S]*?\n    \}/;
+    if (updateSurfaceRegex.test(source)) {
+        const newUpdateSurface =
+            "fun updateSurfaceView(viewType: Int) {\n" +
+            "        // MusicFree: honor useTextureView so the video layer uses a\n" +
+            "        // TextureView (normal RN view hierarchy) instead of a\n" +
+            "        // SurfaceView that floats above RN views and swallows touches.\n" +
+            "        val surfaceType = if (viewType == com.brentvatne.common.api.ViewType.VIEW_TYPE_TEXTURE) {\n" +
+            "            androidx.media3.ui.PlayerView.SURFACE_TYPE_TEXTURE_VIEW\n" +
+            "        } else {\n" +
+            "            androidx.media3.ui.PlayerView.SURFACE_TYPE_SURFACE_VIEW\n" +
+            "        }\n" +
+            "        playerView.setSurfaceType(surfaceType)\n" +
+            "    }";
+        source = source.replace(updateSurfaceRegex, newUpdateSurface);
         changed = true;
     }
 
@@ -112,12 +121,7 @@ function patchExoPlayerView() {
         return;
     }
 
-    // Stamp marker after the package declaration.
-    source = source.replace(
-        /^(package[^\n]*\n)/,
-        `$1\n${marker}\n`,
-    );
-
+    source = source.replace(/^(package[^\n]*\n)/, `$1\n${marker}\n`);
     fs.writeFileSync(viewPath, source);
     console.log(
         "[patch-react-native-video] patched ExoPlayerView.kt: disabled controller/touch, enabled TextureView switching",
