@@ -58,13 +58,54 @@ function normalizeQualityOption(
 }
 
 function qualityHeight(option: VideoQualityOption) {
+    if (option.height) return option.height;
+    const name = `${option.key} ${option.label ?? ""}`;
+    if (/8k/i.test(name)) return 4320;
+    if (/4k/i.test(name)) return 2160;
+    return Number.parseInt(
+        name.match(/(?:^|[^0-9])(\d{3,4})p?/i)?.[1] ?? "0",
+        10,
+    );
+}
+
+function isDolbyVision(option: VideoQualityOption) {
     return (
-        option.height ??
-        Number.parseInt(
-            option.key.match(/(?:^|[^0-9])(\d{3,4})p?/i)?.[1] ?? "0",
-            10,
+        option.dynamicRange === "dolby-vision" ||
+        /dolby[\s_-]*vision|dovi|dvhe|dvh1|杜比视界/i.test(
+            `${option.key} ${option.label ?? ""} ${option.codec ?? ""}`,
         )
     );
+}
+
+function getDynamicRange(
+    option: VideoQualityOption,
+): IPlugin.VideoDynamicRange | undefined {
+    if (option.dynamicRange) return option.dynamicRange;
+    return isDolbyVision(option) ? "dolby-vision" : undefined;
+}
+
+/** 画质排序权重：动态范围 > 分辨率 > 高帧率。 */
+function getQualityRank(option: VideoQualityOption) {
+    const rangeRank = getDynamicRange(option) === "dolby-vision"
+        ? 3
+        : getDynamicRange(option) === "hdr10"
+            ? 2
+            : getDynamicRange(option) === "sdr"
+                ? 1
+                : 0;
+    const hfrRank = /hfr|high[\s_-]*frame|高帧/i.test(
+        `${option.key} ${option.label ?? ""}`,
+    )
+        ? 1
+        : 0;
+    return rangeRank * 100_000 + qualityHeight(option) * 10 + hfrRank;
+}
+
+/** 仅保留已定义字段，避免 undefined 覆盖已有的画质信息。 */
+function definedFields<T extends object>(value: T): Partial<T> {
+    return Object.fromEntries(
+        Object.entries(value).filter(([, v]) => v !== undefined),
+    ) as Partial<T>;
 }
 
 function mergeQualityOptions(
@@ -75,11 +116,14 @@ function mergeQualityOptions(
         const option = normalizeQualityOption(raw);
         if (!option) return;
         const previous = merged.get(option.key);
-        merged.set(option.key, { ...previous, ...option });
+        merged.set(option.key, {
+            ...previous,
+            ...definedFields(option),
+        });
     });
     return [...merged.values()].sort((left, right) => {
         return (
-            qualityHeight(right) - qualityHeight(left) ||
+            getQualityRank(right) - getQualityRank(left) ||
             (right.width ?? 0) - (left.width ?? 0) ||
             (right.bitrate ?? 0) - (left.bitrate ?? 0) ||
             right.key.localeCompare(left.key)
@@ -123,8 +167,69 @@ function formatQualityDetails(option: VideoQualityOption) {
     if (option.size !== undefined && option.size !== null && option.size !== "") {
         details.push(formatFileSize(option.size));
     }
+    const range = option.dynamicRange === "dolby-vision"
+        ? "Dolby Vision"
+        : option.dynamicRange === "hdr10"
+            ? "HDR10"
+            : undefined;
+    if (range) details.push(range);
     if (option.codec) details.push(option.codec);
     return details.join(" · ");
+}
+
+/**
+ * 后台并发预取各画质的真实信息（分辨率/码率/大小/编码/动态范围），
+ * 用于补全画质菜单。最多同时发起 3 个请求，单个失败不影响整体。
+ */
+async function hydrateQualityOptions(
+    getSource: (
+        musicItem: IMusic.IMusicItemBase,
+        videoQuality?: string,
+    ) => Promise<IPlugin.IVideoSourceResult | null>,
+    musicItem: IMusic.IMusicItem,
+    baseOptions: VideoQualityOption[],
+    activeKey: string,
+): Promise<VideoQualityOption[]> {
+    const enriched = baseOptions.map(option => ({ ...option }));
+    const candidates = enriched.filter(
+        option =>
+            option.key !== activeKey &&
+            option.height === undefined &&
+            option.width === undefined &&
+            option.codec === undefined,
+    );
+    if (candidates.length === 0) return enriched;
+
+    let nextIndex = 0;
+    const hydrate = async () => {
+        while (nextIndex < candidates.length) {
+            const candidate = candidates[nextIndex++];
+            const target = enriched.find(option => option.key === candidate.key);
+            if (!target) continue;
+            try {
+                const result = await getSource(musicItem, candidate.key);
+                if (!result?.url) continue;
+                const meta = sourceQualityOption(result, candidate.key);
+                if (!meta) continue;
+                target.label = meta.label || target.label;
+                if (meta.width) target.width = meta.width;
+                if (meta.height) target.height = meta.height;
+                if (meta.bitrate) target.bitrate = meta.bitrate;
+                if (meta.size !== undefined && meta.size !== null && meta.size !== "") {
+                    target.size = meta.size;
+                }
+                if (meta.codec) target.codec = meta.codec;
+                if (meta.mimeType) target.mimeType = meta.mimeType;
+                if (meta.dynamicRange) target.dynamicRange = meta.dynamicRange;
+            } catch {
+                // 单个画质拉取失败不影响其余候选
+            }
+        }
+    };
+    await Promise.all(
+        Array.from({ length: Math.min(3, candidates.length) }, () => hydrate()),
+    );
+    return enriched;
 }
 
 function formatBitrate(value: number) {
@@ -256,10 +361,11 @@ export default function MvPlayer({ musicItem, initialSource }: IMvPlayerProps) {
 
             const declaredQualities = plugin?.instance?.supportedVideoQualities;
             const declaredOptions = mergeQualityOptions(declaredQualities);
+            // 优先用户上次选的画质，其次声明中的最高档，最后回退 1080p。
             const initialQuality =
                 musicItem.videoQuality ||
                 declaredOptions[0]?.key ||
-                undefined;
+                "1080p";
             const result =
                 initialSource ??
                 (await plugin?.methods?.getMvSource(musicItem, initialQuality));
@@ -270,16 +376,15 @@ export default function MvPlayer({ musicItem, initialSource }: IMvPlayerProps) {
                 return;
             }
 
-            setQualityOptions(
-                mergeQualityOptions(
-                    declaredQualities,
-                    result.availableVideoQualities,
-                    sourceQualityOption(result, initialQuality) && [
-                        sourceQualityOption(result, initialQuality)!,
-                    ],
-                    musicItem.videoQuality ? [musicItem.videoQuality] : undefined,
-                ),
+            const baseOptions = mergeQualityOptions(
+                declaredQualities,
+                result.availableVideoQualities,
+                sourceQualityOption(result, initialQuality) && [
+                    sourceQualityOption(result, initialQuality)!,
+                ],
+                musicItem.videoQuality ? [musicItem.videoQuality] : undefined,
             );
+            setQualityOptions(baseOptions);
             setQuality(result.videoQuality || initialQuality || "");
             lockVideoOrientation(result.width, result.height);
             setBackupIndex(0);
@@ -290,6 +395,25 @@ export default function MvPlayer({ musicItem, initialSource }: IMvPlayerProps) {
             });
             setSourceVersion(version => version + 1);
             setLoading(false);
+
+            // 后台补全其它画质的真实信息（分辨率/码率/大小/编码/动态范围），
+            // 避免画质菜单只显示档位名而缺少细节。
+            if (plugin?.methods?.getMvSource) {
+                const getSource = (
+                    item: IMusic.IMusicItemBase,
+                    videoQuality?: string,
+                ) => plugin.methods!.getMvSource(item, videoQuality);
+                hydrateQualityOptions(
+                    getSource,
+                    musicItem,
+                    baseOptions,
+                    result.videoQuality || initialQuality || "",
+                )
+                    .then(enriched => {
+                        if (!canceled) setQualityOptions(enriched);
+                    })
+                    .catch(() => undefined);
+            }
         };
 
         openVideo().catch(reason => {
@@ -442,7 +566,9 @@ export default function MvPlayer({ musicItem, initialSource }: IMvPlayerProps) {
                         style={styles.tapSurface}
                     />
                 ) : null}
-                <View pointerEvents="box-none" style={styles.overlay}>
+                <View
+                    pointerEvents={controlsVisible ? "box-none" : "none"}
+                    style={styles.overlay}>
                     {controlsVisible ? (
                         <>
                             <View style={styles.header}>
@@ -615,7 +741,7 @@ const styles = StyleSheet.create({
     },
     tapSurface: {
         ...StyleSheet.absoluteFillObject,
-        zIndex: 1,
+        zIndex: 3,
     },
     overlay: {
         ...StyleSheet.absoluteFillObject,
