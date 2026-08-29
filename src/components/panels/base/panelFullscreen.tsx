@@ -4,6 +4,7 @@ import {
     DeviceEventEmitter,
     Modal,
     NativeEventSubscription,
+    Pressable,
     StyleSheet,
     TouchableWithoutFeedback,
     View,
@@ -35,6 +36,14 @@ interface IPanelFullScreenProps {
     children?: React.ReactNode;
     containerStyle?: ViewStyle;
     animationType?: "SlideToTop" | "Scale";
+    /**
+     * 全屏唤醒层点击回调（MV 播放器等需要）。
+     * 该层渲染在 Modal 窗口最顶层、不受动画/子层 transform 影响，
+     * 避免被视频 SurfaceView / 动画容器抢走触摸。
+     */
+    fullscreenTapHandler?: () => void;
+    /** 全屏唤醒层是否禁用（控件可见时禁用，避免挡住按钮）。 */
+    fullscreenTapDisabled?: boolean;
 }
 
 /**
@@ -48,6 +57,8 @@ export default function (props: IPanelFullScreenProps) {
         containerStyle,
         children,
         animationType = "SlideToTop",
+        fullscreenTapHandler,
+        fullscreenTapDisabled,
     } = props;
     const snapPoint = useSharedValue(0);
 
@@ -183,6 +194,20 @@ export default function (props: IPanelFullScreenProps) {
                     ]}>
                     {children}
                 </Animated.View>
+                {fullscreenTapHandler ? (
+                    <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="显示播放器控件"
+                        onPress={fullscreenTapHandler}
+                        pointerEvents={
+                            fullscreenTapDisabled ? "none" : "auto"
+                        }
+                        // 渲染在 Modal 窗口最顶层：不受 wrapper 的 Scale
+                        // transform 影响，位于所有子层（含视频 SurfaceView）
+                        // 之后，Android 命中测试优先。
+                        style={style.fullscreenTapLayer}
+                    />
+                ) : null}
             </View>
         </Modal>
     );
@@ -220,5 +245,17 @@ const style = StyleSheet.create({
         zIndex: 1,
         elevation: 16,
         flexDirection: "column",
+    },
+    fullscreenTapLayer: {
+        position: "absolute",
+        left: 0,
+        top: 0,
+        right: 0,
+        bottom: 0,
+        width: "100%",
+        height: "100%",
+        zIndex: 2,
+        elevation: 32,
+        backgroundColor: "transparent",
     },
 });

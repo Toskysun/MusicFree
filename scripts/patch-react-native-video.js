@@ -92,23 +92,20 @@ function patchExoPlayerView() {
         changed = true;
     }
 
-    // 3. updateSurfaceView: honor useTextureView so the video layer uses a
-    //    TextureView (inside the RN hierarchy) instead of a SurfaceView that
-    //    floats above RN views and swallows touches.
+    // 3. updateSurfaceView: keep as a safe no-op. media3-ui 1.x PlayerView
+    //    has no public setSurfaceType (SURFACE_TYPE_* are private) and picks
+    //    the surface at construction from XML attrs, so there is nothing safe
+    //    to switch here. Touch handling is fixed by the useController patch.
     let updateSurfaceRegex =
         /fun updateSurfaceView\(viewType: Int\)\s*\{[\s\S]*?\n    \}/;
     if (updateSurfaceRegex.test(source)) {
         const newUpdateSurface =
             "fun updateSurfaceView(viewType: Int) {\n" +
-            "        // MusicFree: honor useTextureView so the video layer uses a\n" +
-            "        // TextureView (normal RN view hierarchy) instead of a\n" +
-            "        // SurfaceView that floats above RN views and swallows touches.\n" +
-            "        val surfaceType = if (viewType == com.brentvatne.common.api.ViewType.VIEW_TYPE_TEXTURE) {\n" +
-            "            androidx.media3.ui.PlayerView.SURFACE_TYPE_TEXTURE_VIEW\n" +
-            "        } else {\n" +
-            "            androidx.media3.ui.PlayerView.SURFACE_TYPE_SURFACE_VIEW\n" +
-            "        }\n" +
-            "        playerView.setSurfaceType(surfaceType)\n" +
+            "        // MusicFree: media3-ui 1.x PlayerView has no public API to\n" +
+            "        // switch surface type (SURFACE_TYPE_* is private); surface is\n" +
+            "        // chosen at construction from XML attrs. Touch handling is\n" +
+            "        // fixed by disabling useController below, so this stays a\n" +
+            "        // no-op.\n" +
             "    }";
         source = source.replace(updateSurfaceRegex, newUpdateSurface);
         changed = true;

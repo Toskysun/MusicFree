@@ -501,7 +501,9 @@ export default function MvPlayer({ musicItem, initialSource }: IMvPlayerProps) {
         <PanelFullscreen
             hasMask
             animationType="Scale"
-            containerStyle={styles.container}>
+            containerStyle={styles.container}
+            fullscreenTapHandler={showControls}
+            fullscreenTapDisabled={controlsVisible || error}>
             <View style={styles.stage}>
                 <View pointerEvents="none" style={styles.videoLayer}>
                     {source ? (
@@ -704,20 +706,6 @@ export default function MvPlayer({ musicItem, initialSource }: IMvPlayerProps) {
                         </Pressable>
                     </View>
                 ) : null}
-
-                {/* 唤醒层：始终渲染，靠 JSX 顺序置于最上层，
-                    控件/错误态时用 pointerEvents 禁掉，避免遮挡。 */}
-                <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={
-                        paused ? "播放视频" : "显示播放器控件"
-                    }
-                    onPress={showControls}
-                    pointerEvents={
-                        controlsVisible || error ? "none" : "auto"
-                    }
-                    style={styles.tapSurface}
-                />
             </View>
         </PanelFullscreen>
     );
@@ -742,7 +730,7 @@ const styles = StyleSheet.create({
     },
     videoLayer: {
         ...StyleSheet.absoluteFillObject,
-        // 视频是原生 TextureView，禁用整层触摸，避免它吞掉全屏点击。
+        // 视频是原生 TextureView/SurfaceView，禁用整层触摸，避免它吞掉全屏点击。
         zIndex: 0,
     },
     video: {
@@ -750,15 +738,10 @@ const styles = StyleSheet.create({
         width: "100%",
         height: "100%",
     },
-    tapSurface: {
-        ...StyleSheet.absoluteFillObject,
-        // 依赖 JSX 渲染顺序而非 zIndex（Fabric 下 zIndex 命中不可靠）。
-        zIndex: 3,
-    },
     overlay: {
         ...StyleSheet.absoluteFillObject,
         justifyContent: "space-between",
-        zIndex: 2,
+        zIndex: 1,
     },
     header: {
         flexDirection: "row",
