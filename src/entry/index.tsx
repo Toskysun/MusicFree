@@ -5,6 +5,7 @@ import bootstrap from "./bootstrap/bootstrap";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import Dialogs from "@/components/dialogs";
 import Panels from "@/components/panels";
+import MvPlayerHost from "@/components/mvPlayer";
 import { panelInfoStore } from "@/components/panels/usePanel";
 import PageBackground from "@/components/base/pageBackground";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -107,6 +108,7 @@ export default function Pages() {
                                 </Stack.Navigator>
                             </View>
                             <Panels />
+                            <MvPlayerHost />
                             <Dialogs />
                             <ToastBaseComponent />
                             <PortalHost />

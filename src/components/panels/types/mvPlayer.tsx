@@ -14,7 +14,7 @@ import Video, { type VideoRef } from "react-native-video";
 import * as NavigationBar from "expo-navigation-bar";
 import * as ScreenOrientation from "expo-screen-orientation";
 import PanelFullscreen from "../base/panelFullscreen";
-import { hidePanel } from "../usePanel";
+import { hideMvPlayer } from "@/components/mvPlayer/useMvPlayer";
 import TrackPlayer from "@/core/trackPlayer";
 import pluginManager from "@/core/pluginManager";
 import Toast from "@/utils/toast";
@@ -25,6 +25,7 @@ import Icon from "@/components/base/icon";
 interface IMvPlayerProps {
     musicItem: IMusic.IMusicItem;
     initialSource?: IPlugin.IVideoSourceResult;
+    onClosed?: () => void;
 }
 
 interface IVideoSource {
@@ -302,7 +303,11 @@ function restoreSystemBars() {
     }
 }
 
-export default function MvPlayer({ musicItem, initialSource }: IMvPlayerProps) {
+export default function MvPlayer({
+    musicItem,
+    initialSource,
+    onClosed,
+}: IMvPlayerProps) {
     const { t } = useI18N();
     const [source, setSource] = useState<IVideoSource | null>(null);
     const [quality, setQuality] = useState("");
@@ -503,7 +508,9 @@ export default function MvPlayer({ musicItem, initialSource }: IMvPlayerProps) {
             animationType="Scale"
             containerStyle={styles.container}
             fullscreenTapHandler={showControls}
-            fullscreenTapDisabled={controlsVisible || error}>
+            fullscreenTapDisabled={controlsVisible || error}
+            closeEventName="hideMvPlayer"
+            onClosed={onClosed}>
             <View style={styles.stage}>
                 <View pointerEvents="none" style={styles.videoLayer}>
                     {source ? (
@@ -577,7 +584,7 @@ export default function MvPlayer({ musicItem, initialSource }: IMvPlayerProps) {
                                 <Pressable
                                     accessibilityRole="button"
                                     accessibilityLabel={t("panel.mvPlayer.close")}
-                                    onPress={hidePanel}
+                                    onPress={hideMvPlayer}
                                     style={styles.closeButton}>
                                     <Text style={styles.closeText}>×</Text>
                                 </Pressable>

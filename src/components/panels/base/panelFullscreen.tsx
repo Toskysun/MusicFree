@@ -44,6 +44,13 @@ interface IPanelFullScreenProps {
     fullscreenTapHandler?: () => void;
     /** 全屏唤醒层是否禁用（控件可见时禁用，避免挡住按钮）。 */
     fullscreenTapDisabled?: boolean;
+    /**
+     * 监听的关闭事件。普通面板使用 hidePanel，独立宿主可使用自己的
+     * 事件，避免关闭时修改通用 panelInfoStore。
+     */
+    closeEventName?: string;
+    /** Modal 退出动画完成后的卸载回调。 */
+    onClosed?: () => void;
 }
 
 /**
@@ -59,6 +66,8 @@ export default function (props: IPanelFullScreenProps) {
         animationType = "SlideToTop",
         fullscreenTapHandler,
         fullscreenTapDisabled,
+        closeEventName = "hidePanel",
+        onClosed,
     } = props;
     const snapPoint = useSharedValue(0);
 
@@ -78,11 +87,15 @@ export default function (props: IPanelFullScreenProps) {
             callbacks.forEach(cb => cb?.());
             return;
         }
+        if (onClosed) {
+            onClosed();
+            return;
+        }
         panelInfoStore.setValue({
             name: null,
             payload: null,
         });
-    }, []);
+    }, [onClosed]);
 
     const closePanel = useCallback(() => {
         if (closingRef.current) {
@@ -115,7 +128,7 @@ export default function (props: IPanelFullScreenProps) {
         );
 
         const listenerSubscription = DeviceEventEmitter.addListener(
-            "hidePanel",
+            closeEventName,
             (callback?: () => void) => {
                 if (callback) {
                     hideCallbackRef.current.push(callback);
@@ -131,6 +144,8 @@ export default function (props: IPanelFullScreenProps) {
             }
             listenerSubscription.remove();
         };
+        // The listener is bound once for the mounted modal. Its event name is
+        // part of the host contract and must not change while it is visible.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 

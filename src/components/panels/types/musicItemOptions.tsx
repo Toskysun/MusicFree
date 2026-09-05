@@ -24,6 +24,7 @@ import { FlatList } from "react-native-gesture-handler";
 import musicHistory from "@/core/musicHistory";
 import { showDialog, hideDialog } from "@/components/dialogs/useDialog";
 import { hidePanel, showPanel } from "../usePanel";
+import { showMvPlayer } from "@/components/mvPlayer/useMvPlayer";
 import Divider from "@/components/base/divider";
 import { iconSizeConst } from "@/constants/uiConst";
 import Config from "@/core/appConfig";
@@ -172,7 +173,7 @@ export default function MusicItemOptions(props: IMusicItemOptionsProps) {
                             () => undefined,
                         );
                     }
-                    showPanel("MvPlayer", { musicItem, initialSource });
+                    showMvPlayer({ musicItem, initialSource });
                 } catch (reason) {
                     hidePanel();
                     Toast.warn(

@@ -15,7 +15,9 @@ const path = require("path");
  *      so useTextureView never took effect.
  *
  * Patch: disable the ExoPlayer controller + touch listener at the source,
- * and make updateSurfaceView switch to a TextureView (normal RN hierarchy).
+ * and recreate PlayerView with the requested surface type. media3's PlayerView
+ * chooses its surface in the constructor, so updateSurfaceView must replace
+ * the view rather than call a non-existent setter.
  * Idempotent: safe to run after npm install or repeated postinstall runs.
  */
 const viewPath = path.join(
@@ -33,7 +35,37 @@ const viewPath = path.join(
     "ExoPlayerView.kt",
 );
 
-const marker = "/* musicfree-disable-player-touch */";
+const marker = "/* musicfree-player-touch-v2 */";
+
+const textureLayoutPath = path.join(
+    __dirname,
+    "..",
+    "node_modules",
+    "react-native-video",
+    "android",
+    "src",
+    "main",
+    "res",
+    "layout",
+    "musicfree_texture_player_view.xml",
+);
+
+const textureLayout = `<?xml version="1.0" encoding="utf-8"?>
+<androidx.media3.ui.PlayerView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    app:surface_type="texture_view" />
+`;
+
+function ensureTexturePlayerViewResource() {
+    const layoutDirectory = path.dirname(textureLayoutPath);
+    fs.mkdirSync(layoutDirectory, { recursive: true });
+    if (!fs.existsSync(textureLayoutPath) || fs.readFileSync(textureLayoutPath, "utf8") !== textureLayout) {
+        fs.writeFileSync(textureLayoutPath, textureLayout);
+    }
+}
 
 function patchExoPlayerView() {
     if (!fs.existsSync(viewPath)) {
@@ -41,14 +73,99 @@ function patchExoPlayerView() {
         return;
     }
 
+    ensureTexturePlayerViewResource();
+
     let source = fs.readFileSync(viewPath, "utf8");
 
-    if (source.includes(marker)) {
-        console.log("[patch-react-native-video] ExoPlayerView.kt already patched");
-        return;
+    let changed = false;
+
+    // Upgrade the marker on a worktree that still has the previous patch. It
+    // is important to continue below so the surface replacement is applied.
+    const previousMarker = "/* musicfree-disable-player-touch */";
+    if (source.includes(previousMarker) && !source.includes(marker)) {
+        source = source.replace(previousMarker, marker);
+        changed = true;
     }
 
-    let changed = false;
+    // The previous marker is upgraded in-place; these imports/state changes
+    // are then applied below to keep existing worktrees compatible.
+
+    // PlayerView chooses its surface in the constructor. Use a real XML
+    // resource so Android can provide the parser implementation expected by
+    // Context.obtainStyledAttributes.
+    const imports = [
+        [
+            "import android.util.AttributeSet\n",
+            "import android.util.AttributeSet\nimport android.view.LayoutInflater\n",
+        ],
+        [
+            "import com.brentvatne.common.api.SubtitleStyle\n",
+            "import com.brentvatne.common.api.SubtitleStyle\nimport com.brentvatne.common.api.ViewType\n",
+        ],
+    ];
+    for (const [from, to] of imports) {
+        if (source.includes(from) && !source.includes(to.trim())) {
+            source = source.replace(from, to);
+            changed = true;
+        }
+    }
+    for (const obsoleteImport of ["import android.util.Xml\n", "import java.io.StringReader\n"]) {
+        if (source.includes(obsoleteImport)) {
+            source = source.replace(obsoleteImport, "");
+            changed = true;
+        }
+    }
+
+    const stateFields =
+        "    private var currentViewType = ViewType.VIEW_TYPE_SURFACE\n" +
+        "    private var controllerVisibilityListener: PlayerView.ControllerVisibilityListener? = null\n" +
+        "    private var fullscreenButtonClickListener: PlayerView.FullscreenButtonClickListener? = null\n" +
+        "    private var controllerShowTimeoutMs = 5000\n" +
+        "    private var controllerAutoShow = false\n" +
+        "    private var controllerHideOnTouch = false\n" +
+        "    private var subtitleButtonVisible = false\n" +
+        "    private var shutterColor = Color.TRANSPARENT\n" +
+        "    private var focusable = true\n" +
+        "    private val layoutChangeListeners = mutableListOf<View.OnLayoutChangeListener>()\n";
+    if (!source.includes("private var currentViewType")) {
+        source = source.replace(
+            "    private var pendingResizeMode: Int? = null\n",
+            "    private var pendingResizeMode: Int? = null\n" + stateFields,
+        );
+        changed = true;
+    }
+
+    const playerViewDeclaration =
+        /    private (?:val|var) playerView = PlayerView\(context\)\.apply \{/;
+    if (playerViewDeclaration.test(source)) {
+        source = source.replace(
+            playerViewDeclaration,
+            "    private var playerView = createPlayerView(context, currentViewType).apply {",
+        );
+        changed = true;
+    }
+
+    const createPlayerViewHelper =
+        "    private fun createPlayerView(context: Context, viewType: Int): PlayerView {\n" +
+        "        if (viewType != ViewType.VIEW_TYPE_TEXTURE) {\n" +
+        "            return PlayerView(context)\n" +
+        "        }\n\n" +
+        "        return LayoutInflater.from(context).inflate(\n" +
+        "            com.brentvatne.react.R.layout.musicfree_texture_player_view,\n" +
+        "            null,\n" +
+        "            false,\n" +
+        "        ) as PlayerView\n" +
+        "    }\n\n";
+    if (!source.includes("musicfree_texture_player_view")) {
+        const helperStart = source.indexOf("    private fun createPlayerView");
+        const nextMethodStart = source.indexOf("    fun setPlayer", helperStart);
+        if (helperStart >= 0 && nextMethodStart > helperStart) {
+            source = source.slice(0, helperStart) + createPlayerViewHelper + source.slice(nextMethodStart);
+        } else {
+            source = source.replace("    init {\n", createPlayerViewHelper + "    init {\n");
+        }
+        changed = true;
+    }
 
     // 1. Controller defaults: force the PlayerView to never arm its own
     //    controller / touch handling at construction time.
@@ -92,20 +209,148 @@ function patchExoPlayerView() {
         changed = true;
     }
 
-    // 3. updateSurfaceView: keep as a safe no-op. media3-ui 1.x PlayerView
-    //    has no public setSurfaceType (SURFACE_TYPE_* are private) and picks
-    //    the surface at construction from XML attrs, so there is nothing safe
-    //    to switch here. Touch handling is fixed by the useController patch.
+    const setterReplacements = [
+        [
+            "fun setShutterColor(color: Int) {\n" +
+                "        playerView.setShutterBackgroundColor(color)\n" +
+                "    }",
+            "fun setShutterColor(color: Int) {\n" +
+                "        shutterColor = color\n" +
+                "        playerView.setShutterBackgroundColor(color)\n" +
+                "    }",
+        ],
+        [
+            "fun setControllerShowTimeoutMs(showTimeoutMs: Int) {\n" +
+                "        playerView.controllerShowTimeoutMs = showTimeoutMs\n" +
+                "    }",
+            "fun setControllerShowTimeoutMs(showTimeoutMs: Int) {\n" +
+                "        controllerShowTimeoutMs = showTimeoutMs\n" +
+                "        playerView.controllerShowTimeoutMs = showTimeoutMs\n" +
+                "    }",
+        ],
+        [
+            "fun setControllerAutoShow(autoShow: Boolean) {\n" +
+                "        playerView.controllerAutoShow = autoShow\n" +
+                "    }",
+            "fun setControllerAutoShow(autoShow: Boolean) {\n" +
+                "        controllerAutoShow = autoShow\n" +
+                "        playerView.controllerAutoShow = autoShow\n" +
+                "    }",
+        ],
+        [
+            "fun setControllerHideOnTouch(hideOnTouch: Boolean) {\n" +
+                "        playerView.controllerHideOnTouch = hideOnTouch\n" +
+                "    }",
+            "fun setControllerHideOnTouch(hideOnTouch: Boolean) {\n" +
+                "        controllerHideOnTouch = hideOnTouch\n" +
+                "        playerView.controllerHideOnTouch = hideOnTouch\n" +
+                "    }",
+        ],
+        [
+            "fun setFullscreenButtonClickListener(listener: PlayerView.FullscreenButtonClickListener?) {\n" +
+                "        playerView.setFullscreenButtonClickListener(listener)\n" +
+                "    }",
+            "fun setFullscreenButtonClickListener(listener: PlayerView.FullscreenButtonClickListener?) {\n" +
+                "        fullscreenButtonClickListener = listener\n" +
+                "        playerView.setFullscreenButtonClickListener(listener)\n" +
+                "    }",
+        ],
+        [
+            "fun setShowSubtitleButton(show: Boolean) {\n" +
+                "        playerView.setShowSubtitleButton(show)\n" +
+                "    }",
+            "fun setShowSubtitleButton(show: Boolean) {\n" +
+                "        subtitleButtonVisible = show\n" +
+                "        playerView.setShowSubtitleButton(show)\n" +
+                "    }",
+        ],
+        [
+            "fun setControllerVisibilityListener(listener: PlayerView.ControllerVisibilityListener?) {\n" +
+                "        playerView.setControllerVisibilityListener(listener)\n" +
+                "    }",
+            "fun setControllerVisibilityListener(listener: PlayerView.ControllerVisibilityListener?) {\n" +
+                "        controllerVisibilityListener = listener\n" +
+                "        playerView.setControllerVisibilityListener(listener)\n" +
+                "    }",
+        ],
+    ];
+    for (const [from, to] of setterReplacements) {
+        if (source.includes(from)) {
+            source = source.replace(from, to);
+            changed = true;
+        }
+    }
+
+    const focusableMethod =
+        "    override fun setFocusable(focusable: Boolean) {\n" +
+        "        playerView.isFocusable = focusable\n" +
+        "    }";
+    const trackedFocusableMethod =
+        "    override fun setFocusable(focusable: Boolean) {\n" +
+        "        this.focusable = focusable\n" +
+        "        playerView.isFocusable = focusable\n" +
+        "    }";
+    if (source.includes(focusableMethod)) {
+        source = source.replace(focusableMethod, trackedFocusableMethod);
+        changed = true;
+    }
+
+    const layoutListenerMethod =
+        "    override fun addOnLayoutChangeListener(listener: View.OnLayoutChangeListener) {\n" +
+        "        playerView.addOnLayoutChangeListener(listener)\n" +
+        "    }";
+    const trackedLayoutListenerMethod =
+        "    override fun addOnLayoutChangeListener(listener: View.OnLayoutChangeListener) {\n" +
+        "        layoutChangeListeners += listener\n" +
+        "        playerView.addOnLayoutChangeListener(listener)\n" +
+        "    }";
+    if (source.includes(layoutListenerMethod)) {
+        source = source.replace(layoutListenerMethod, trackedLayoutListenerMethod);
+        changed = true;
+    }
+
+    // 3. PlayerView has no public setSurfaceType. Replace it when React Native
+    //    changes viewType, preserving the player and listeners across the swap.
     let updateSurfaceRegex =
         /fun updateSurfaceView\(viewType: Int\)\s*\{[\s\S]*?\n    \}/;
     if (updateSurfaceRegex.test(source)) {
         const newUpdateSurface =
             "fun updateSurfaceView(viewType: Int) {\n" +
-            "        // MusicFree: media3-ui 1.x PlayerView has no public API to\n" +
-            "        // switch surface type (SURFACE_TYPE_* is private); surface is\n" +
-            "        // chosen at construction from XML attrs. Touch handling is\n" +
-            "        // fixed by disabling useController below, so this stays a\n" +
-            "        // no-op.\n" +
+            "        val normalizedType = when (viewType) {\n" +
+            "            ViewType.VIEW_TYPE_TEXTURE -> ViewType.VIEW_TYPE_TEXTURE\n" +
+            "            else -> ViewType.VIEW_TYPE_SURFACE\n" +
+            "        }\n" +
+            "        if (normalizedType == currentViewType) return\n\n" +
+            "        val oldPlayerView = playerView\n" +
+            "        val currentPlayer = oldPlayerView.player\n" +
+            "        val childIndex = indexOfChild(oldPlayerView).coerceAtLeast(0)\n" +
+            "        oldPlayerView.player = null\n" +
+            "        removeView(oldPlayerView)\n\n" +
+            "        currentViewType = normalizedType\n" +
+            "        playerView = createPlayerView(context, normalizedType).apply {\n" +
+            "            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)\n" +
+            "            setShutterBackgroundColor(shutterColor)\n" +
+            "            useController = false\n" +
+            "            controllerAutoShow = this@ExoPlayerView.controllerAutoShow\n" +
+            "            controllerHideOnTouch = this@ExoPlayerView.controllerHideOnTouch\n" +
+            "            controllerShowTimeoutMs = this@ExoPlayerView.controllerShowTimeoutMs\n" +
+            "            setShowSubtitleButton(subtitleButtonVisible)\n" +
+            "            setUseArtwork(false)\n" +
+            "            setDefaultArtwork(null)\n" +
+            "            pendingResizeMode?.let { resizeMode = it }\n" +
+            "            setOnTouchListener(null)\n" +
+            "            isClickable = false\n" +
+            "            isFocusable = false\n" +
+            "            controllerVisibilityListener?.let { setControllerVisibilityListener(it) }\n" +
+            "            fullscreenButtonClickListener?.let { setFullscreenButtonClickListener(it) }\n" +
+            "            isFocusable = this@ExoPlayerView.focusable\n" +
+            "            if (currentPlayer != null) {\n" +
+            "                player = currentPlayer\n" +
+            "            }\n" +
+            "        }\n" +
+            "        addView(playerView, childIndex, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))\n" +
+            "        setSubtitleStyle(localStyle)\n" +
+            "        requestLayout()\n" +
             "    }";
         source = source.replace(updateSurfaceRegex, newUpdateSurface);
         changed = true;
@@ -118,7 +363,9 @@ function patchExoPlayerView() {
         return;
     }
 
-    source = source.replace(/^(package[^\n]*\n)/, `$1\n${marker}\n`);
+    if (!source.includes(marker)) {
+        source = source.replace(/^(package[^\n]*\n)/, `$1\n${marker}\n`);
+    }
     fs.writeFileSync(viewPath, source);
     console.log(
         "[patch-react-native-video] patched ExoPlayerView.kt: disabled controller/touch, enabled TextureView switching",

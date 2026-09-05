@@ -25,7 +25,6 @@ import MusicItemLyricOptions from "./musicItemLyricOptions";
 import EditMusicSheetInfo from "./editMusicSheetInfo";
 import QualityTranslation from "./qualityTranslation";
 import MusicMetadataSettings from "./musicMetadataSettings";
-import MvPlayer from "./mvPlayer";
 
 export default {
     /** 加入歌单 */
@@ -80,6 +79,4 @@ export default {
     QualityTranslationPanel: QualityTranslation,
     /** 音乐标签设置 */
     MusicMetadataSettingsPanel: MusicMetadataSettings,
-    /** MV 播放器 */
-    MvPlayer,
 };
