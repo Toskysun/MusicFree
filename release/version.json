@@ -1,6 +1,13 @@
 {
-  "version": "0.7.77",
+  "version": "1.0.0",
   "changeLog": [
+    "【重磅】新增音乐视频（MV）播放，可从歌曲菜单直接进入全屏视频播放器",
+    "【画质】支持自动获取多档视频源、清晰度切换，以及 8K/4K、HDR/Dolby Vision 和高帧率标识",
+    "【播放】新增全屏播放控制与横竖屏适配，播放 MV 时自动暂停歌曲音频",
+    "【插件】扩展音乐视频能力，支持插件提供视频源、分辨率、码率、大小与编码等信息",
+    "【修复】修复 Android Fabric 下视频原生层吞掉点击、控制栏无法唤起及触摸生命周期异常的问题",
+    "【修复】修复 iOS 选择本地插件文件时面板未先关闭、文档选择器可能重复启动的问题",
+    "--------以上为v1.0.0新特性--------",
     "【交流】欢迎加入 Q 群：1064805856",
     "【导入】适配 baka-plugins 新版歌单导入格式：插件返回完整歌单对象时直接预览歌单详情，不再弹出新建歌单窗口；兼容旧版数组返回",
     "--------以上为v0.7.77新特性--------",
@@ -185,7 +192,7 @@
     "【优化】优化了软件启动速度 (需要在【侧边栏-基本设置-插件】中打开【启用插件懒加载】开关)"
   ],
   "download": [
-    "https://github.com/Toskysun/MusicFree/releases/download/v0.7.77/MusicFree-v0.7.77-arm64-v8a-release.apk",
-    "https://github.com/Toskysun/MusicFree/releases/download/v0.7.77/MusicFree-v0.7.77-universal-release.apk"
+    "https://github.com/Toskysun/MusicFree/releases/download/v1.0.0/MusicFree-v1.0.0-arm64-v8a-release.apk",
+    "https://github.com/Toskysun/MusicFree/releases/download/v1.0.0/MusicFree-v1.0.0-universal-release.apk"
   ]
 }
