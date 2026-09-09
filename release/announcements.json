@@ -1,6 +1,29 @@
 {
   "announcements": [
     {
+      "id": "1788883200000",
+      "title": "🎉 MusicFree v1.0.0 正式发布",
+      "content": [
+        "MusicFree v1.0.0 现已发布，感谢大家一路以来的支持与陪伴！",
+        "",
+        "🎬 本次更新重点：",
+        "【重磅】新增音乐视频（MV）播放，可从歌曲菜单直接进入全屏视频播放器",
+        "【修复】优化 iOS 本地插件文件选择流程",
+        "【碎碎念】跑路了xdm",
+        "【碎碎念】敬请期待BakaMusic For Android/IOS",
+        "",
+        "欢迎加入 Q 群交流：1064805856",
+        "项目地址：https://github.com/Toskysun/MusicFree"
+      ],
+      "priority": 2,
+      "minVersion": "1.0.0",
+      "maxVersion": "1.0.99",
+      "expireTime": "2027-12-31T23:59:59+08:00",
+      "showOnce": false,
+      "type": "info",
+      "createTime": "2026-09-09T00:00:00+08:00"
+    },
+    {
       "id": "1",
       "title": "⚠️ 重要声明",
       "content": [
@@ -44,5 +67,5 @@
       "createTime": "2026-01-05T00:00:00+08:00"
     }
   ],
-  "timestamp": "2026-02-13T00:00:00+08:00"
+  "timestamp": "2026-09-09T00:00:00+08:00"
 }
