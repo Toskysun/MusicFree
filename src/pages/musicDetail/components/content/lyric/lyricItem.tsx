@@ -1361,7 +1361,7 @@ function RegularLyricLine({
                     onLayout?.(index, nativeEvent.layout.height);
                 }
             }}
-            style={containerStyle}>
+            style={[lyricStyles.regularLineContainer, containerStyle]}>
             <Animated.Text
                 style={[
                     lyricStyles.item,
@@ -1801,11 +1801,15 @@ const lyricStyles = StyleSheet.create({
     item: {
         color: "white",
         opacity: 0.5,
-        paddingHorizontal: rpx(64),
-        paddingVertical: rpx(24),
         width: "100%",
         textAlign: "center",
         textAlignVertical: "center",
+    },
+    // Keep spacing on the row so mini lyrics can override it consistently.
+    regularLineContainer: {
+        paddingHorizontal: rpx(64),
+        paddingVertical: rpx(24),
+        width: "100%",
     },
     // Compact item for multi-line groups (no padding, container handles it)
     compactItem: {
